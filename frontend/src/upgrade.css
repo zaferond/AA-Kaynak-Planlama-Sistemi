@@ -601,7 +601,9 @@ html{zoom:80%}
 .timeline-editor-form .milestone-note-row input[type=checkbox]{width:14px;min-width:14px;height:14px;min-height:14px;padding:0}
 .milestone-note-remove{grid-column:2;grid-row:1;display:grid;place-items:center;width:25px;height:36px;border:1px solid #d7e2eb;border-radius:5px;background:#fff;color:#8c5360;cursor:pointer}
 .milestone-note-remove:disabled{opacity:.35;cursor:default}
-.milestone-note-add{display:inline-flex;align-items:center;gap:4px;justify-self:start;padding:3px 1px;border:0;background:none;color:#245d85;font-size:10px;font-weight:650;cursor:pointer}
+.milestone-note-add{display:inline-flex;align-items:center;gap:5px;justify-self:start;min-height:29px;padding:5px 9px;border:1px solid #a7c5dc;border-radius:5px;background:#dceefa;color:#1e557b;font-size:10px;font-weight:700;cursor:pointer}
+.milestone-note-add:hover:not(:disabled){border-color:#7eabc9;background:#cce5f6}
+.milestone-note-add:focus-visible{outline:2px solid #3979aa;outline-offset:2px}
 .milestone-note-add:disabled{opacity:.4;cursor:default}
 .milestone-range-colors{grid-column:2;grid-row:3;display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-height:30px}
 .milestone-range-colors span{margin-right:4px;color:#344f67;font-size:11px;font-weight:650}

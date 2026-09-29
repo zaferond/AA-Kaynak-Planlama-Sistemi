@@ -42,6 +42,6 @@ export default function MilestoneDateEditor({value,isEmpty,projectStart,projectE
    <div className="milestone-range-colors" role="group" aria-label={`${index+1}. tarih aralığının bar rengi`}><span>Bar Rengi</span>{phasePalette.map(color=><button type="button" key={color.id} className={range.color===color.id?'selected':''} title={color.name} aria-label={color.name} aria-pressed={range.color===color.id} style={{'--range-color':color.border,'--range-soft':color.bg} as CSSProperties} onClick={()=>updateRange(index,{color:color.id})}/>)}</div>
    <button type="button" className="milestone-range-remove" aria-label={`${index+1}. kritik detay konuyu kaldır`} title="Kritik detay konuyu kaldır" onClick={()=>{const removed=removeDraftMilestoneRange(value,index);onChange(removed.value,removed.isEmpty)}}><Trash2 size={15}/></button>
   </div>})}</div>
-  <button type="button" className="button milestone-range-add" disabled={ranges.length>=20} onClick={addRange}><Plus size={14}/>Kritik Detay Konu Ekle</button>
+  <button type="button" className="button milestone-range-add" disabled={ranges.length>=20} onClick={addRange}><Plus size={14}/>Detay Açıklama Ekle</button>
  </fieldset>;
 }
