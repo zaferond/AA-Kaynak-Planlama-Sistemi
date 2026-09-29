@@ -24,7 +24,7 @@ export function buildProjectInfoReport(projects:Project[]):ReportProject[]{
 export function updateReportedTopic(project:Project,infoId:string,topic:ReportTopic,change:{text:string;start?:string;end?:string}|{includeInReport:false}|{completed:boolean}):Project{
  const milestones=project.milestones||[];
  const index=milestones.findIndex(item=>item.id===infoId);
- if(index<0)throw Error('Bilgi kaydı bulunamadı.');
+ if(index<0)throw Error('Kritik konu kaydı bulunamadı.');
  const milestone=milestones[index];
  const ranges=milestoneRanges(milestone);
  const range=ranges[topic.rangeIndex];

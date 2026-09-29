@@ -25,8 +25,8 @@ export default function MilestoneDateEditor({value,isEmpty,projectStart,projectE
  function addRange(){
   onChange(addDraftMilestoneRange(value,projectEnd,isEmpty),false);
  }
- return <fieldset className="milestone-ranges"><legend>Kritik Konular</legend><p className="milestone-date-hint">Detay açıklama tarihleri üstteki tarih aralığını otomatik belirler. Üstteki tarihleri ayrıca elle değiştirebilirsiniz.</p>
-  {isEmpty&&<p className="milestone-range-empty">Henüz kritik konu eklenmedi. İlk konuyu aşağıdaki düğmeyle ekleyin.</p>}
+ return <fieldset className="milestone-ranges"><legend>Kritik Detay Konular</legend><p className="milestone-date-hint">Detay açıklama tarihleri üstteki tarih aralığını otomatik belirler. Üstteki tarihleri ayrıca elle değiştirebilirsiniz.</p>
+  {isEmpty&&<p className="milestone-range-empty">Henüz kritik detay konu eklenmedi. İlk konuyu aşağıdaki düğmeyle ekleyin.</p>}
   <div className="milestone-range-list">{ranges.map((range,index)=>{const notes=rangeNotes(range);return <div className="milestone-range-row" key={index}>
    <span className="milestone-range-number">{index+1}</span>
    <div className="milestone-range-dates">
@@ -40,8 +40,8 @@ export default function MilestoneDateEditor({value,isEmpty,projectStart,projectE
     <button type="button" className="milestone-note-remove" aria-label={`${index+1}.${noteIndex+1} açıklamayı kaldır`} title="Açıklamayı kaldır" onClick={()=>onChange(removeMilestoneNote(value,index,noteIndex))}><Trash2 size={14}/></button>
    </div>)}<button type="button" className="milestone-note-add" disabled={notes.length>=10} onClick={()=>addNote(index)}><Plus size={13}/>Açıklama Ekle</button></div>
    <div className="milestone-range-colors" role="group" aria-label={`${index+1}. tarih aralığının bar rengi`}><span>Bar Rengi</span>{phasePalette.map(color=><button type="button" key={color.id} className={range.color===color.id?'selected':''} title={color.name} aria-label={color.name} aria-pressed={range.color===color.id} style={{'--range-color':color.border,'--range-soft':color.bg} as CSSProperties} onClick={()=>updateRange(index,{color:color.id})}/>)}</div>
-   <button type="button" className="milestone-range-remove" aria-label={`${index+1}. kritik konuyu kaldır`} title="Kritik konuyu kaldır" onClick={()=>{const removed=removeDraftMilestoneRange(value,index);onChange(removed.value,removed.isEmpty)}}><Trash2 size={15}/></button>
+   <button type="button" className="milestone-range-remove" aria-label={`${index+1}. kritik detay konuyu kaldır`} title="Kritik detay konuyu kaldır" onClick={()=>{const removed=removeDraftMilestoneRange(value,index);onChange(removed.value,removed.isEmpty)}}><Trash2 size={15}/></button>
   </div>})}</div>
-  <button type="button" className="button milestone-range-add" disabled={ranges.length>=20} onClick={addRange}><Plus size={14}/>Kritik Konu Ekle</button>
+  <button type="button" className="button milestone-range-add" disabled={ranges.length>=20} onClick={addRange}><Plus size={14}/>Kritik Detay Konu Ekle</button>
  </fieldset>;
 }

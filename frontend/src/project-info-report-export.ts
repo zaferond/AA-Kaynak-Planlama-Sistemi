@@ -11,7 +11,7 @@ function cell(row:number,index:number,value:string,style:number){
 }
 
 export function projectInfoReportSheet(projects:ReportProject[]):string{
- const headers=['Proje','Bilgi','Detay Açıklamalar','İlk Başlangıç','Son Bitiş'];
+ const headers=['Proje','Kritik Konu','Detay Açıklamalar','İlk Başlangıç','Son Bitiş'];
  const rows:string[]=[];
  rows.push(`<row r="1" ht="29" customHeight="1">${cell(1,0,'AA Mühendislik | Kritik Proje Konuları',1)}</row>`);
  rows.push(`<row r="2" ht="22" customHeight="1">${cell(2,0,`Rapora Ekle seçili açıklamalar · ${new Date().toLocaleDateString('tr-TR')}`,2)}</row>`);
