@@ -111,6 +111,6 @@ test('migration recalculates old training percentages without changing project h
   assert.equal(data.actualAllocations['r|p|'+month],amount);
   assert(Math.abs(data.actualPercentEntries['r|p|'+month]-amount*DEFAULT_MONTHLY_HOURS/automatic*100)<1e-10);
   assert.equal(data.revisions['actual:r|p|'+month],1);
-  assert.equal((await store.db.query('SELECT MAX(version) AS version FROM kp_schema_migrations')).rows[0].version,23);
+  assert.equal((await store.db.query('SELECT MAX(version) AS version FROM kp_schema_migrations')).rows[0].version,24);
  }finally{await store.close();await fs.rm(dir,{recursive:true,force:true})}
 });

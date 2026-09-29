@@ -22,6 +22,10 @@ export const tables = {
       end_month: "varchar(7)",
     },
   },
+  project_risks: {
+    key: ["id"],
+    columns: { id: "nvarchar(120)", project_id: "nvarchar(120)", payload: "nvarchar(max)" },
+  },
   project_phases: {
     key: ["project_id", "month"],
     columns: {

@@ -151,7 +151,7 @@ test('existing month milestones become full date ranges during migration',async(
     const store=new Store({env:{DB_PROVIDER:'sqljs',SQLJS_FILE:file}});
     try{
       await store.connect();
-      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,23);
+      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,24);
       assert.deepEqual((await store.read()).data.projects.find(p=>p.id==='p').milestones,[{id:'m',name:'Eski kilometre taşı',start:'2026-02-01',end:'2026-03-31',barColor:'red',barStyle:'solid'}]);
     }finally{await store.close()}
   }finally{

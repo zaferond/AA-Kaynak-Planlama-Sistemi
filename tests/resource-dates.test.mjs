@@ -61,7 +61,7 @@ test('resource month dates migrate to first and last calendar day',async()=>{
   const store=new Store({env:{DB_PROVIDER:'sqljs',SQLJS_FILE:file}});
   try{
   await store.connect();
-      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,23);
+      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,24);
    await store.db.transaction(c=>c.query("UPDATE kp_resource_versions SET status='İşten Ayrıldı' WHERE resource_id='r'"));
    const resource=(await store.read()).data.resources.find(r=>r.id==='r');
    assert.equal(resource.versions[0].status,'İşten Ayrıldı');

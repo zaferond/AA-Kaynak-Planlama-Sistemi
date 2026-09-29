@@ -557,6 +557,7 @@ function migrate(data) {
 	d.actualAllocations ??= {};
 	d.actualWorkedHours ??= {};
 	d.actualPercentEntries ??= {};
+	d.risks ??= [];
 	if ((d.catalogVersion || 0) < 1) {
 		for (const t of d.teams) t.catalog = false;
 		for (const t of catalog_default.teams) {
@@ -738,7 +739,8 @@ function scopeData(d, u) {
 		actualPercentEntries: actualEntries(d.actualPercentEntries, "actual"),
 		personCalendar: Object.fromEntries(Object.entries(d.personCalendar || {}).filter(([key]) => canSeePersonDay(key))),
 		actualTeamTotals: actualTeamTotalIndex(d, ids),
-		revisions: Object.fromEntries(Object.entries(d.revisions).filter(([key]) => key.startsWith("allocation:") ? u.role === "manager" && ids.has(key.slice(11).split("|")[0]) : key.startsWith("actual:") ? canSeeActual(key.slice(7), "actual") : key.startsWith("workedHours:") ? canSeeActual(key.slice(12), "workedHours") : key.startsWith("personDay:") ? canSeePersonDay(key.slice(10)) : key === "calendar:shared"))
+		revisions: Object.assign(Object.fromEntries(Object.entries(d.revisions).filter(([key]) => key.startsWith("allocation:") ? u.role === "manager" && ids.has(key.slice(11).split("|")[0]) : key.startsWith("actual:") ? canSeeActual(key.slice(7), "actual") : key.startsWith("workedHours:") ? canSeeActual(key.slice(12), "workedHours") : key.startsWith("personDay:") ? canSeePersonDay(key.slice(10)) : key === "calendar:shared")), { ...Object.fromEntries(Object.entries(d.revisions).filter(([key]) => key.startsWith("risk:"))) }),
+		risks: d.risks || []
 	};
 }
 //#endregion
@@ -1009,6 +1011,46 @@ var proj = z.object({
 	phaseColors: z.record(z.enum(phasePalette.map((x) => x.id))).optional(),
 	milestones: z.array(milestone).max(100).optional()
 });
+var risk = z.object({
+	id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
+	projectId: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
+	reportedBy: z.string().trim().min(1).max(200),
+	category: z.enum([
+		"Takvim",
+		"Mali",
+		"Teknik",
+		"İdari"
+	]),
+	reportedAt: day,
+	system: z.string().trim().max(200),
+	description: z.string().trim().min(1).max(5e3),
+	cause: z.string().trim().max(5e3),
+	actionPlan: z.string().trim().max(5e3),
+	targetAt: z.union([day, z.literal("")]),
+	status: z.enum([
+		"Açık",
+		"Takipte",
+		"Kapalı"
+	]),
+	owner: z.string().trim().max(200),
+	likelihood: z.number().int().min(1).max(5),
+	impact: z.number().int().min(1).max(5),
+	strategy: z.enum([
+		"",
+		"Kaçınma",
+		"Kontrol",
+		"Üstlenme-Kabul",
+		"Transfer"
+	]),
+	implementedAt: z.union([day, z.literal("")]),
+	actionResult: z.string().trim().max(5e3),
+	residualLikelihood: z.number().int().min(1).max(5).nullable(),
+	residualImpact: z.number().int().min(1).max(5).nullable(),
+	createdBy: z.string().min(1).max(120),
+	createdByName: z.string().trim().min(1).max(150),
+	createdAt: z.string().min(1).max(40),
+	updatedAt: z.string().min(1).max(40)
+}).strict();
 var credentialSchema = z.object({
 	salt: z.string(),
 	iv: z.string(),
@@ -1039,6 +1081,7 @@ var schema = z.object({
 	})).min(1),
 	resources: z.array(res),
 	projects: z.array(proj),
+	risks: z.array(risk).max(1e5).default([]),
 	allocations: z.record(z.number().min(0).max(1e4)),
 	actualAllocations: z.record(z.number().min(0).max(100)).optional(),
 	actualWorkedHours: z.record(z.number().min(0).max(1e3)).optional(),
@@ -1087,6 +1130,12 @@ function validate(input) {
 	]) if (new Set(list.map((x) => x.id)).size !== list.length) throw bad("Tekrarlanan kayıt kimliği.");
 	const teamIds = new Set(d.teams.map((team) => team.id));
 	const projectsById = new Map(d.projects.map((project) => [project.id, project]));
+	if (new Set((d.risks || []).map((item) => item.id)).size !== (d.risks || []).length) throw bad("Tekrarlanan risk kimliği.");
+	for (const item of d.risks || []) {
+		if (!projectsById.has(item.projectId)) throw bad("Risk projesi bulunamadı.");
+		if (item.residualLikelihood === null !== (item.residualImpact === null)) throw bad("Aksiyon sonrası olasılık ve etki birlikte girilmeli.");
+		if (item.residualLikelihood !== null && !item.implementedAt) throw bad("Aksiyon sonrası değerlendirme için devreye alınma tarihi girin.");
+	}
 	const resourcesById = new Map(d.resources.map((resource) => [resource.id, resource]));
 	for (const key of Object.keys(d.personCalendar || {})) {
 		const [resourceId, date, ...extra] = key.split("|");

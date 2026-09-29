@@ -19,7 +19,7 @@ const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
 const changesSchema = z
   .array(
     z.object({
-      kind: z.enum(["team", "project", "resource", "allocation", "actual", "workedHours", "calendar", "personDay"]),
+      kind: z.enum(["team", "project", "risk", "resource", "allocation", "actual", "workedHours", "calendar", "personDay"]),
       id,
       value: z.unknown().optional(),
       revision: z.number().int().nonnegative(),
@@ -72,7 +72,9 @@ export function applyChanges(d, u, input) {
     const managerActual=u.role === "manager" && actualKind && !!assignment && allowedTeam(d,publicUser(u),assignment.team);
     const ownActual=u.role === "normal" && !!u.resourceId && targetId === u.resourceId && actualKind;
     const ownDay=kind==='personDay'&&!!u.resourceId&&targetId===u.resourceId;
-    if (u.role !== "admin" && !managerPlan && !managerActual && !ownActual && !ownDay)
+    const existingRisk=kind==='risk'?d.risks?.find(item=>item.id===id):undefined;
+    const canRisk=kind==='risk'&&(!operation||u.role!=='normal')&&(u.role==='manager'||u.role==='admin'||!existingRisk||existingRisk.createdBy===u._id);
+    if (u.role !== "admin" && !managerPlan && !managerActual && !ownActual && !ownDay && !canRisk)
       fail(403, "Bu işlem için yetkiniz yok.");
     if (ownActual && !resource) fail(404, "Çalışan kaynak bulunamadı.");
     if ((d.revisions[k] || 0) !== revision)
@@ -82,7 +84,20 @@ export function applyChanges(d, u, input) {
       );
     if (kind === "actual" && !operation && id.split("|")[2] > currentPlanningMonth())
       fail(400, "Gelecek aylara gerçekleşen kaynak dağılımı girilemez.");
-    if (kind === "allocation") {
+    if(kind==='risk'){
+      d.risks??=[];
+      if(operation){
+        if(!existingRisk)fail(404,"Risk kaydı bulunamadı.");
+        d.risks=d.risks.filter(item=>item.id!==id);
+      }else{
+        if(!value||value.id!==id)fail(400,"Risk kimliği eşleşmiyor.");
+        if(existingRisk&&value.projectId!==existingRisk.projectId)fail(400,"Risk başka projeye taşınamaz.");
+        if(!d.projects.some(item=>item.id===value.projectId))fail(404,"Proje bulunamadı.");
+        const now=new Date().toISOString();
+        const next={...value,createdBy:existingRisk?.createdBy||u._id,createdByName:existingRisk?.createdByName||u.name,createdAt:existingRisk?.createdAt||now,updatedAt:now};
+        d.risks=[...d.risks.filter(item=>item.id!==id),next];
+      }
+    } else if (kind === "allocation") {
       if (operation) delete d.allocations[id];
       else d.allocations[id] = value;
     } else if (kind === "actual") {
@@ -159,6 +174,7 @@ export function applyChanges(d, u, input) {
         )
           fail(409, "Kullanılan takım silinemez.");
         if(kind==="project"){
+          d.risks=(d.risks||[]).filter(risk=>risk.projectId!==id);
           for(const key of Object.keys(d.allocations))if(key.split("|")[1]===id){
             delete d.allocations[key];
             d.revisions["allocation:"+key]=(d.revisions["allocation:"+key]||0)+1;

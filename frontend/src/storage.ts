@@ -75,7 +75,7 @@ export async function checkUpdates() {
   return r.generation !== generation;
 }
 export type Change = {
-  kind: "allocation" | "actual" | "workedHours" | "calendar" | "personDay" | "project" | "resource" | "team";
+  kind: "allocation" | "actual" | "workedHours" | "calendar" | "personDay" | "project" | "risk" | "resource" | "team";
   id: string;
   value: any;
   revision: number;

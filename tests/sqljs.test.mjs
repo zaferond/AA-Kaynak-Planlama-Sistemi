@@ -85,7 +85,7 @@ test("sql.js: person allocations are folded into team allocations once", async (
       await store.connect();
       assert.equal((await store.read()).data.allocations['t|p|2026-09'],0.75);
       assert.equal((await store.db.query('SELECT COUNT(*) AS n FROM kp_person_allocations')).rows[0].n,0);
-      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,23);
+      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,24);
       await store.close();
       await store.connect();
       assert.equal((await store.read()).data.allocations['t|p|2026-09'],0.75);
@@ -120,7 +120,7 @@ test("sql.js: existing actual entries keep their hours when the baseline changes
     assert(Math.abs(data.actualAllocations['r2|p|2026-09']-99/180)<1e-10);
     assert.equal(data.actualPercentEntries['r|p|2026-09'],80);
     assert.equal(data.actualWorkedHours['r|2026-09'],200);
-    assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,23);
+    assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,24);
     await store.close();
     store=new Store({env});
     await store.connect();

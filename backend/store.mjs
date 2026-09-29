@@ -10,6 +10,7 @@ import { table } from "./tables.mjs";
 export const kinds = {
   team: "teams",
   project: "projects",
+  risk: "risks",
   resource: "resources",
   allocation: "allocations",
   actual: "actualAllocations",
@@ -265,6 +266,10 @@ export class Store {
             }
           }
         }
+        if (!versions.includes(24)) {
+          if (!auto) throw Error("Risk yönetimi şeması için IT npm run db:migrate çalıştırmalı.");
+          await c.batch(await fs.readFile(new URL("./migrations/024_" + this.provider + ".sql", import.meta.url), "utf8"));
+        }
         if (!versions.includes(23)) {
           if (!auto) throw Error("Kritik konu olmadan bilgi kaydı için IT npm run db:migrate çalıştırmalı.");
           await c.batch(await fs.readFile(new URL("./migrations/023_" + this.provider + ".sql", import.meta.url), "utf8"));
@@ -422,6 +427,7 @@ export class Store {
     const d = {
       teams: [],
       projects: [],
+      risks: [],
       resources: [],
       allocations: {},
       actualAllocations: {},
@@ -458,6 +464,7 @@ export class Store {
       milestones: [],
     }));
     const pm = new Map(d.projects.map((p) => [p.id, p]));
+    d.risks = (await c.query("SELECT * FROM kp_project_risks ORDER BY id")).rows.map((row)=>JSON.parse(row.payload));
     for (const r of (await c.query("SELECT * FROM kp_project_phases")).rows) {
       const p = pm.get(r.project_id);
       if (r.label !== null) p.phases[r.month] = r.label;
@@ -513,7 +520,7 @@ export class Store {
     for (const r of (await c.query("SELECT * FROM kp_actual_percent_entries")).rows)
       d.actualPercentEntries[r.resource_id + "|" + r.project_id + "|" + r.month] = r.percent;
     for (const r of (await c.query("SELECT * FROM kp_revisions")).rows)
-      d.revisions[r.kind === "allocation" && r.record_id.startsWith("@actual:") ? "actual:" + r.record_id.slice(8) : r.kind === "allocation" && r.record_id.startsWith("@worked:") ? "workedHours:" + r.record_id.slice(8) : r.kind === "allocation" && r.record_id.startsWith("@calendar:") ? "calendar:" + r.record_id.slice(10) : r.kind === "allocation" && r.record_id.startsWith("@person:") ? "personDay:" + r.record_id.slice(8) : r.kind + ":" + r.record_id] = Number(r.revision);
+      d.revisions[r.kind === "allocation" && r.record_id.startsWith("@risk:") ? "risk:" + r.record_id.slice(6) : r.kind === "allocation" && r.record_id.startsWith("@actual:") ? "actual:" + r.record_id.slice(8) : r.kind === "allocation" && r.record_id.startsWith("@worked:") ? "workedHours:" + r.record_id.slice(8) : r.kind === "allocation" && r.record_id.startsWith("@calendar:") ? "calendar:" + r.record_id.slice(10) : r.kind === "allocation" && r.record_id.startsWith("@person:") ? "personDay:" + r.record_id.slice(8) : r.kind + ":" + r.record_id] = Number(r.revision);
     return { data: d, generation: Number(s.generation) };
   }
   async view(u) {
@@ -593,6 +600,8 @@ export class Store {
         end_month: p.end,
       })),
     );
+    await c.upsert("project_risks",up("risk").map(r=>({id:r.id,project_id:r.projectId,payload:JSON.stringify(r)})));
+    await c.remove("project_risks",changed.risk.filter(x=>x.value===undefined).map(x=>({id:x.id})));
     const rs = up("resource");
     await c.upsert(
       "resources",
@@ -733,7 +742,7 @@ export class Store {
         )
         .map(([k, revision]) => {
           const i = k.indexOf(":");
-          return k.startsWith("actual:") ? {kind:"allocation",record_id:"@actual:"+k.slice(7),revision} : k.startsWith("workedHours:") ? {kind:"allocation",record_id:"@worked:"+k.slice(12),revision} : k.startsWith("calendar:") ? {kind:"allocation",record_id:"@calendar:"+k.slice(9),revision} : k.startsWith("personDay:") ? {kind:"allocation",record_id:"@person:"+k.slice(10),revision} : { kind: k.slice(0, i), record_id: k.slice(i + 1), revision };
+          return k.startsWith("risk:") ? {kind:"allocation",record_id:"@risk:"+k.slice(5),revision} : k.startsWith("actual:") ? {kind:"allocation",record_id:"@actual:"+k.slice(7),revision} : k.startsWith("workedHours:") ? {kind:"allocation",record_id:"@worked:"+k.slice(12),revision} : k.startsWith("calendar:") ? {kind:"allocation",record_id:"@calendar:"+k.slice(9),revision} : k.startsWith("personDay:") ? {kind:"allocation",record_id:"@person:"+k.slice(10),revision} : { kind: k.slice(0, i), record_id: k.slice(i + 1), revision };
         }),
     );
     await c.remove(

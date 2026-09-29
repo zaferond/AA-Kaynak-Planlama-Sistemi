@@ -65,6 +65,31 @@ const proj = z.object({
     .optional(),
   milestones: z.array(milestone).max(100).optional(),
 });
+const risk = z.object({
+  id:z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
+  projectId:z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
+  reportedBy:z.string().trim().min(1).max(200),
+  category:z.enum(['Takvim','Mali','Teknik','İdari']),
+  reportedAt:day,
+  system:z.string().trim().max(200),
+  description:z.string().trim().min(1).max(5000),
+  cause:z.string().trim().max(5000),
+  actionPlan:z.string().trim().max(5000),
+  targetAt:z.union([day,z.literal('')]),
+  status:z.enum(['Açık','Takipte','Kapalı']),
+  owner:z.string().trim().max(200),
+  likelihood:z.number().int().min(1).max(5),
+  impact:z.number().int().min(1).max(5),
+  strategy:z.enum(['','Kaçınma','Kontrol','Üstlenme-Kabul','Transfer']),
+  implementedAt:z.union([day,z.literal('')]),
+  actionResult:z.string().trim().max(5000),
+  residualLikelihood:z.number().int().min(1).max(5).nullable(),
+  residualImpact:z.number().int().min(1).max(5).nullable(),
+  createdBy:z.string().min(1).max(120),
+  createdByName:z.string().trim().min(1).max(150),
+  createdAt:z.string().min(1).max(40),
+  updatedAt:z.string().min(1).max(40),
+}).strict();
 const credentialSchema = z.object({
   salt: z.string(),
   iv: z.string(),
@@ -95,6 +120,7 @@ const schema = z.object({
     .min(1),
   resources: z.array(res),
   projects: z.array(proj),
+  risks: z.array(risk).max(100000).default([]),
   allocations: z.record(z.number().min(0).max(10000)),
   actualAllocations: z.record(z.number().min(0).max(100)).optional(),
   actualWorkedHours: z.record(z.number().min(0).max(1000)).optional(),
@@ -133,6 +159,12 @@ export function validate(input: unknown): Data {
       throw bad("Tekrarlanan kayıt kimliği.");
   const teamIds=new Set(d.teams.map(team=>team.id));
   const projectsById=new Map(d.projects.map(project=>[project.id,project]));
+  if(new Set((d.risks||[]).map(item=>item.id)).size!==(d.risks||[]).length)throw bad('Tekrarlanan risk kimliği.');
+  for(const item of d.risks||[]){
+    if(!projectsById.has(item.projectId))throw bad('Risk projesi bulunamadı.');
+    if((item.residualLikelihood===null)!==(item.residualImpact===null))throw bad('Aksiyon sonrası olasılık ve etki birlikte girilmeli.');
+    if(item.residualLikelihood!==null&&!item.implementedAt)throw bad('Aksiyon sonrası değerlendirme için devreye alınma tarihi girin.');
+  }
   const resourcesById=new Map(d.resources.map(resource=>[resource.id,resource]));
   for(const key of Object.keys(d.personCalendar||{})){const [resourceId,date,...extra]=key.split('|');if(extra.length||!resourcesById.has(resourceId)||!day.safeParse(date).success)throw bad('Geçersiz kişisel takvim kaydı.');}
   const leaderNames=new Set(d.leaders||[]);
