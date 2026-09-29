@@ -213,8 +213,29 @@ async function deleteProject(){
   setNotice(`“${project.name}” projesi ve bağlı kaynak dağılımları silindi.`);
  }catch(e){setFormError((e as Error).message)}
 }
-function openMilestone(project:Project,milestone?:Milestone){if(!isAdmin)return;setFormError('');const first=months.find(month=>month>=project.start&&month<=project.end)||project.start;setEditor({kind:'milestone',projectId:project.id,isNew:!milestone,value:milestone?structuredClone(milestone):{id:crypto.randomUUID(),name:'',start:first+'-01',end:first+'-01',barColor:'red',barStyle:'solid',barText:''}})}
-async function deleteMilestone(project:Project,milestone:Milestone){if(!data||!isAdmin||saving)return;if(!confirm('“'+milestone.name+'” kritik kilometre taşı silinsin mi?'))return;try{await batch([change('project',project.id,{...project,milestones:(project.milestones||[]).filter(item=>item.id!==milestone.id)})]);setNotice('Kritik kilometre taşı silindi.')}catch(e){setError((e as Error).message)}}
+function openMilestone(project:Project,milestone?:Milestone){if(!isAdmin)return;setFormError('');const first=months.find(month=>month>=project.start&&month<=project.end)||project.start;setEditor({kind:'milestone',projectId:project.id,isNew:!milestone,value:milestone?structuredClone(milestone):{id:crypto.randomUUID(),name:'',start:first+'-01',end:first+'-01',barColor:'red',barStyle:'solid',barText:'',barNotes:[{text:'',includeInReport:false}]}})}
+async function deleteMilestone(project:Project,milestone:Milestone){
+ if(!data||!isAdmin||saving)return;
+ const current=data.projects.find(item=>item.id===project.id);
+ if(!current?.milestones?.some(item=>item.id===milestone.id)){
+  const message='Bilgi bulunamadı. Verileri yenileyip tekrar deneyin.';
+  if(editor?.kind==='milestone'&&editor.value?.id===milestone.id)setFormError(message);else setError(message);
+  return;
+ }
+ if(!confirm('“'+milestone.name+'” bilgisi tüm tarih aralıkları ve açıklamalarıyla silinsin mi?'))return;
+ try{
+  await batch([change('project',current.id,{...current,milestones:current.milestones.filter(item=>item.id!==milestone.id)})]);
+  setEditor((active:any)=>active?.kind==='milestone'&&active.value?.id===milestone.id?null:active);
+  setNotice('Bilgi ve bağlı açıklamaları silindi.');
+ }catch(e){if(editor?.kind==='milestone'&&editor.value?.id===milestone.id)setFormError((e as Error).message);else setError((e as Error).message)}
+}
+function deleteEditedMilestone(){
+ if(!data||editor?.kind!=='milestone'||editor.isNew)return;
+ const project=data.projects.find(item=>item.id===editor.projectId);
+ const milestone=project?.milestones?.find(item=>item.id===editor.value.id);
+ if(!project||!milestone){setFormError('Bilgi bulunamadı. Verileri yenileyip tekrar deneyin.');return}
+ void deleteMilestone(project,milestone);
+}
 async function changeMilestoneRange(project:Project,milestone:Milestone,rangeIndex:number,mode:'move'|'start'|'end',days:number){
  if(!data||!isAdmin||saving||days===0)return;
  try{
@@ -407,4 +428,4 @@ return <div className={'app dense-'+density+' tab-'+tab+(fullPlan?' full-plan':'
 </div>
 <p className="bulk-edit-hint">Değiştirmediğiniz alanlar korunur. Aktif İlanı plana dahil etmek için İşbaşı Tarihi gerekir.</p>
 </>}
-{formError&&editor.kind!=='milestone'&&<p role="alert" className="negative">{formError}</p>}{editor.kind==='projectPhase'||editor.kind==='milestone'||editor.kind==='bulkResources'?<div className={editor.kind==='bulkResources'?'bulk-edit-actions':'timeline-editor-actions'}>{editor.kind==='milestone'&&formError&&<p role="alert" className="negative timeline-save-error">{formError}</p>}<button type="button" className="button" disabled={saving} onClick={()=>setEditor(null)}>Vazgeç</button><button type="button" className="button primary" disabled={saving} onClick={submit}>{saving?'Kaydediliyor…':'Kaydet'}</button></div>:editor.kind==='project'&&!editor.isNew?<div className="project-editor-actions"><button type="button" className="button deletebutton" disabled={saving} onClick={deleteProject}>Projeyi Sil</button><button type="button" className="button primary" disabled={saving} onClick={submit}>{saving?'Kaydediliyor…':'Kaydet'}</button></div>:<button className="button primary" disabled={saving} onClick={submit}>{saving?'Kaydediliyor…':'Kaydet'}</button>}</div>}</DialogContent></Dialog></div>}
+{formError&&editor.kind!=='milestone'&&<p role="alert" className="negative">{formError}</p>}{editor.kind==='projectPhase'||editor.kind==='milestone'||editor.kind==='bulkResources'?<div className={editor.kind==='bulkResources'?'bulk-edit-actions':'timeline-editor-actions'}>{editor.kind==='milestone'&&formError&&<p role="alert" className="negative timeline-save-error">{formError}</p>}{editor.kind==='milestone'&&!editor.isNew&&<button type="button" className="button deletebutton milestone-delete-button" disabled={saving} onClick={deleteEditedMilestone}>Bilgiyi Sil</button>}<button type="button" className="button" disabled={saving} onClick={()=>setEditor(null)}>Vazgeç</button><button type="button" className="button primary" disabled={saving} onClick={submit}>{saving?'Kaydediliyor…':'Kaydet'}</button></div>:editor.kind==='project'&&!editor.isNew?<div className="project-editor-actions"><button type="button" className="button deletebutton" disabled={saving} onClick={deleteProject}>Projeyi Sil</button><button type="button" className="button primary" disabled={saving} onClick={submit}>{saving?'Kaydediliyor…':'Kaydet'}</button></div>:<button className="button primary" disabled={saving} onClick={submit}>{saving?'Kaydediliyor…':'Kaydet'}</button>}</div>}</DialogContent></Dialog></div>}

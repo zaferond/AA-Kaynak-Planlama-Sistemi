@@ -6,8 +6,9 @@ import path from 'node:path';
 import {Store} from '../backend/store.mjs';
 import {SqlJsAdapter} from '../backend/adapters/sqljs.mjs';
 import {migrate,validate} from '../backend/domain/index.mjs';
-import {cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
+import {addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
 import {milestoneBars} from '../frontend/src/milestone-bars.ts';
+import {buildProjectInfoReport} from '../frontend/src/project-info-report.ts';
 
 test('project milestones survive add, edit, delete and restart',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'aa-milestones-'));
@@ -27,6 +28,14 @@ test('project milestones survive add, edit, delete and restart',async()=>{
     const milestone={id:'m1',name:'Tasarım Onayı',start:'2026-11-12',end:'2027-02-18',barColor:'purple',barStyle:'striped',barText:'PDR · Onay Bekleniyor'};
     await saveProject({...project,milestones:[milestone]});
     assert.deepEqual((await store.read()).data.projects.find(p=>p.id===project.id).milestones,[milestone]);
+    const cleared=removeMilestoneNote(milestone,0,0);
+    await saveProject({...project,milestones:[cleared]});
+    await store.close();
+    await store.connect();
+    const reloaded=(await store.read()).data.projects.find(p=>p.id===project.id).milestones[0];
+    assert.deepEqual(rangeNotes(milestoneRanges(reloaded)[0]),[]);
+    assert.equal(reloaded.barText||'','');
+    await saveProject({...project,milestones:[milestone]});
     await assert.rejects(()=>saveProject({...project,milestones:[{...milestone,end:'2027-09-01'}]}),/Kilometre taşı proje dönemi içinde olmalı/);
     await assert.rejects(()=>saveProject({...project,milestones:[{...milestone,start:'2026-11-31'}]}),/Invalid input|Geçersiz gün|validation/i);
     await store.close();
@@ -50,6 +59,14 @@ test('project milestones survive add, edit, delete and restart',async()=>{
     await store.close();
     await store.connect();
     assert.deepEqual((await store.read()).data.projects.find(p=>p.id===project.id).milestones,[noted]);
+    const withoutExtraNotes=removeMilestoneNote(removeMilestoneNote(noted,1,0),1,0);
+    await saveProject({...project,milestones:[withoutExtraNotes]});
+    await store.close();
+    await store.connect();
+    const reloadedWithoutExtra=(await store.read()).data.projects.find(p=>p.id===project.id).milestones[0];
+    assert.deepEqual(rangeNotes(milestoneRanges(reloadedWithoutExtra)[1]),[]);
+    assert.equal(reloadedWithoutExtra.additionalRanges[0].description,'');
+    await saveProject({...project,milestones:[noted]});
     const longText='Uzun açıklama '.repeat(1000).trim();
     const lengthy={...noted,barText:longText,barNotes:[{text:longText,includeInReport:true}],additionalRanges:[{...multi.additionalRanges[0],description:longText,notes:[{text:longText,includeInReport:true}]},multi.additionalRanges[1]]};
     await saveProject({...project,milestones:[lengthy]});
@@ -116,4 +133,36 @@ test('multiple date ranges form separate bars on one monthly track',()=>{
  const legacy={...milestone,additionalRanges:[{start:'2026-01-20',end:'2026-01-22'}]};
  assert.equal(milestoneRanges(legacy)[1].color,'purple');
  assert.equal(withMilestoneRanges(legacy,milestoneRanges(legacy).map((range,index)=>index?range:{...range,color:'blue'})).additionalRanges[0].color,'purple');
+});
+
+test('deleting descriptions and date ranges updates bars and report topics',()=>{
+ const milestone={id:'info',name:'Analizler',start:'2026-02-01',end:'2026-02-15',barColor:'blue',barNotes:[
+  {text:'İlk açıklama',includeInReport:true,start:'2026-02-01',end:'2026-02-05'},
+  {text:'İkinci açıklama',includeInReport:true,start:'2026-02-10',end:'2026-02-15'}
+ ],additionalRanges:[{start:'2026-03-01',end:'2026-03-10',color:'green',notes:[{text:'Üçüncü açıklama',includeInReport:true,start:'2026-03-01',end:'2026-03-10'}]}]};
+ const project={id:'p',name:'Proje',start:'2026-01',end:'2026-12',phases:{},milestones:[milestone]};
+ const firstRemoved=removeMilestoneNote(milestone,0,0);
+ assert.deepEqual([firstRemoved.start,firstRemoved.end,firstRemoved.barText],['2026-02-10','2026-02-15','İkinci açıklama']);
+ assert.deepEqual(buildProjectInfoReport([{...project,milestones:[firstRemoved]}])[0].infos[0].topics.map(topic=>topic.text),['İkinci açıklama','Üçüncü açıklama']);
+ const lastMainRemoved=removeMilestoneNote(firstRemoved,0,0);
+ assert.deepEqual(lastMainRemoved.barNotes,[]);
+ assert.equal(lastMainRemoved.barText,'');
+ assert.deepEqual([lastMainRemoved.start,lastMainRemoved.end],['2026-02-10','2026-02-15']);
+ const allRemoved=removeMilestoneNote(lastMainRemoved,1,0);
+ assert.deepEqual(buildProjectInfoReport([{...project,milestones:[allRemoved]}]),[]);
+ assert.deepEqual(cleanMilestoneRanges(milestoneRanges(allRemoved)).map(range=>range.notes),[[],[]]);
+ const added=addMilestoneNote(allRemoved,0);
+ assert.deepEqual(added.barNotes,[{text:'',includeInReport:false,start:'2026-02-10',end:'2026-02-15'}]);
+ assert.equal(added.barNotes.length,1);
+ const promoted=removeMilestoneRange(milestone,0);
+ assert.deepEqual([promoted.start,promoted.end,promoted.barColor],['2026-03-01','2026-03-10','green']);
+ assert.deepEqual(promoted.barNotes,milestone.additionalRanges[0].notes);
+ assert.equal(promoted.additionalRanges,undefined);
+ assert.deepEqual(removeMilestoneRange(milestone,1).barNotes,milestone.barNotes);
+ const threeRanges={...milestone,additionalRanges:[...milestone.additionalRanges,{start:'2026-04-01',end:'2026-04-05',color:'amber',notes:[{text:'Son açıklama',includeInReport:true}]}]};
+ const middleRemoved=removeMilestoneRange(threeRanges,1);
+ assert.deepEqual(middleRemoved.additionalRanges?.map(range=>[range.start,range.end,range.color]),[['2026-04-01','2026-04-05','amber']]);
+ assert.deepEqual(middleRemoved.additionalRanges?.[0].notes,threeRanges.additionalRanges[1].notes);
+ assert.throws(()=>removeMilestoneRange(promoted,0),/Son tarih aralığını/);
+ assert.throws(()=>removeMilestoneNote(allRemoved,0,0),/Açıklama bulunamadı/);
 });

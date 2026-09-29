@@ -60,6 +60,32 @@ export function withMilestoneRanges(milestone:Milestone,ranges:MilestoneRange[])
  return {...rest,start:first.start,end:first.end,barColor:first.color||milestone.barColor||'red',barText:firstNotes[0]?.text||'',barNotes:firstNotes,...(additionalRanges.length?{additionalRanges:additionalRanges.map(range=>{const notes=rangeNotes(range);return {...range,description:notes[0]?.text||'',notes}})}:{})};
 }
 
+export function addMilestoneNote(milestone:Milestone,rangeIndex:number):Milestone{
+ const ranges=milestoneRanges(milestone);
+ const range=ranges[rangeIndex];
+ if(!range)throw Error('Tarih aralığı bulunamadı.');
+ const notes=rangeNotes(range);
+ if(notes.length>=10)throw Error('Bir tarih aralığına en fazla 10 açıklama eklenebilir.');
+ const next={text:'',includeInReport:false,start:range.start,end:range.end};
+ return withMilestoneRanges(milestone,ranges.map((item,index)=>index===rangeIndex?{...item,notes:[...notes,next]}:item));
+}
+
+export function removeMilestoneNote(milestone:Milestone,rangeIndex:number,noteIndex:number):Milestone{
+ const ranges=milestoneRanges(milestone);
+ const range=ranges[rangeIndex];
+ if(!range)throw Error('Tarih aralığı bulunamadı.');
+ const notes=datedNotes(range);
+ if(noteIndex<0||noteIndex>=notes.length)throw Error('Açıklama bulunamadı.');
+ return withMilestoneRanges(milestone,ranges.map((item,index)=>index===rangeIndex?rangeWithNoteDates(item,notes.filter((_,i)=>i!==noteIndex)):item));
+}
+
+export function removeMilestoneRange(milestone:Milestone,rangeIndex:number):Milestone{
+ const ranges=milestoneRanges(milestone);
+ if(rangeIndex<0||rangeIndex>=ranges.length)throw Error('Tarih aralığı bulunamadı.');
+ if(ranges.length===1)throw Error('Son tarih aralığını kaldırmak için bilgiyi silin.');
+ return withMilestoneRanges(milestone,ranges.filter((_,index)=>index!==rangeIndex));
+}
+
 export const shiftCalendarDate=(date:string,days:number)=>{
  const value=new Date(date+'T12:00:00Z');
  value.setUTCDate(value.getUTCDate()+days);
