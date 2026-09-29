@@ -46,6 +46,7 @@ const milestone = z.object({
   name: z.string().trim().min(1).max(200),
   start: day,
   end: day,
+  hasCriticalTopics: z.boolean().optional(),
   additionalRanges: z.array(z.object({start:day,end:day,description:z.string().trim().optional(),notes:z.array(milestoneNote).max(10).optional(),color:z.enum(phasePalette.map((x)=>x.id) as [string,...string[]]).optional()})).max(19).optional(),
   barColor: z.enum(phasePalette.map((x)=>x.id) as [string,...string[]]).optional(),
   barStyle: z.enum(['solid','striped','outline']).optional(),
@@ -163,6 +164,10 @@ export function validate(input: unknown): Data {
     if (new Set(milestones.map((m) => m.id)).size !== milestones.length)
       throw bad("Aynı kilometre taşı kimliği iki kez kullanılamaz.");
     for (const m of milestones){
+      if(m.hasCriticalTopics===false){
+        if(m.additionalRanges?.length||m.barNotes?.length||m.barText?.trim())throw bad('Kritik konusu olmayan bilgi açıklama içeremez.');
+        continue;
+      }
       const ranges=[{start:m.start,end:m.end,notes:m.barNotes},...(m.additionalRanges||[])].sort((a,b)=>a.start.localeCompare(b.start));
       for(const [index,range] of ranges.entries()){
         if(range.start>range.end||range.start<p.start+'-01'||range.end.slice(0,7)>p.end)

@@ -6,7 +6,7 @@ import type {WorkCalendar,PersonCalendar} from './actual-units';
 export type Team={id:string;name:string;lead:string;managerName?:string;excelCapacity:number;catalog?:boolean};
 export type MilestoneNote={text:string;includeInReport:boolean;completed?:boolean;start?:string;end?:string};
 export type MilestoneRange={start:string;end:string;description?:string;notes?:MilestoneNote[];color?:string};
-export type Milestone={id:string;name:string;start:string;end:string;additionalRanges?:MilestoneRange[];barColor?:string;barStyle?:'solid'|'striped'|'outline';barText?:string;barNotes?:MilestoneNote[]};
+export type Milestone={id:string;name:string;start:string;end:string;hasCriticalTopics?:boolean;additionalRanges?:MilestoneRange[];barColor?:string;barStyle?:'solid'|'striped'|'outline';barText?:string;barNotes?:MilestoneNote[]};
 export type Project={id:string;name:string;responsibleName?:string;start:string;end:string;phases:Record<string,string>;phaseColors?:Record<string,string>;milestones?:Milestone[]};
 export type Version={effective:string;team:string;lead?:string;status:string;included:boolean;start:string;end:string;amount:number};
 export type Resource={id:string;name:string;note:string;code?:string;versions:Version[]};

@@ -18,6 +18,9 @@
 @media(max-width:1000px){.mastbrandrow .systembrand{font-size:14px}.mastbrandrow{gap:10px}.mastuser{font-size:10px}.mastglobalactions{margin-left:0}.app:is(.tab-plan,.tab-projects) .stats>div{padding:6px 8px}.app:is(.tab-plan,.tab-projects) .stats strong{font-size:18px}.app [data-slot=table-container]:has(>.planning-grid){max-height:65vh}}@media(max-width:650px){.app>.mast{padding:10px}.mastbrandrow{align-items:flex-start}.mastbrandrow .systembrand{font-size:12px}.mastbrandrow .mark{display:none}.mastuser{font-size:9px;padding:5px;white-space:normal}.mastuser svg{display:none}.app>main{padding:7px}.app .filters{gap:7px}.app .filters>.pick:nth-child(-n+3){flex:1 1 140px}.app .mast .resetfilters{width:auto}.app .navtabs{gap:16px!important}.app .stats{grid-template-columns:repeat(2,1fr)}.app .tablefoot{flex-wrap:wrap}}
 .pager{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 12px;background:#f5f8fc;border-block:1px solid #dce6ef;font-size:11px;color:#46617e}.pager label{display:flex;align-items:center;gap:5px}.pager .button,.pager select{min-height:25px;height:25px;font-size:11px;padding:2px 8px}.pager small{font-size:10px;color:#72869a;margin-left:auto}
 
+/* Match the application workspace to an initial 80% page scale. */
+html{zoom:80%}
+
 /* Monthly capacity disclosure */
 .app .capacitystrip{margin:8px 12px 10px;border:1px solid #cbdced;border-radius:9px;background:#fff;box-shadow:0 1px 3px #173b6110;overflow:hidden}
 .app .capacitystrip>summary,.app .capacitystrip[open]>summary{display:flex;align-items:center;gap:11px;min-height:57px;padding:9px 12px;list-style:none;cursor:pointer;background:#f5f9fe;color:#183f65;transition:background-color .18s ease}
@@ -268,6 +271,7 @@
 .app .projectmatrix .milestone-row td.milestone-month{position:relative;height:36px;padding:0!important;vertical-align:middle;border-bottom:1px solid #e7eef6;overflow:hidden}
 .app .projectmatrix .milestone-row td.milestone-range{padding:5px 0!important}
 .app .projectmatrix .milestone-track{position:relative;width:100%;height:36px;background-image:linear-gradient(to right,transparent calc(100% - 1px),#dce7f0 calc(100% - 1px));background-size:var(--milestone-month-width) 100%}
+.app .projectmatrix .milestone-track-empty{display:flex;align-items:center;justify-content:flex-start;padding:0 12px;color:#8697a7;font-size:10px;font-style:italic}
 .app .projectmatrix .milestone-track .gantt-bar{position:absolute;top:6px;min-width:6px;min-height:24px;padding:3px 5px;overflow:visible}
 .app .projectmatrix .milestone-track .gantt-bar span{max-height:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .app .projectmatrix .gantt-note-list{display:block;width:100%;min-width:0;margin:0;padding:0;list-style:none;text-align:left}
@@ -636,9 +640,9 @@
 .timeline-editor-form .timeline-editor-actions{position:sticky;bottom:0;z-index:2;display:flex;justify-content:flex-end;flex-wrap:wrap;gap:9px;margin:2px -26px 0;padding:14px 26px;border-top:1px solid #dce6ef;background:#fff;box-shadow:0 -5px 14px #1c3b5512}
 .timeline-editor-actions .timeline-save-error{flex:1 1 100%;margin:0;padding:9px 11px;border:1px solid #dfb2b9;border-radius:5px;background:#fff4f5;color:#8b3443;font-size:12px;line-height:1.45}
 .timeline-editor-actions .button{min-width:88px;min-height:36px;padding:7px 16px;border-radius:5px;font-size:12px;font-weight:650}
-.timeline-editor-actions .milestone-delete-button,.timeline-editor-actions .milestone-delete-confirm{border-color:#deb8bf;background:#fff7f8;color:#a0394d}
+.timeline-editor-actions .milestone-delete-button{border-color:#deb8bf;background:#fff7f8;color:#a0394d}
 .timeline-editor-actions .milestone-delete-button{margin-right:auto}
-.timeline-editor-actions :is(.milestone-delete-button,.milestone-delete-confirm):hover:not(:disabled){background:#ffecef;border-color:#ca8996}
+.timeline-editor-actions .milestone-delete-button:hover:not(:disabled){background:#ffecef;border-color:#ca8996}
 .timeline-editor-actions .button.primary{background:#315b7d;border-color:#315b7d;color:#fff}
 .timeline-editor-actions .button.primary:hover:not(:disabled){background:#274c69;border-color:#274c69}
 @media(max-width:650px){.editor.timeline-editor{max-height:92dvh}.timeline-editor [data-slot=dialog-header]{padding:18px 18px 15px}.editor .timeline-editor-form{padding:18px 18px 0}.timeline-editor-form>.phasecontext{align-items:flex-start;flex-direction:column;gap:8px}.timeline-editor-form .palette,.timeline-editor-form .milestone-colors{grid-template-columns:repeat(2,minmax(0,1fr))}.timeline-editor-form .formrow{grid-template-columns:1fr}.timeline-editor-form .timeline-editor-actions{margin-inline:-18px;padding:12px 18px}}

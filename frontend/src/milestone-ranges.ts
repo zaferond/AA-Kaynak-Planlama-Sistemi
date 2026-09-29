@@ -48,16 +48,22 @@ export function cleanMilestoneRanges(ranges:MilestoneRange[]):MilestoneRange[]{
 }
 
 export function milestoneRanges(milestone:Milestone):MilestoneRange[]{
+ if(milestone.hasCriticalTopics===false)return [];
  const color=milestone.barColor||'red';
  return [{start:milestone.start,end:milestone.end,color,...(milestone.barText!==undefined?{description:milestone.barText}:{}),notes:milestone.barNotes??(milestone.barText?[{text:milestone.barText,includeInReport:false}]:[])},...(milestone.additionalRanges||[]).map(range=>({...range,color:range.color||color,notes:rangeNotes(range)}))];
 }
 
 export function withMilestoneRanges(milestone:Milestone,ranges:MilestoneRange[]):Milestone{
  if(!ranges.length)throw Error('En az bir tarih aralığı gereklidir.');
- const {additionalRanges:_,barText:__,barNotes:___,barColor:____,...rest}=milestone;
+ const {additionalRanges:_,barText:__,barNotes:___,barColor:____,hasCriticalTopics:_____,...rest}=milestone;
  const [first,...additionalRanges]=ranges;
  const firstNotes=rangeNotes(first);
  return {...rest,start:first.start,end:first.end,barColor:first.color||milestone.barColor||'red',barText:firstNotes[0]?.text||'',barNotes:firstNotes,...(additionalRanges.length?{additionalRanges:additionalRanges.map(range=>{const notes=rangeNotes(range);return {...range,description:notes[0]?.text||'',notes}})}:{})};
+}
+
+export function withoutCriticalTopics(milestone:Milestone):Milestone{
+ const {additionalRanges:_,barText:__,barNotes:___,...rest}=milestone;
+ return {...rest,hasCriticalTopics:false,barText:'',barNotes:[]};
 }
 
 export function addMilestoneNote(milestone:Milestone,rangeIndex:number):Milestone{

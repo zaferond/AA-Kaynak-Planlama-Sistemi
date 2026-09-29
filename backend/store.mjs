@@ -265,6 +265,10 @@ export class Store {
             }
           }
         }
+        if (!versions.includes(23)) {
+          if (!auto) throw Error("Kritik konu olmadan bilgi kaydı için IT npm run db:migrate çalıştırmalı.");
+          await c.batch(await fs.readFile(new URL("./migrations/023_" + this.provider + ".sql", import.meta.url), "utf8"));
+        }
         if (
           !(await c.query("SELECT id FROM kp_settings WHERE id=1")).rows.length
         ) {
@@ -469,6 +473,7 @@ export class Store {
         end: r.end_date || new Date(Date.UTC(Number(r.end_month.slice(0,4)),Number(r.end_month.slice(5,7)),0)).toISOString().slice(0,10),
         barColor: r.bar_color || "red",
         barStyle: r.bar_style || "solid",
+        ...(Number(r.has_critical_topics)===0?{hasCriticalTopics:false}:{}),
         ...(r.bar_text?{barText:r.bar_text}:{}),
         ...(r.bar_notes&&r.bar_notes!=="[]"?{barNotes:JSON.parse(r.bar_notes)}:{}),
         ...(r.extra_ranges&&r.extra_ranges!=="[]"?{additionalRanges:JSON.parse(r.extra_ranges)}:{}),
@@ -645,6 +650,7 @@ export class Store {
             end_date: milestone.end,
             bar_color: milestone.barColor || "red",
             bar_style: milestone.barStyle || "solid",
+            has_critical_topics: milestone.hasCriticalTopics===false?0:1,
             bar_text: milestone.barText || "",
             bar_notes: JSON.stringify(milestone.barNotes || []),
             extra_ranges: JSON.stringify(milestone.additionalRanges || []),

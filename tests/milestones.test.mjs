@@ -6,7 +6,7 @@ import path from 'node:path';
 import {Store} from '../backend/store.mjs';
 import {SqlJsAdapter} from '../backend/adapters/sqljs.mjs';
 import {migrate,validate} from '../backend/domain/index.mjs';
-import {addDraftMilestoneRange,addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeDraftMilestoneRange,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
+import {addDraftMilestoneRange,addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeDraftMilestoneRange,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges,withoutCriticalTopics} from '../frontend/src/milestone-ranges.ts';
 import {milestoneBars} from '../frontend/src/milestone-bars.ts';
 import {buildProjectInfoReport} from '../frontend/src/project-info-report.ts';
 
@@ -89,6 +89,47 @@ test('project milestones survive add, edit, delete and restart',async()=>{
   }
 });
 
+test('information without critical topics remains editable and can receive topics later',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'aa-empty-information-'));
+ const store=new Store({env:{DB_PROVIDER:'sqljs',SQLJS_FILE:path.join(dir,'plan.sqlite')}});
+ const project={id:'empty_info_project',name:'Test Projesi',start:'2026-01',end:'2026-12',phases:{},phaseColors:{},milestones:[]};
+ const save=async milestone=>store.transaction(async c=>{
+  const {data}=await store.read(c);
+  await store.persist(data,validate({...data,projects:[...data.projects.filter(item=>item.id!==project.id),{...project,milestones:[milestone]}]}),c);
+ });
+ try{
+  await store.connect();
+  const empty=withoutCriticalTopics({id:'info',name:'Analizler',start:'2026-01-01',end:'2026-01-01',barColor:'blue',barStyle:'solid',barText:'',barNotes:[]});
+  await save(empty);
+  await store.close();
+  await store.connect();
+  let saved=(await store.read()).data.projects.find(item=>item.id===project.id).milestones[0];
+  assert.equal(saved.name,'Analizler');
+  assert.equal(saved.hasCriticalTopics,false);
+  assert.deepEqual(milestoneRanges(saved),[]);
+  assert.deepEqual(milestoneBars(milestoneRanges(saved),['2026-01']),[]);
+  assert.deepEqual(buildProjectInfoReport([{...project,milestones:[saved]}]),[]);
+  const topicDraft=addDraftMilestoneRange(saved,project.end,true);
+  await save(withMilestoneRanges(topicDraft,cleanMilestoneRanges(milestoneRanges(topicDraft))));
+  await store.close();
+  await store.connect();
+  saved=(await store.read()).data.projects.find(item=>item.id===project.id).milestones[0];
+  assert.equal(saved.hasCriticalTopics,undefined);
+  assert.equal(milestoneRanges(saved).length,1);
+  await save(withoutCriticalTopics(saved));
+  await store.close();
+  await store.connect();
+  saved=(await store.read()).data.projects.find(item=>item.id===project.id).milestones[0];
+  assert.equal(saved.hasCriticalTopics,false);
+  assert.deepEqual(milestoneRanges(saved),[]);
+  const {data}=await store.read();
+  assert.throws(()=>validate({...data,projects:[...data.projects.filter(item=>item.id!==project.id),{...project,milestones:[{...empty,barNotes:[{text:'Konu',includeInReport:true}]}]}]}));
+ }finally{
+  await store.close();
+  await fs.rm(dir,{recursive:true,force:true});
+ }
+});
+
 test('existing month milestones become full date ranges during migration',async()=>{
   const dir=await fs.mkdtemp(path.join(os.tmpdir(),'aa-milestone-upgrade-'));
   const file=path.join(dir,'plan.sqlite');
@@ -104,7 +145,7 @@ test('existing month milestones become full date ranges during migration',async(
     const store=new Store({env:{DB_PROVIDER:'sqljs',SQLJS_FILE:file}});
     try{
       await store.connect();
-      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,22);
+      assert.equal((await store.db.query('SELECT MAX(version) AS v FROM kp_schema_migrations')).rows[0].v,23);
       assert.deepEqual((await store.read()).data.projects.find(p=>p.id==='p').milestones,[{id:'m',name:'Eski kilometre taşı',start:'2026-02-01',end:'2026-03-31',barColor:'red',barStyle:'solid'}]);
     }finally{await store.close()}
   }finally{
