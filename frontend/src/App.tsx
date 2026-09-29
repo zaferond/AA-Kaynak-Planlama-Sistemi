@@ -60,6 +60,8 @@ function Cell({value,save,label,disabled=false,onFillSelection}:{value:number;sa
  return <div className={'cell '+(error?'invalid':'')}><input aria-label={label} title={error||label+' : '+(text||'0')+(onFillSelection?' · Ctrl+Enter: seçili hücrelere uygula':'')} onFocus={e=>e.currentTarget.select()} inputMode="decimal" value={text} disabled={disabled||busy} placeholder={disabled?'—':'0'} onChange={e=>{delete e.currentTarget.dataset.gridSelectionFocus;setText(e.target.value)}} onBlur={()=>{if(skipBlur.current){skipBlur.current=false;return}void commit()}} onKeyDown={e=>{if(e.key==='Escape'){e.preventDefault();skipBlur.current=true;setText(value?String(value).replace('.',','):'');e.currentTarget.blur();return}if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)&&onFillSelection){e.preventDefault();e.stopPropagation();skipBlur.current=true;e.currentTarget.blur();void fillSelection();return}if(e.key==='Enter')e.currentTarget.blur()}}/>{error&&<small role="alert">{error}</small>}</div>
 }
 export default function Portal(){const pendingExternal=useRef(false),menuRef=useRef<HTMLDivElement>(null),planMenuRef=useRef<HTMLDivElement>(null),mainTabsRef=useRef<HTMLDivElement>(null),capacityTableRef=useRef<HTMLTableElement>(null),planTableRef=useRef<HTMLTableElement>(null);const [planPage,setPlanPage]=useState(0),[projectPage,setProjectPage]=useState(0),[resourcePage,setResourcePage]=useState(0);const [showCapacity,setShowCapacity]=useState(true);const [density,setDensity]=useState<'detail'|'compact'|'overview'>(fullPlan?initialDensity:'detail');const [phaseDetail,setPhaseDetail]=useState<{project:Project;month:string}|null>(null);const [phaseMenu,setPhaseMenu]=useState<{projectId:string;month:string;x:number;y:number}|null>(null),[copiedPhase,setCopiedPhase]=useState<string|null>(null),[copiedPhaseColor,setCopiedPhaseColor]=useState<string|null>(null),[copiedPhaseBundle,setCopiedPhaseBundle]=useState<{text:string;color:string}|null>(null),[milestoneMenu,setMilestoneMenu]=useState<{projectId:string;milestoneId:string;rangeIndex:number;x:number;y:number}|null>(null);const [planMenu,setPlanMenu]=useState<{key:string;x:number;y:number}|null>(null),[copiedPlan,setCopiedPlan]=useState<PlanClipboard|null>(null);const monthWidth=density==='overview'?24:density==='compact'?68:150;const planMonthWidth=density==='overview'?23:density==='compact'?65:144;const labelWidth=density==='overview'?210:240;const projectLabelWidth=180;const planningLabelWidth=220;const [browserFullScreen,setBrowserFullScreen]=useState(!!document.fullscreenElement);const [showImport,setShowImport]=useState(false);const [user,setUser]=useState(currentUser);const isAdmin=user?.role==='admin';const isManager=user?.role==='manager';const readOnlyAllLeaders=!isAdmin&&!(isManager&&!!user?.leaders.length);const [data,setData]=useState<Data|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[defaultTab,setDefaultTab]=useState(()=>readDefaultTab(currentUser())),[tab,setTab]=useState(()=>fullPlan?'plan':readDefaultTab(currentUser())),[view,setView]=useState(fullPlan&&workspaceQuery.get('view')==='team'?'team':'project');const [leads,setLeads]=useState<string[]>(fullPlan?workspaceQuery.getAll('lead'):[]),[teamIds,setTeamIds]=useState<string[]>(fullPlan?workspaceQuery.getAll('team'):[]),[projectIds,setProjectIds]=useState<string[]>(fullPlan?workspaceQuery.getAll('project'):[]),[start,setStart]=useState(fullPlan?initialStart:DEFAULT_FILTERS.start),[count,setCount]=useState(fullPlan?initialCount:DEFAULT_FILTERS.count),[search,setSearch]=useState('');const [editor,setEditor]=useState<any>(null),[saving,setSaving]=useState(false),[formError,setFormError]=useState('');const [cells,setCells]=useState<string[]>([]),[resourceIds,setResourceIds]=useState<string[]>([]),[personIds,setPersonIds]=useState<string[]>([]),[showAllActual,setShowAllActual]=useState(false),[expandedActualTeams,setExpandedActualTeams]=useState<string[]>([]);
+const leaderReportTableRef=useRef<HTMLTableElement>(null);
+const teamReportTableRef=useRef<HTMLTableElement>(null);
 const planPastePending=useRef(false);
 const planFocusFrame=useRef<number|null>(null);
 async function load(){try{setData(await readLocal());setUser(currentUser());setError('')}catch(e){setData(null);setUser(currentUser());setEditor(null);setError((e as Error).message)}}useEffect(()=>{load()},[]);
@@ -115,6 +117,24 @@ useEffect(()=>{
   plan.addEventListener('scroll',fromPlan);
   return()=>{capacity.removeEventListener('scroll',fromCapacity);plan.removeEventListener('scroll',fromPlan)};
 },[tab,view,showCapacity,months,planMonthWidth]);
+useEffect(()=>{
+ if(tab!=='overview')return;
+ const leader=leaderReportTableRef.current?.parentElement;
+ const team=teamReportTableRef.current?.parentElement;
+ if(!leader||!team)return;
+ const sync=(source:HTMLElement,target:HTMLElement)=>{
+  if(Math.abs(target.scrollLeft-source.scrollLeft)>0.5)target.scrollLeft=source.scrollLeft;
+ };
+ const fromLeader=()=>sync(leader,team);
+ const fromTeam=()=>sync(team,leader);
+ team.scrollLeft=leader.scrollLeft;
+ leader.addEventListener('scroll',fromLeader);
+ team.addEventListener('scroll',fromTeam);
+ return()=>{
+  leader.removeEventListener('scroll',fromLeader);
+  team.removeEventListener('scroll',fromTeam);
+ };
+},[tab,months,monthWidth]);
 const allLeads=data?.leaders||[];const availableTeams=data?.teams.filter(t=>!leads.length||leads.includes(t.lead))||[];const teams=availableTeams.filter(t=>!teamIds.length||teamIds.includes(t.id));const projects=data?.projects.filter(p=>!projectIds.length||projectIds.includes(p.id))||[];const ids=teams.map(t=>t.id);const leaderReportGroups=[...new Set(teams.map(t=>t.lead))].map(lead=>({name:lead||'Liderlik eşleştirilmemiş',leader:lead,ids:teams.filter(t=>t.lead===lead).map(t=>t.id)}));const teamReportGroups=teams.map(t=>({name:t.name,ids:[t.id]}));const availablePeople=data?.resources.filter(r=>months.some(m=>{if(m>currentMonth)return false;const v=visibleActualVersion(r,m,currentMonth);return !!v&&ids.includes(v.team)})).map(r=>({id:r.id,name:r.name}))||[];
 const capacityFilters=[
  {label:'Liderlik',values:leads,active:leads.length>0},
@@ -343,7 +363,7 @@ function reportYearRow(){const years=[...new Set(months.map(m=>m.slice(0,4)))];r
 function reportMonthHead(month:string){const years=[...new Set(months.map(m=>m.slice(0,4)))];return <TableHead key={month} data-month={month} className={'monthhead year-band-'+years.indexOf(month.slice(0,4))%6} title={monthLabel(month)}><span>{shortDateFormat.format(new Date(month+'-01T12:00:00'))}</span></TableHead>}
 function personCount(teamIds:string[]){return data?.resources.filter(r=>{const v=versionAt(r,start);return !!v&&teamIds.includes(v.team)&&v.included&&isWorkingStatus(v.status)&&resourceMonthFraction(v,start)>0}).length||0}
 function reportRows(groups:{name:string;ids:string[];leader?:string}[],teamReport=false){
- return <><Table todayDate={todayDate} todayMonthsKey={months.join('|')} className={'remaining-report '+(teamReport?'team-report':'leader-report')} style={{width:350+months.length*monthWidth,minWidth:'100%'}}>
+ return <><Table ref={teamReport?teamReportTableRef:leaderReportTableRef} todayDate={todayDate} todayMonthsKey={months.join('|')} className={'remaining-report '+(teamReport?'team-report':'leader-report')} style={{width:350+months.length*monthWidth,minWidth:'100%'}}>
   <colgroup><col style={{width:110}}/><col style={{width:240}}/>{months.map(m=><col key={m} style={{width:monthWidth}}/>)}</colgroup>
   <TableHeader>{reportYearRow()}<TableRow><TableHead>Yönetici</TableHead><TableHead>{teamReport?'Takım':'Liderlik'}</TableHead>{months.map(reportMonthHead)}</TableRow></TableHeader>
   <TableBody>{groups.map(g=><TableRow key={(teamReport?'team:':'leader:')+(teamReport?g.ids[0]:g.leader||g.name)}>
