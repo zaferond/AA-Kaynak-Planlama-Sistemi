@@ -271,7 +271,7 @@ async function changeMilestoneRange(project:Project,milestone:Milestone,rangeInd
   const changed=mode==='move'?shiftMilestoneRange(current,selected,rangeIndex,days):resizeMilestoneRange(current,selected,rangeIndex,mode,days);
   const ordered=withMilestoneRanges(changed,milestoneRanges(changed).sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end)));
   await batch([change('project',current.id,{...current,milestones:current.milestones?.map(item=>item.id===selected.id?ordered:item)})]);
-  setNotice(mode==='move'?'Kritik konu barı ve açıklama tarihleri '+Math.abs(days)+' gün '+(days>0?'sağa':'sola')+' taşındı.':'Kritik konu barının '+(mode==='start'?'başlangıç':'bitiş')+' tarihi güncellendi.');
+  setNotice(mode==='move'?'Kritik konu barı ve açıklama tarihleri '+Math.abs(days)+' gün '+(days>0?'sağa':'sola')+' taşındı.':'Kritik konu barının '+(mode==='start'?'başlangıç':'bitiş')+' tarihi ve bağlı detay açıklama tarihleri güncellendi.');
  }catch(error){setError((error as Error).message)}
 }
 async function changeMilestoneNote(project:Project,milestone:Milestone,rangeIndex:number,noteIndex:number,mode:'move'|'start'|'end',days:number){

@@ -97,17 +97,18 @@ test('drag position maps month widths to calendar days including leap February a
  assert.equal(calendarDayDifference('2028-02-28','2028-03-01'),2);
 });
 
-test('resizing either end changes only the selected bar boundary and retains note report dates',()=>{
+test('resizing either end updates the selected bar and every detail date by the same number of days',()=>{
  const info={id:'i',name:'Bilgi',start:'2026-03-10',end:'2026-03-20',barNotes:[{text:'Görev',includeInReport:true,start:'2026-03-12',end:'2026-03-18'},{text:'Eski not',includeInReport:true}],additionalRanges:[{start:'2026-04-10',end:'2026-04-15',notes:[{text:'Başka aralık',includeInReport:true}]}]};
  const narrowed=resizeMilestoneRange(project,info,0,'start',5);
  assert.deepEqual([narrowed.start,narrowed.end],['2026-03-15','2026-03-20']);
- assert.deepEqual([narrowed.barNotes[0].start,narrowed.barNotes[0].end],['2026-03-12','2026-03-18']);
- assert.deepEqual([narrowed.barNotes[1].start,narrowed.barNotes[1].end],['2026-03-10','2026-03-20']);
+ assert.deepEqual([narrowed.barNotes[0].start,narrowed.barNotes[0].end],['2026-03-17','2026-03-18']);
+ assert.deepEqual([narrowed.barNotes[1].start,narrowed.barNotes[1].end],['2026-03-15','2026-03-20']);
  const expanded=resizeMilestoneRange(project,narrowed,0,'end',7);
  assert.deepEqual([expanded.start,expanded.end],['2026-03-15','2026-03-27']);
- assert.deepEqual(buildProjectInfoReport([{...project,milestones:[expanded]}])[0].infos[0].topics.filter(topic=>topic.text==='Görev').map(topic=>[topic.start,topic.end]),[['2026-03-12','2026-03-18']]);
+ assert.deepEqual(buildProjectInfoReport([{...project,milestones:[expanded]}])[0].infos[0].topics.map(topic=>[topic.text,topic.start,topic.end]),[['Eski not','2026-03-15','2026-03-27'],['Görev','2026-03-17','2026-03-25'],['Başka aralık','2026-04-10','2026-04-15']]);
  assert.deepEqual([expanded.additionalRanges[0].start,expanded.additionalRanges[0].end],['2026-04-10','2026-04-15']);
- assert.throws(()=>resizeMilestoneRange(project,info,0,'start',11),/Bitiş tarihi/);
+ assert.doesNotThrow(()=>validate(dataWith(expanded)));
+ assert.throws(()=>resizeMilestoneRange(project,info,0,'start',11),/Bar daraltılamıyor/);
  assert.throws(()=>resizeMilestoneRange(project,info,0,'end',25),error=>error.message===CRITICAL_DATE_OVERLAP_MESSAGE);
  assert.throws(()=>resizeMilestoneRange(project,info,0,'start',-80),/proje dönemi/);
 });

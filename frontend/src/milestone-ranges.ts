@@ -135,15 +135,16 @@ export function shiftMilestoneRange(project:Pick<Project,'start'|'end'>,mileston
  return withMilestoneRanges(milestone,moved);
 }
 
-/** Resize one end of a bar while retaining every note's existing dates. */
+/** Resize one end of a bar and the same end of every detail within it. */
 export function resizeMilestoneRange(project:Pick<Project,'start'|'end'>,milestone:Milestone,rangeIndex:number,edge:'start'|'end',days:number):Milestone{
  const ranges=milestoneRanges(milestone);
  if(!Number.isInteger(days)||rangeIndex<0||rangeIndex>=ranges.length)throw Error('Düzenlenecek tarih aralığı bulunamadı.');
  const resized=ranges.map((range,index)=>index===rangeIndex?{
   ...range,
   [edge]:shiftCalendarDate(range[edge],days),
-  notes:datedNotes(range),
+  notes:datedNotes(range).map(note=>({...note,[edge]:shiftCalendarDate(note[edge]!,days)})),
  }:range);
+ if(resized.some(range=>range.notes?.some(note=>note.text.trim()&&note.start&&note.end&&note.start>note.end)))throw Error('Bar daraltılamıyor: detay açıklamanın başlangıcı bitiş tarihini geçiyor.');
  assertMilestoneDateRanges(project,resized);
  return withMilestoneRanges(milestone,resized);
 }

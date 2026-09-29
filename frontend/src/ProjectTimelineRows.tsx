@@ -59,7 +59,7 @@ type MilestoneTrackProps=Pick<Props,'isAdmin'|'saving'|'onEditMilestone'|'onMile
 };
 
 type DragMode='move'|'start'|'end';
-type DragState={pointerId:number;rangeIndex:number;mode:DragMode;startX:number;startDate:string;timer:ReturnType<typeof setTimeout>|null;active:boolean;cancelled:boolean;moved:boolean;days:number};
+type DragState={pointerId:number;rangeIndex:number;mode:DragMode;startX:number;startDate:string;timer:ReturnType<typeof setTimeout>|null;active:boolean;cancelled:boolean;moved:boolean;days:number;valid:boolean};
 type DragPreview={rangeIndex:number;mode:DragMode;days:number;start:string;end:string;message:string;x:number;y:number};
 type NoteDragState={pointerId:number;rangeIndex:number;noteIndex:number;mode:DragMode;startX:number;timer:ReturnType<typeof setTimeout>|null;active:boolean;moved:boolean;days:number;valid:boolean};
 type NoteDragPreview=DragPreview & {noteIndex:number};
@@ -88,7 +88,7 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAd
   const rect=trackRef.current.getBoundingClientRect();
   const startDate=dateAtPeriodPosition(event.clientX,rect.left,rect.width,periods);
   const range=ranges[rangeIndex];
-  const drag:DragState={pointerId:event.pointerId,rangeIndex,mode,startX:event.clientX,startDate,timer:null,active:mode!=='move',cancelled:false,moved:false,days:0};
+  const drag:DragState={pointerId:event.pointerId,rangeIndex,mode,startX:event.clientX,startDate,timer:null,active:mode!=='move',cancelled:false,moved:false,days:0,valid:true};
   if(mode==='move')drag.timer=setTimeout(()=>{if(dragRef.current!==drag||drag.cancelled)return;drag.active=true;setDragging(true);setPreview({rangeIndex,mode,days:0,start:range.start,end:range.end,message:'',x:event.clientX,y:event.clientY})},350);
   else{setDragging(true);setPreview({rangeIndex,mode,days:0,start:range.start,end:range.end,message:'',x:event.clientX,y:event.clientY})}
   dragRef.current=drag;
@@ -114,8 +114,10 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAd
   try{
    if(drag.mode==='move')shiftMilestoneRange(project,milestone,drag.rangeIndex,days);
    else resizeMilestoneRange(project,milestone,drag.rangeIndex,drag.mode,days);
+   drag.valid=true;
    setPreview({rangeIndex:drag.rangeIndex,mode:drag.mode,days,start,end,message:'',x:event.clientX,y:event.clientY});
   }catch(error){
+   drag.valid=false;
    setPreview(current=>({rangeIndex:drag.rangeIndex,mode:drag.mode,days:current?.days||0,start,end,message:(error as Error).message,x:event.clientX,y:event.clientY}));
   }
  }
@@ -125,7 +127,7 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAd
   if(!drag||drag.pointerId!==event.pointerId)return;
   if(drag.timer)clearTimeout(drag.timer);
   if(drag.moved){suppressClickRef.current=true;setTimeout(()=>{suppressClickRef.current=false},0)}
-  if(drag.active&&drag.days!==0)void onChangeMilestoneRange(milestone,drag.rangeIndex,drag.mode,drag.days);
+  if(drag.active&&drag.days!==0&&drag.valid)void onChangeMilestoneRange(milestone,drag.rangeIndex,drag.mode,drag.days);
   dragRef.current=null;
   setDragging(false);
   setPreview(null);
