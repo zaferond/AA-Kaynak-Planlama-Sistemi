@@ -1,0 +1,25 @@
+{
+  "name": "aa-kaynak-planlama-mssql",
+  "private": true,
+  "type": "module",
+  "version": "3.0.0",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node --env-file=.env backend/server.mjs",
+    "build": "npm --prefix frontend run build",
+    "test": "node --test tests/*.test.mjs",
+    "test:db": "node --env-file=.env --test tests/mssql.integration.mjs",
+    "admin:password": "node --env-file=.env backend/admin-password.mjs",
+    "setup": "node backend/setup.mjs",
+    "db:migrate": "node --env-file=.env backend/migrate.mjs",
+    "db:check": "node --env-file=.env backend/check-db.mjs"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "zod": "^3.25.76",
+    "mssql": "^12.0.0",
+    "sql.js": "^1.13.0"
+  }
+}

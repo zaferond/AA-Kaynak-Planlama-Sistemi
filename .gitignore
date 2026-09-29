@@ -1,0 +1,10 @@
+node_modules/
+.env
+data/
+*.log
+frontend/.compiled/
+.DS_Store
+site/
+tests/local-test-*/
+*.sqlite
+*.sqlite.lock
