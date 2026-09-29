@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {projectTimelinePeriods} from '../frontend/src/timeline-periods.ts';
-import {weeklyNoteLayout} from '../frontend/src/weekly-note-bars.ts';
+import {daysForWeekDrag,weeklyNoteLayout} from '../frontend/src/weekly-note-bars.ts';
 
 test('dated descriptions occupy their own weeks and overlapping dates use separate lanes',()=>{
  const periods=projectTimelinePeriods(['2026-10'],true);
@@ -42,4 +42,12 @@ test('notes outside the parent bar remain visible; undated legacy notes stay unp
  assert.deepEqual(bars.map(bar=>bar.text),['Ekim notu']);
  assert.deepEqual(undated.map(note=>note.text),['Eski açıklama']);
  assert.equal(bars[0].color,'green');
+});
+
+test('dragging weekly boxes snaps to complete calendar weeks',()=>{
+ assert.equal(daysForWeekDrag(46,700,10),7);
+ assert.equal(daysForWeekDrag(-46,700,10),-7);
+ assert.equal(daysForWeekDrag(20,700,10),0);
+ assert.equal(daysForWeekDrag(140,700,10),14);
+ assert.equal(daysForWeekDrag(100,0,10),0);
 });

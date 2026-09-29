@@ -147,3 +147,21 @@ export function resizeMilestoneRange(project:Pick<Project,'start'|'end'>,milesto
  assertMilestoneDateRanges(project,resized);
  return withMilestoneRanges(milestone,resized);
 }
+
+/** Move or resize one dated detail, then recalculate its enclosing critical date range. */
+export function changeMilestoneNoteDates(project:Pick<Project,'start'|'end'>,milestone:Milestone,rangeIndex:number,noteIndex:number,mode:'move'|'start'|'end',days:number):Milestone{
+ const ranges=milestoneRanges(milestone);
+ const range=ranges[rangeIndex];
+ const notes=range&&datedNotes(range);
+ if(!Number.isInteger(days)||!range||!notes||noteIndex<0||noteIndex>=notes.length)throw Error('Düzenlenecek detay açıklama bulunamadı.');
+ const note=notes[noteIndex];
+ if(!note.text.trim())throw Error('Boş detay açıklama taşınamaz.');
+ if(!note.start||!note.end)throw Error('Detay açıklamanın başlangıç ve bitiş tarihlerini girin.');
+ const start=mode==='end'?note.start:shiftCalendarDate(note.start,days);
+ const end=mode==='start'?note.end:shiftCalendarDate(note.end,days);
+ if(start>end)throw Error('Açıklama bitiş tarihi başlangıç tarihinden önce olamaz.');
+ const changed=notes.map((item,index)=>index===noteIndex?{...item,start,end}:item);
+ const next=ranges.map((item,index)=>index===rangeIndex?rangeWithNoteDates(item,changed):item);
+ assertMilestoneDateRanges(project,next);
+ return withMilestoneRanges(milestone,next);
+}

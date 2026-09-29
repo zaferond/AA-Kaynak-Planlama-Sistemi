@@ -5,6 +5,12 @@ import {noteDates,rangeNotes} from './milestone-ranges.ts';
 export type WeeklyNoteBar={rangeIndex:number;noteIndex:number;text:string;completed:boolean;start:string;end:string;left:number;width:number;firstPeriodIndex:number;lastPeriodIndex:number;lane:number;color?:string};
 export type UndatedWeeklyNote={rangeIndex:number;noteIndex:number;text:string;completed:boolean};
 
+/** A weekly box moves one calendar week per visible column, including clipped edge weeks. */
+export function daysForWeekDrag(deltaX:number,trackWidth:number,periodCount:number):number{
+ if(trackWidth<=0||periodCount<=0)return 0;
+ return Math.round(deltaX/(trackWidth/periodCount))*7;
+}
+
 /** Layout dated descriptions independently of their enclosing bar dates. */
 export function weeklyNoteLayout(ranges:MilestoneRange[],periods:readonly TimelinePeriod[]):{bars:WeeklyNoteBar[];undated:UndatedWeeklyNote[];laneCount:number}{
  const bars:WeeklyNoteBar[]=[],undated:UndatedWeeklyNote[]=[];

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assertMilestoneDateRanges,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,datedNotes,milestoneRanges,noteDates,rangeWithNoteDates,resizeMilestoneRange,shiftMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
+import {assertMilestoneDateRanges,changeMilestoneNoteDates,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,datedNotes,milestoneRanges,noteDates,rangeWithNoteDates,resizeMilestoneRange,shiftMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
 import {buildProjectInfoReport,updateReportedTopic} from '../frontend/src/project-info-report.ts';
 import {projectInfoReportSheet} from '../frontend/src/project-info-report-export.ts';
 import {calendarDayDifference,dateAtTrackPosition,milestoneBars} from '../frontend/src/milestone-bars.ts';
@@ -110,4 +110,30 @@ test('resizing either end changes only the selected bar boundary and retains not
  assert.throws(()=>resizeMilestoneRange(project,info,0,'start',11),/Bitiş tarihi/);
  assert.throws(()=>resizeMilestoneRange(project,info,0,'end',25),error=>error.message===CRITICAL_DATE_OVERLAP_MESSAGE);
  assert.throws(()=>resizeMilestoneRange(project,info,0,'start',-80),/proje dönemi/);
+});
+
+test('moving and resizing a weekly detail updates its enclosing range and report without moving siblings',()=>{
+ const info={id:'i',name:'Bilgi',start:'2026-03-10',end:'2026-03-25',barNotes:[
+  {text:'İlk',includeInReport:true,start:'2026-03-10',end:'2026-03-12'},
+  {text:'İkinci',includeInReport:true,start:'2026-03-23',end:'2026-03-25'},
+ ]};
+ const moved=changeMilestoneNoteDates(project,info,0,0,'move',7);
+ assert.deepEqual([moved.start,moved.end],['2026-03-17','2026-03-25']);
+ assert.deepEqual([moved.barNotes[0].start,moved.barNotes[0].end],['2026-03-17','2026-03-19']);
+ assert.deepEqual([moved.barNotes[1].start,moved.barNotes[1].end],['2026-03-23','2026-03-25']);
+ const expanded=changeMilestoneNoteDates(project,moved,0,1,'end',7);
+ assert.deepEqual([expanded.start,expanded.end],['2026-03-17','2026-04-01']);
+ assert.doesNotThrow(()=>validate(dataWith(expanded)));
+ assert.deepEqual(buildProjectInfoReport([{...project,milestones:[expanded]}])[0].infos[0].topics.map(topic=>[topic.start,topic.end]),[['2026-03-17','2026-03-19'],['2026-03-23','2026-04-01']]);
+ const lengthened=changeMilestoneNoteDates(project,expanded,0,0,'end',7);
+ const narrowed=changeMilestoneNoteDates(project,lengthened,0,0,'start',7);
+ assert.deepEqual([narrowed.start,narrowed.end],['2026-03-23','2026-04-01']);
+});
+
+test('weekly detail changes reject reversed dates, project bounds and conflicting critical ranges',()=>{
+ const info={id:'i',name:'Bilgi',start:'2026-03-01',end:'2026-03-05',barNotes:[{text:'İlk',includeInReport:false,start:'2026-03-01',end:'2026-03-05'}],additionalRanges:[{start:'2026-03-20',end:'2026-03-25',notes:[{text:'İkinci',includeInReport:false,start:'2026-03-20',end:'2026-03-25'}]}]};
+ assert.throws(()=>changeMilestoneNoteDates(project,info,0,0,'start',7),/bitiş tarihi/);
+ assert.throws(()=>changeMilestoneNoteDates(project,info,0,0,'move',21),error=>error.message===CRITICAL_DATE_OVERLAP_MESSAGE);
+ assert.throws(()=>changeMilestoneNoteDates(project,info,0,0,'move',-70),/proje dönemi/);
+ assert.deepEqual([info.start,info.end],['2026-03-01','2026-03-05']);
 });
