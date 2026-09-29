@@ -23,10 +23,12 @@ Komutları kendiniz çalıştırmak isterseniz `package.json` bulunan klasörde 
 ```powershell
 node backend/setup.mjs
 npm.cmd ci --omit=dev
+npm.cmd --prefix frontend ci
+npm.cmd run build
 npm.cmd start
 ```
 
-Sonraki açılışlarda yalnızca `npm.cmd start` yeterlidir. Durdurmak için Ctrl+C basın. Aynı anda ikinci bir kopya açmayın.
+Sonraki açılışlarda `baslat-windows.cmd` kullanın; güncel arayüz her seferinde derlenir. Durdurmak için Ctrl+C basın. Aynı anda ikinci bir kopya açmayın.
 
 ## Mac'te başlatma
 

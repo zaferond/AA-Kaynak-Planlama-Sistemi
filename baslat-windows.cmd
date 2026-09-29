@@ -18,6 +18,12 @@ if not exist node_modules\sql.js (
  call npm.cmd ci --omit=dev
  if errorlevel 1 goto error
 )
+if not exist frontend\node_modules\vite (
+ call npm.cmd --prefix frontend ci
+ if errorlevel 1 goto error
+)
+call npm.cmd run build
+if errorlevel 1 goto error
 call npm.cmd start
 if errorlevel 1 goto error
 exit /b 0

@@ -1,13 +1,11 @@
 # AA Mühendislik Liderliği Kaynak Yönetimi Sistemi
 
-Node.js 24 veya üzeri gerektirir. Yerel kurulum için:
+Node.js 24 veya üzeri gerektirir. İlk kurulumda ve sonraki açılışlarda Mac Terminal'de bu klasöre geçip:
 
 ```sh
-npm ci
-npm --prefix frontend install
-cp .env.example .env
-npm run build
-npm start
+bash baslat-mac.sh
 ```
 
-Uygulama varsayılan olarak `http://127.0.0.1:3000` adresinde açılır. Kurulum ve veritabanı seçenekleri için [başlangıç kılavuzuna](ONCE-BUNU-OKUYUN.md) ve [MSSQL geçiş notlarına](IT-MSSQL-GECIS.md) bakın.
+Windows'ta `baslat-windows.cmd` dosyasını çalıştırın. Başlatıcı ilk giriş hesabını oluşturur, gerekli paketleri kurar ve arayüzü derler. Sonraki açılışlarda da aynı dosyayı kullanın.
+
+Uygulama varsayılan olarak `http://127.0.0.1:3000` adresinde açılır. Aynı anda başka bir kopyası çalışıyorsa önce onu durdurun. Kurulum ve veritabanı seçenekleri için [başlangıç kılavuzuna](ONCE-BUNU-OKUYUN.md) ve [MSSQL geçiş notlarına](IT-MSSQL-GECIS.md) bakın.
