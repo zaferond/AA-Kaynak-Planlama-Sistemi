@@ -26,14 +26,20 @@
 .app .capacitystrip>summary:focus-visible{outline:2px solid #2674c2;outline-offset:-3px}
 .app .capacitystrip[open]>summary{background:#edf5fe;border-bottom:1px solid #d7e5f3}
 .app .capacitystrip-icon{width:35px;height:35px;flex:none;display:grid;place-items:center;border:1px solid #c9ddf2;border-radius:8px;background:#fff;color:#2165a3}
-.app .capacitystrip-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px;line-height:1.25}
+.app .capacitystrip-copy{min-width:0;flex:1;display:flex;flex-direction:column;gap:6px;line-height:1.25}
 .app .capacitystrip-copy strong{font-size:12px;font-weight:700;color:#183f65}
-.app .capacitystrip-copy small{font-size:10px;font-weight:400;color:#637e98}
+.app .capacity-filter-list{display:flex;flex-wrap:wrap;gap:5px}
+.app .capacity-filter-chip{display:inline-flex;align-items:baseline;flex-wrap:wrap;gap:4px;max-width:100%;padding:3px 7px;border:1px solid #ffffff40;border-radius:5px;background:#ffffff12;line-height:1.35}
+.app .capacity-filter-chip>span{font-size:10px;font-weight:500;color:#d5e5f1}
+.app .capacity-filter-chip>strong{font-size:11px;font-weight:700;color:#fff;overflow-wrap:anywhere}
+.app .capacity-filter-chip.is-active{border-color:#c1ddf1;background:#eaf5ff}
+.app .capacity-filter-chip.is-active>span{color:#51708b}
+.app .capacity-filter-chip.is-active>strong{color:#17476b}
 .app .capacitystrip-action{display:inline-flex;align-items:center;gap:7px;flex:none;padding:7px 10px;border:1px solid #bcd3eb;border-radius:6px;background:#fff;color:#1c609f;font-size:11px;font-weight:700;white-space:nowrap}
 .app .capacitystrip-action svg{transition:transform .18s ease}
 .app .capacitystrip[open] .capacitystrip-action svg{transform:rotate(180deg)}
 .app .capacitystrip [data-slot=table-container]{border-top:0}
-@media(max-width:650px){.app .capacitystrip{margin:8px 0 10px}.app .capacitystrip>summary,.app .capacitystrip[open]>summary{gap:8px;padding:9px}.app .capacitystrip-icon{width:32px;height:32px}.app .capacitystrip-action{padding:7px;font-size:10px}.app .capacitystrip-copy small{font-size:9px}}
+@media(max-width:650px){.app .capacitystrip{margin:8px 0 10px}.app .capacitystrip>summary,.app .capacitystrip[open]>summary{gap:8px;padding:9px}.app .capacitystrip-icon{width:32px;height:32px}.app .capacitystrip-action{padding:7px;font-size:10px}}
 
 /* Section navigation and contextual controls */
 .app>.mast{display:flex;flex-direction:column}
@@ -83,11 +89,6 @@
 .app .filteractions .button{height:30px;min-height:30px;padding:4px 8px;border-radius:6px;font-size:10px}
 .app .filteractions .resetfilters{width:auto;background:#f3f7fb;color:#315f8c;border-color:#cbd9e8}
 .app .filteractions .bulk-toggle{display:inline-flex;align-items:center;gap:7px;height:30px;padding:4px 8px;border:1px solid #c9d9e8;border-radius:6px;background:#f2f7fc;color:#315a7c;font-size:10px;font-weight:700;cursor:pointer}
-.app .bulkcontrols{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px;margin:0 0 8px;padding:7px 9px;border:1px solid #d8e5f1;border-radius:7px;background:#f6faff;color:#46617e;font-size:11px}
-.app .bulkcontrols .button{height:29px;min-height:29px;padding:4px 8px;font-size:10px}
-.app .bulkcontrols label{display:flex;align-items:center;gap:6px}
-.app .bulkcontrols input{width:70px;height:29px;min-height:29px;padding:4px 6px;font-size:11px}
-.app .bulkcontrols small{color:#677d92;font-size:10px}
 @media(max-width:1150px){.app .planning-filterbar{flex-wrap:wrap;gap:6px}.app .planning-filterbar .filters{flex:1 1 100%;width:100%;max-width:none}.app .filteractions{flex:1 1 100%}}
 @media(max-width:650px){.app .planning-filterbar .filters{flex-wrap:wrap}.app .planning-filterbar .filters>.pick:nth-child(-n+3){flex:1 1 140px}.app .planning-filterbar .filters>.pick:nth-child(4),.app .planning-filterbar .filters>.period{flex:1 1 130px}.app .filteractions{flex-wrap:wrap}}
 
@@ -515,8 +516,7 @@
 .app.tab-plan .capacitystrip[open]>summary{background:#274b6b;border-bottom:1px solid #22415e}
 .app.tab-plan .capacitystrip>summary:focus-visible{outline-color:#a2c9eb}
 .app.tab-plan .capacitystrip-icon{border-color:#a9c4db;background:#eaf3f9;color:#245274}
-.app.tab-plan .capacitystrip-copy strong{color:#fff}
-.app.tab-plan .capacitystrip-copy small{color:#d6e5f1}
+.app.tab-plan .capacitystrip-copy>strong{color:#fff}
 .app.tab-plan .capacitystrip-action{border-color:#b6d0e5;background:#f2f7fb;color:#1e4c71}
 
 /* Align the capacity months with the fixed project and manager columns below. */
