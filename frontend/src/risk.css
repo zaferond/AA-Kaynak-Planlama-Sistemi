@@ -1,7 +1,5 @@
 .risk-workspace{padding:0!important;overflow:hidden;background:#f5f8fb;border:1px solid #d7e2eb;border-radius:12px}
-.risk-header{display:flex;justify-content:space-between;align-items:end;gap:24px;padding:23px 28px 24px;background:linear-gradient(112deg,#143b57 0%,#1e5476 62%,#246684 100%);border-bottom:3px solid #5ab4d5}
-.risk-header h2{margin:6px 0 0;color:#fff;font-size:25px;line-height:1.15;letter-spacing:-.025em}
-.risk-eyebrow{display:flex;align-items:center;gap:8px;color:#a9dbee;font-size:11px;font-weight:800;letter-spacing:.12em}
+.risk-header{display:flex;justify-content:flex-start;align-items:center;gap:16px;padding:10px 20px 11px;background:linear-gradient(112deg,#143b57 0%,#1e5476 62%,#246684 100%);border-bottom:2px solid #5ab4d5}
 .risk-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
 .risk-toolbar .risk-field{min-width:270px;color:#e5f2fa}
 .risk-toolbar .button{height:40px;white-space:nowrap}
@@ -70,6 +68,11 @@
 .risk-inline-strategy.selected{border-color:#92d1b7;background:#d9f0e8;color:#207a55}
 .risk-inline-delete{margin-top:6px;padding:2px 0;border:0;background:transparent;color:#ad514b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
 .risk-inline-delete:hover{text-decoration:underline}
+.risk-inline-cancel{margin-top:6px;padding:2px 0;border:0;background:transparent;color:#386d8b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.risk-inline-cancel:hover{text-decoration:underline}
+.risk-new-badge{display:inline-block;margin-bottom:6px;padding:3px 7px;border-radius:4px;background:#d8edfa;color:#256889;font-size:10px;font-weight:800;letter-spacing:.06em}
+.risk-table tbody tr.risk-new-row td{background:#edf7fc}
+.risk-table tbody tr.risk-new-row .risk-sticky-first{box-shadow:inset 3px 0 0 #3a97be,5px 0 9px -8px #224c69a8}
 .risk-inline-error{padding:9px 16px;border-bottom:1px solid #eab7b1;background:#fff1ef;color:#a6312a;font-size:12px;font-weight:650}
 .risk-empty-row td{padding:35px 18px!important;color:#748a9c;text-align:center;font-size:12px}
 .risk-score{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;border-radius:7px;padding:5px 8px;white-space:nowrap;font-size:11px;font-weight:800}
@@ -81,16 +84,5 @@
 .risk-matrix-panel table{border-collapse:separate;border-spacing:5px;width:100%;min-width:660px}
 .risk-matrix-panel th{color:#587185;font-size:11px;text-align:center;padding:6px}.risk-matrix-panel td{text-align:center}.risk-matrix-panel .risk-score{min-width:90px;justify-content:center}.risk-matrix-panel .risk-score small{font-size:9px}
 .risk-legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:16px 28px 22px;color:#677e90;font-size:11px}.risk-legend>span:first-child{font-weight:800;margin-right:7px}
-.risk-dialog{width:min(900px,95vw)!important;max-width:900px!important;max-height:92vh;overflow-y:auto}
-.risk-dialog [data-slot="dialog-description"]{margin-bottom:6px}
-.risk-form{display:flex;flex-direction:column;gap:16px}
-.risk-form-section{border:1px solid #e1e9f0;border-radius:10px;padding:16px;background:#fcfdff}
-.risk-form-section h3{font-size:13px;font-weight:800;color:#254861;margin:0 0 13px;padding-bottom:9px;border-bottom:1px solid #e6edf3}
-.risk-form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px 16px}
-.risk-score-grid{grid-template-columns:1fr 1fr 1.2fr}
-.risk-form-result{display:flex;flex-direction:column;gap:7px;align-items:start}.risk-form-result>small{color:#71879a;font-size:10px;font-weight:800;letter-spacing:.05em}
-.risk-form-error{margin:0;color:#ae332e;background:#fff1ef;border:1px solid #f2c8c4;border-radius:7px;padding:9px 11px;font-size:12px}
-.risk-form-actions{display:flex;align-items:center;gap:9px;position:sticky;bottom:-1px;background:#fff;padding:13px 0 0;border-top:1px solid #e1e8ef}
-.risk-form-actions>span{flex:1}
-@media(max-width:900px){.risk-header{flex-direction:column;align-items:stretch}.risk-toolbar .risk-field{flex:1;min-width:210px}.risk-summary{grid-template-columns:repeat(2,1fr)}.risk-scroll-hint{display:none}}
-@media(max-width:560px){.risk-header{padding:18px}.risk-summary{padding:14px 18px;gap:8px}.risk-summary>div{padding:10px}.risk-register,.risk-matrix-panel,.risk-legend{margin-left:18px;margin-right:18px}.risk-form-grid,.risk-score-grid{grid-template-columns:1fr}.risk-toolbar .button{flex:1;justify-content:center}}
+@media(max-width:900px){.risk-toolbar .risk-field{flex:1;min-width:210px}.risk-summary{grid-template-columns:repeat(2,1fr)}.risk-scroll-hint{display:none}}
+@media(max-width:560px){.risk-header{padding:10px 16px}.risk-summary{padding:14px 18px;gap:8px}.risk-summary>div{padding:10px}.risk-register,.risk-matrix-panel,.risk-legend{margin-left:18px;margin-right:18px}.risk-toolbar .button{flex:1;justify-content:center}}
