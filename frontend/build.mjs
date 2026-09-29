@@ -6,7 +6,8 @@ await build({configFile:false,root,resolve:{alias:{'@':root}},esbuild:{jsx:'auto
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex').slice(0,12);
 async function asset(label,ext,bytes){const name=label+'.'+hash(bytes)+'.'+ext;await fs.writeFile(path.join(site,'assets',name),bytes);if(ext!=='png')await fs.writeFile(path.join(site,'assets',name+'.gz'),gzipSync(bytes));return name}
 const jsName=await asset('app','js',await fs.readFile(path.join(root,'.compiled/app.js')));
-const css=await fs.readFile(path.join(root,'assets/base.css'),'utf8')+'\n'+await fs.readFile(path.join(root,'src/upgrade.css'),'utf8')+'\n'+await fs.readFile(path.join(root,'src/login.css'),'utf8');
+const bundledCss=(await fs.readdir(path.join(root,'.compiled'))).filter(file=>file.endsWith('.css')).sort();
+const css=[...await Promise.all(['assets/base.css','src/upgrade.css','src/login.css'].map(file=>fs.readFile(path.join(root,file),'utf8'))),...await Promise.all(bundledCss.map(file=>fs.readFile(path.join(root,'.compiled',file),'utf8')))].join('\n');
 const cssName=await asset('app','css',Buffer.from(css));
 
 const html=`<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Askeri Araçlar Kaynak Yönetimi Sistemi</title><link rel="stylesheet" href="/assets/${cssName}"><script defer src="/assets/${jsName}"></script></head><body><div id="root"></div><noscript>JavaScript etkin olmalıdır.</noscript></body></html>`;
