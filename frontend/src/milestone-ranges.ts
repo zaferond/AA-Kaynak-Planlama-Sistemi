@@ -1,5 +1,7 @@
 import type {Milestone,MilestoneNote,MilestoneRange,Project} from './model';
 
+export function visibleMilestoneBarStyle(style:Milestone['barStyle']):'solid'|'outline'{return style==='outline'?'outline':'solid'}
+
 export const CRITICAL_DATE_OVERLAP_MESSAGE='Güncellemek istediğiniz tarih diğer kritik tarihlerin içerisindeki bir tarihtir. Tekrar kontrol ediniz.';
 
 export function rangeNotes(range:MilestoneRange):MilestoneNote[]{

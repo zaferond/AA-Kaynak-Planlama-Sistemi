@@ -291,7 +291,7 @@ html{zoom:80%}
 .app .projectmatrix .gantt-bar .gantt-resize-handle.start{left:-4px;border-radius:8px 0 0 8px}
 .app .projectmatrix .gantt-bar .gantt-resize-handle.end{right:-4px;border-radius:0 8px 8px 0}
 .app .projectmatrix .gantt-bar .gantt-resize-handle::after{content:'';position:absolute;top:50%;left:50%;width:2px;height:12px;border-radius:2px;background:#fff;box-shadow:0 0 0 1px #183b6280;opacity:.75;transform:translate(-50%,-50%)}
-.app .projectmatrix .gantt-bar.outline .gantt-resize-handle::after,.app .projectmatrix .gantt-bar.striped .gantt-resize-handle::after{background:var(--gantt-ink)}
+.app .projectmatrix .gantt-bar.outline .gantt-resize-handle::after{background:var(--gantt-ink)}
 .app .projectmatrix .gantt-bar.dragging .gantt-resize-handle{background:#ffffff80}
 .gantt-drag-status{position:fixed;z-index:100;width:214px;max-width:calc(100vw - 16px);padding:8px 10px;border:1px solid #8fb0c9;border-radius:7px;background:#f8fcff;color:#214b6d;box-shadow:0 7px 20px #173b6138;font-size:10px;line-height:1.35;pointer-events:none}
 .gantt-drag-status>strong{display:flex;justify-content:space-between;gap:8px;font-size:11px}.gantt-drag-status>strong span{color:#3b779d;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -301,15 +301,13 @@ html{zoom:80%}
 .app .projectmatrix .gantt-bar.start{border-radius:9px 0 0 9px}
 .app .projectmatrix .gantt-bar.end{border-radius:0 9px 9px 0}
 .app .projectmatrix .gantt-bar.start.end{border-radius:9px}
-.app .projectmatrix .gantt-bar.striped{background:repeating-linear-gradient(135deg,var(--gantt-color) 0,var(--gantt-color) 5px,var(--gantt-soft) 5px,var(--gantt-soft) 9px);color:var(--gantt-ink)}
 .app .projectmatrix .gantt-bar.outline{background:var(--gantt-soft);color:var(--gantt-ink);box-shadow:inset 0 0 0 1px var(--gantt-color)}
 .app .projectmatrix .gantt-bar:focus-visible{outline:2px solid #245d90;outline-offset:2px}
 .app .projectmatrix .gantt-bar span{display:block;min-width:0;max-height:160px;width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;text-align:center;font-size:10px;font-weight:700;line-height:1.35}
-.milestone-bar-options{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}
+.milestone-bar-options{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
 .milestone-bar-options button{display:flex;flex-direction:column;align-items:flex-start;gap:7px;padding:9px;border:1px solid #d4e0ec;border-radius:5px;background:#fff;color:#43617d;font-size:11px;cursor:pointer}
 .milestone-bar-options button.selected{border-color:#3172aa;background:#eff7ff;box-shadow:inset 0 0 0 1px #3172aa}
 .milestone-bar-options .sample{display:block;width:100%;height:12px;border-radius:6px;background:#477eb2}
-.milestone-bar-options .sample.striped{background:repeating-linear-gradient(135deg,#477eb2 0,#477eb2 5px,#eaf3fe 5px,#eaf3fe 9px)}
 .milestone-bar-options .sample.outline{border:2px solid #477eb2;background:#eaf3fe}
 .milestone-colors{display:flex;flex-wrap:wrap;gap:7px}
 .milestone-colors button{display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid #d4e0ec;border-radius:5px;background:#fff;color:#46627d;font-size:11px;cursor:pointer}
@@ -630,7 +628,6 @@ html{zoom:80%}
 .timeline-live-preview>span{color:#658096;font-size:10px;font-weight:750;letter-spacing:.08em}
 .timeline-live-preview .timeline-phase-preview{min-height:42px;padding:10px 12px;border-radius:4px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.45}
 .timeline-live-preview .timeline-milestone-preview{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px 12px;border:1px solid var(--preview-color);border-radius:6px;background:var(--preview-color);color:#fff;white-space:pre-wrap;overflow-wrap:anywhere;text-align:center;font-size:11px;font-weight:700;line-height:1.4}
-.timeline-live-preview .timeline-milestone-preview.striped{background:repeating-linear-gradient(135deg,var(--preview-color) 0,var(--preview-color) 5px,var(--preview-soft) 5px,var(--preview-soft) 9px);color:var(--preview-ink)}
 .timeline-live-preview .timeline-milestone-preview.outline{background:var(--preview-soft);color:var(--preview-ink)}
 .timeline-live-preview .milestone-preview-notes{width:100%;margin:0;padding:0;list-style:none;text-align:left}
 .timeline-live-preview .milestone-preview-notes li{line-height:1.5}

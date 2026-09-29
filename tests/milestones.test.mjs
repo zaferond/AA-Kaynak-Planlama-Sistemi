@@ -6,7 +6,7 @@ import path from 'node:path';
 import {Store} from '../backend/store.mjs';
 import {SqlJsAdapter} from '../backend/adapters/sqljs.mjs';
 import {migrate,validate} from '../backend/domain/index.mjs';
-import {addDraftMilestoneRange,addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeDraftMilestoneRange,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges,withoutCriticalTopics} from '../frontend/src/milestone-ranges.ts';
+import {addDraftMilestoneRange,addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeDraftMilestoneRange,removeMilestoneNote,removeMilestoneRange,visibleMilestoneBarStyle,withMilestoneRanges,withoutCriticalTopics} from '../frontend/src/milestone-ranges.ts';
 import {milestoneBars} from '../frontend/src/milestone-bars.ts';
 import {buildProjectInfoReport} from '../frontend/src/project-info-report.ts';
 
@@ -87,6 +87,12 @@ test('project milestones survive add, edit, delete and restart',async()=>{
     await store.close();
     await fs.rm(dir,{recursive:true,force:true});
   }
+});
+
+test('legacy striped bars display as solid while outlined bars remain outlined',()=>{
+ assert.equal(visibleMilestoneBarStyle('striped'),'solid');
+ assert.equal(visibleMilestoneBarStyle('solid'),'solid');
+ assert.equal(visibleMilestoneBarStyle('outline'),'outline');
 });
 
 test('information without critical topics remains editable and can receive topics later',async()=>{
