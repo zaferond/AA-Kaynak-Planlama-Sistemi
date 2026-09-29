@@ -234,7 +234,7 @@ async function deleteProject(){
   setNotice(`“${project.name}” projesi ve bağlı kaynak dağılımları silindi.`);
  }catch(e){setFormError((e as Error).message)}
 }
-function openMilestone(project:Project,milestone?:Milestone){if(!isAdmin)return;setFormError('');const first=months.find(month=>month>=project.start&&month<=project.end)||project.start;setEditor({kind:'milestone',projectId:project.id,isNew:!milestone,draftEmpty:!milestone||milestone.hasCriticalTopics===false,value:milestone?{...structuredClone(milestone),barStyle:visibleMilestoneBarStyle(milestone.barStyle)}:{id:crypto.randomUUID(),name:'',start:first+'-01',end:first+'-01',barColor:'red',barStyle:'solid',barText:''}})}
+function openMilestone(project:Project,milestone?:Milestone){if(!isAdmin)return;setFormError('');const first=months.find(month=>month>=project.start&&month<=project.end)||project.start;setEditor({kind:'milestone',projectId:project.id,isNew:!milestone,draftEmpty:!milestone||milestone.hasCriticalTopics===false,value:milestone?{...structuredClone(milestone),barStyle:visibleMilestoneBarStyle(milestone.barStyle)}:{id:crypto.randomUUID(),name:'',start:first+'-01',end:first+'-01',barColor:'red',barStyle:'outline',barText:''}})}
 async function deleteMilestone(project:Project,milestone:Milestone){
  if(!data||!isAdmin||saving)return;
  const current=data.projects.find(item=>item.id===project.id);
