@@ -86,6 +86,23 @@ export function removeMilestoneRange(milestone:Milestone,rangeIndex:number):Mile
  return withMilestoneRanges(milestone,ranges.filter((_,index)=>index!==rangeIndex));
 }
 
+export function addDraftMilestoneRange(milestone:Milestone,projectEnd:string,isEmpty:boolean):Milestone{
+ const ranges=isEmpty?[]:milestoneRanges(milestone);
+ if(ranges.length>=20)throw Error('En fazla 20 kritik konu eklenebilir.');
+ const last=ranges.at(-1);
+ const next=last?.end?new Date(last.end+'T12:00:00Z'):null;
+ next?.setUTCDate(next.getUTCDate()+1);
+ const max=new Date(Date.UTC(Number(projectEnd.slice(0,4)),Number(projectEnd.slice(5,7)),0)).toISOString().slice(0,10);
+ const date=last?(next&&next.toISOString().slice(0,10)<=max?next.toISOString().slice(0,10):''):milestone.start;
+ return withMilestoneRanges(milestone,[...ranges,{start:date,end:date,description:'',notes:[{text:'',includeInReport:false}],color:last?.color||milestone.barColor||'red'}]);
+}
+
+export function removeDraftMilestoneRange(milestone:Milestone,rangeIndex:number):{value:Milestone;isEmpty:boolean}{
+ const ranges=milestoneRanges(milestone);
+ if(rangeIndex<0||rangeIndex>=ranges.length)throw Error('Tarih aralığı bulunamadı.');
+ return ranges.length===1?{value:milestone,isEmpty:true}:{value:removeMilestoneRange(milestone,rangeIndex),isEmpty:false};
+}
+
 export const shiftCalendarDate=(date:string,days:number)=>{
  const value=new Date(date+'T12:00:00Z');
  value.setUTCDate(value.getUTCDate()+days);

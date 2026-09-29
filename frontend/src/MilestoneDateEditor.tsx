@@ -2,15 +2,15 @@ import {Plus,Trash2} from 'lucide-react';
 import type {CSSProperties} from 'react';
 import {phasePalette} from './model';
 import type {Milestone,MilestoneNote,MilestoneRange} from './model';
-import {addMilestoneNote,datedNotes,milestoneRanges,noteDates,rangeNotes,rangeWithNoteDates,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges} from './milestone-ranges';
+import {addDraftMilestoneRange,addMilestoneNote,datedNotes,milestoneRanges,noteDates,rangeNotes,rangeWithNoteDates,removeDraftMilestoneRange,removeMilestoneNote,withMilestoneRanges} from './milestone-ranges';
 
-type Props={value:Milestone;projectStart:string;projectEnd:string;onChange:(value:Milestone)=>void};
-export default function MilestoneDateEditor({value,projectStart,projectEnd,onChange}:Props){
- const ranges=milestoneRanges(value);
+type Props={value:Milestone;isEmpty:boolean;projectStart:string;projectEnd:string;onChange:(value:Milestone,isEmpty?:boolean)=>void};
+export default function MilestoneDateEditor({value,isEmpty,projectStart,projectEnd,onChange}:Props){
+ const ranges=isEmpty?[]:milestoneRanges(value);
  const min=projectStart+'-01';
  const max=new Date(Date.UTC(Number(projectEnd.slice(0,4)),Number(projectEnd.slice(5,7)),0)).toISOString().slice(0,10);
  function updateRange(index:number,changes:Partial<MilestoneRange>){
-  onChange(withMilestoneRanges(value,ranges.map((range,i)=>i===index?{...range,...(('start' in changes||'end' in changes)?{notes:datedNotes(range)}:{}),...changes}:range)));
+  onChange(withMilestoneRanges(value,ranges.map((range,i)=>i===index?{...range,...(('start' in changes||'end' in changes)?{notes:rangeNotes(range).map(note=>note.text.trim()?{...note,...noteDates(note,range)}:note)}:{}),...changes}:range)));
  }
  function updateNote(index:number,noteIndex:number,changes:Partial<MilestoneNote>){
   const range=ranges[index];
@@ -23,13 +23,10 @@ export default function MilestoneDateEditor({value,projectStart,projectEnd,onCha
   onChange(addMilestoneNote(value,index));
  }
  function addRange(){
-  const last=ranges.at(-1)!;
-  const next=last.end?new Date(last.end+'T12:00:00Z'):null;
-  next?.setUTCDate(next.getUTCDate()+1);
-  const date=next&&next.toISOString().slice(0,10)<=max?next.toISOString().slice(0,10):'';
-  onChange(withMilestoneRanges(value,[...ranges,{start:date,end:date,description:'',notes:[],color:last.color||value.barColor||'red'}]));
+  onChange(addDraftMilestoneRange(value,projectEnd,isEmpty),false);
  }
- return <fieldset className="milestone-ranges"><legend>Tarih Aralıkları</legend><p className="milestone-date-hint">Açıklama tarihleri ana barın başlangıç ve bitişini otomatik belirler. Ana bar tarihlerini ayrıca elle değiştirebilirsiniz.</p>
+ return <fieldset className="milestone-ranges"><legend>Kritik Konular</legend><p className="milestone-date-hint">Açıklama tarihleri ana barın başlangıç ve bitişini otomatik belirler. Ana bar tarihlerini ayrıca elle değiştirebilirsiniz.</p>
+  {isEmpty&&<p className="milestone-range-empty">Henüz kritik konu eklenmedi. İlk konuyu aşağıdaki düğmeyle ekleyin.</p>}
   <div className="milestone-range-list">{ranges.map((range,index)=>{const notes=rangeNotes(range);return <div className="milestone-range-row" key={index}>
    <span className="milestone-range-number">{index+1}</span>
    <div className="milestone-range-dates">
@@ -42,8 +39,8 @@ export default function MilestoneDateEditor({value,projectStart,projectEnd,onCha
     <button type="button" className="milestone-note-remove" aria-label={`${noteIndex+1}. açıklamayı kaldır`} title="Açıklamayı kaldır" onClick={()=>onChange(removeMilestoneNote(value,index,noteIndex))}><Trash2 size={14}/></button>
    </div>)}<button type="button" className="milestone-note-add" disabled={notes.length>=10} onClick={()=>addNote(index)}><Plus size={13}/>Açıklama Ekle</button></div>
    <div className="milestone-range-colors" role="group" aria-label={`${index+1}. tarih aralığının bar rengi`}><span>Bar Rengi</span>{phasePalette.map(color=><button type="button" key={color.id} className={range.color===color.id?'selected':''} title={color.name} aria-label={color.name} aria-pressed={range.color===color.id} style={{'--range-color':color.border,'--range-soft':color.bg} as CSSProperties} onClick={()=>updateRange(index,{color:color.id})}/>)}</div>
-   <button type="button" className="milestone-range-remove" aria-label={`${index+1}. tarih aralığını kaldır`} title={ranges.length===1?'Son tarih aralığını kaldırmak için bilgiyi silin':'Tarih aralığını kaldır'} disabled={ranges.length===1} onClick={()=>onChange(removeMilestoneRange(value,index))}><Trash2 size={15}/></button>
+   <button type="button" className="milestone-range-remove" aria-label={`${index+1}. kritik konuyu kaldır`} title="Kritik konuyu kaldır" onClick={()=>{const removed=removeDraftMilestoneRange(value,index);onChange(removed.value,removed.isEmpty)}}><Trash2 size={15}/></button>
   </div>})}</div>
-  <button type="button" className="button milestone-range-add" disabled={ranges.length>=20} onClick={addRange}><Plus size={14}/>Tarih Aralığı Ekle</button>
+  <button type="button" className="button milestone-range-add" disabled={ranges.length>=20} onClick={addRange}><Plus size={14}/>Kritik Konu Ekle</button>
  </fieldset>;
 }

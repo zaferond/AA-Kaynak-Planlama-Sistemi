@@ -6,7 +6,7 @@ import path from 'node:path';
 import {Store} from '../backend/store.mjs';
 import {SqlJsAdapter} from '../backend/adapters/sqljs.mjs';
 import {migrate,validate} from '../backend/domain/index.mjs';
-import {addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
+import {addDraftMilestoneRange,addMilestoneNote,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,milestoneRanges,rangeNotes,removeDraftMilestoneRange,removeMilestoneNote,removeMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
 import {milestoneBars} from '../frontend/src/milestone-bars.ts';
 import {buildProjectInfoReport} from '../frontend/src/project-info-report.ts';
 
@@ -165,4 +165,23 @@ test('deleting descriptions and date ranges updates bars and report topics',()=>
  assert.deepEqual(middleRemoved.additionalRanges?.[0].notes,threeRanges.additionalRanges[1].notes);
  assert.throws(()=>removeMilestoneRange(promoted,0),/Son tarih aralığını/);
  assert.throws(()=>removeMilestoneNote(allRemoved,0,0),/Açıklama bulunamadı/);
+});
+
+test('a new information draft starts without a bar and the final critical topic can be removed',()=>{
+ const initial={id:'draft',name:'Analizler',start:'2026-01-01',end:'2026-01-01',barColor:'blue',barText:''};
+ const first=addDraftMilestoneRange(initial,'2026-12',true);
+ assert.deepEqual([first.start,first.end],['2026-01-01','2026-01-01']);
+ assert.deepEqual(first.barNotes,[{text:'',includeInReport:false}]);
+ const second=addDraftMilestoneRange(first,'2026-12',false);
+ assert.deepEqual([second.additionalRanges[0].start,second.additionalRanges[0].end],['2026-01-02','2026-01-02']);
+ const afterSecondRemoval=removeDraftMilestoneRange(second,1);
+ assert.equal(afterSecondRemoval.isEmpty,false);
+ assert.equal(afterSecondRemoval.value.additionalRanges,undefined);
+ const afterLastRemoval=removeDraftMilestoneRange(afterSecondRemoval.value,0);
+ assert.equal(afterLastRemoval.isEmpty,true);
+ const previouslyFilled={...first,barText:'Eski açıklama',barNotes:[{text:'Eski açıklama',includeInReport:true}]};
+ const cleared=removeDraftMilestoneRange(previouslyFilled,0);
+ const readded=addDraftMilestoneRange(cleared.value,'2026-12',cleared.isEmpty);
+ assert.deepEqual(readded.barNotes,[{text:'',includeInReport:false}]);
+ assert.throws(()=>removeDraftMilestoneRange(first,1),/Tarih aralığı bulunamadı/);
 });
