@@ -20,6 +20,7 @@ type Props={
  project:Project;
  months:string[];
  density:'detail'|'compact'|'overview';
+ expandAllDetails:boolean;
  isAdmin:boolean;
  saving:boolean;
  onProjectInfo:()=>void;
@@ -137,8 +138,9 @@ function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onE
  })}{preview&&createPortal(<div className={'gantt-drag-status'+(preview.message?' invalid':'')} role="status" style={{left:Math.max(8,Math.min(preview.x-105,window.innerWidth-222)),top:Math.max(8,preview.y-94)}}><strong>{preview.mode==='move'?'Taşınıyor':preview.mode==='start'?'Başlangıç ayarlanıyor':'Bitiş ayarlanıyor'} <span>{preview.days>0?'+':''}{preview.days} gün</span></strong><div><span><small>Başlangıç</small>{dateLabel(preview.start)}</span><span><small>Bitiş</small>{dateLabel(preview.end)}</span></div>{preview.message?<p>{preview.message}</p>:<em>{calendarDayDifference(preview.start,preview.end)+1} gün sürer</em>}</div>,document.body)}</div>;
 }
 
-export default function ProjectTimelineRows({project,months,density,isAdmin,saving,onProjectInfo,onPhaseClick,onPhaseContextMenu,onAddMilestone,onEditMilestone,onDeleteMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:Props){
- const [expanded,setExpanded]=useState(false);
+export default function ProjectTimelineRows({project,months,density,expandAllDetails,isAdmin,saving,onProjectInfo,onPhaseClick,onPhaseContextMenu,onAddMilestone,onEditMilestone,onDeleteMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:Props){
+ const [expanded,setExpanded]=useState(expandAllDetails);
+ useLayoutEffect(()=>setExpanded(expandAllDetails),[expandAllDetails]);
  const milestones=[...(project.milestones||[])].sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end)||a.name.localeCompare(b.name,'tr'));
  return <>
   <TableRow className="project-main-row">
