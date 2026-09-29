@@ -4,10 +4,12 @@ import {createPortal} from 'react-dom';
 import {ChevronDown,Pencil,Plus,Trash2} from 'lucide-react';
 import {TableRow,TableCell} from '@/components/ui/table';
 import type {Milestone,Project} from './model';
+import {periodOverlapsProject,phaseInitial,phaseMonthForPeriod} from './timeline-periods';
+import type {TimelinePeriod} from './timeline-periods';
 import {phasePalette,phaseStyle} from './model';
 import ProjectResponsible from './ProjectResponsible';
 import {milestoneRanges,noteDates,rangeNotes,resizeMilestoneRange,shiftCalendarDate,shiftMilestoneRange,visibleMilestoneBarStyle} from './milestone-ranges';
-import {calendarDayDifference,dateAtTrackPosition,milestoneBars} from './milestone-bars';
+import {calendarDayDifference,dateAtPeriodPosition,milestoneBarsForPeriods} from './milestone-bars';
 
 const monthFormat=new Intl.DateTimeFormat('tr-TR',{month:'short',year:'numeric'});
 const monthLabel=(month:string)=>monthFormat.format(new Date(month+'-01T12:00:00'));
@@ -15,11 +17,10 @@ const dateFormat=new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'short',ye
 const dateLabel=(date:string)=>dateFormat.format(new Date(date+'T12:00:00'));
 const barDateFormat=new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});
 const barDateLabel=(date:string)=>barDateFormat.format(new Date(date+'T12:00:00'));
-const phaseInitial=(text:string)=>(text.match(/\p{L}/u)?.[0]||Array.from(text)[0]||'').toLocaleUpperCase('tr-TR');
 
 type Props={
  project:Project;
- months:string[];
+ periods:TimelinePeriod[];
  density:'detail'|'compact'|'overview';
  expandAllDetails:boolean;
  isAdmin:boolean;
@@ -38,15 +39,15 @@ type MilestoneTrackProps=Pick<Props,'isAdmin'|'saving'|'onEditMilestone'|'onMile
  project:Project;
  milestone:Milestone;
  ranges:ReturnType<typeof milestoneRanges>;
- bars:ReturnType<typeof milestoneBars>;
- months:string[];
+ bars:ReturnType<typeof milestoneBarsForPeriods>;
+ periods:TimelinePeriod[];
 };
 
 type DragMode='move'|'start'|'end';
 type DragState={pointerId:number;rangeIndex:number;mode:DragMode;startX:number;startDate:string;timer:ReturnType<typeof setTimeout>|null;active:boolean;cancelled:boolean;moved:boolean;days:number};
 type DragPreview={rangeIndex:number;mode:DragMode;days:number;start:string;end:string;message:string;x:number;y:number};
 
-function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onEditMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:MilestoneTrackProps){
+function MilestoneTrack({project,milestone,ranges,bars,periods,isAdmin,saving,onEditMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:MilestoneTrackProps){
  const trackRef=useRef<HTMLDivElement>(null);
  const dragRef=useRef<DragState|null>(null);
  const suppressClickRef=useRef(false);
@@ -59,7 +60,7 @@ function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onE
  function beginDrag(event:PointerEvent<HTMLElement>,rangeIndex:number,mode:DragMode){
   if(!isAdmin||saving||event.pointerType!=='mouse'||event.button!==0||!trackRef.current)return;
   const rect=trackRef.current.getBoundingClientRect();
-  const startDate=dateAtTrackPosition(event.clientX,rect.left,rect.width,months);
+  const startDate=dateAtPeriodPosition(event.clientX,rect.left,rect.width,periods);
   const range=ranges[rangeIndex];
   const drag:DragState={pointerId:event.pointerId,rangeIndex,mode,startX:event.clientX,startDate,timer:null,active:mode!=='move',cancelled:false,moved:false,days:0};
   if(mode==='move')drag.timer=setTimeout(()=>{if(dragRef.current!==drag||drag.cancelled)return;drag.active=true;setDragging(true);setPreview({rangeIndex,mode,days:0,start:range.start,end:range.end,message:'',x:event.clientX,y:event.clientY})},350);
@@ -77,7 +78,7 @@ function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onE
   }
   const rect=trackRef.current?.getBoundingClientRect();
   if(!rect)return;
-  const date=dateAtTrackPosition(event.clientX,rect.left,rect.width,months);
+  const date=dateAtPeriodPosition(event.clientX,rect.left,rect.width,periods);
   const days=calendarDayDifference(drag.startDate,date);
   drag.days=days;
   if(days)drag.moved=true;
@@ -126,10 +127,10 @@ function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onE
  },[bars]);
 
  const defaultColor=phasePalette.find(item=>item.id===(milestone.barColor||'red'))||phasePalette[3];
- return <div ref={trackRef} className="milestone-track" style={{'--milestone-month-width':100/months.length+'%',height:trackHeight} as CSSProperties}>{bars.map((bar,index)=>{
+ return <div ref={trackRef} className="milestone-track" style={{'--milestone-period-width':100/periods.length+'%',height:trackHeight} as CSSProperties}>{bars.map((bar,index)=>{
   const rangeIndex=ranges.indexOf(bar.range);
   const changed=preview?.rangeIndex===rangeIndex&&preview.days?(preview.mode==='move'?shiftMilestoneRange(project,milestone,rangeIndex,preview.days):resizeMilestoneRange(project,milestone,rangeIndex,preview.mode,preview.days)):null;
-  const displayed=changed?milestoneBars([milestoneRanges(changed)[rangeIndex]],months)[0]||bar:bar;
+  const displayed=changed?milestoneBarsForPeriods([milestoneRanges(changed)[rangeIndex]],periods)[0]||bar:bar;
   const notes=rangeNotes(displayed.range).filter(note=>note.text.trim());
   const entries=notes.length?notes.map(note=>({text:note.text,completed:!!note.completed,...noteDates(note,displayed.range)})):[{text:milestone.name,completed:false,start:displayed.range.start,end:displayed.range.end}];
   const details=entries.map(entry=>'• '+(entry.completed?'Tamamlandı: ':'')+entry.text+' · '+dateLabel(entry.start)+' – '+dateLabel(entry.end));
@@ -139,12 +140,13 @@ function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onE
  })}{preview&&createPortal(<div className={'gantt-drag-status'+(preview.message?' invalid':'')} role="status" style={{left:Math.max(8,Math.min(preview.x-105,window.innerWidth-222)),top:Math.max(8,preview.y-94)}}><strong>{preview.mode==='move'?'Taşınıyor':preview.mode==='start'?'Başlangıç ayarlanıyor':'Bitiş ayarlanıyor'} <span>{preview.days>0?'+':''}{preview.days} gün</span></strong><div><span><small>Başlangıç</small>{dateLabel(preview.start)}</span><span><small>Bitiş</small>{dateLabel(preview.end)}</span></div>{preview.message?<p>{preview.message}</p>:<em>{calendarDayDifference(preview.start,preview.end)+1} gün sürer</em>}</div>,document.body)}</div>;
 }
 
-export default function ProjectTimelineRows({project,months,density,expandAllDetails,isAdmin,saving,onProjectInfo,onPhaseClick,onPhaseContextMenu,onAddMilestone,onEditMilestone,onDeleteMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:Props){
+export default function ProjectTimelineRows({project,periods,density,expandAllDetails,isAdmin,saving,onProjectInfo,onPhaseClick,onPhaseContextMenu,onAddMilestone,onEditMilestone,onDeleteMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:Props){
  const [expanded,setExpanded]=useState(expandAllDetails);
  const [hoveredPhase,setHoveredPhase]=useState('');
  const phaseTooltipRef=useRef<HTMLDivElement>(null);
  const phasePointerRef=useRef({x:0,y:0});
  useLayoutEffect(()=>setExpanded(expandAllDetails),[expandAllDetails]);
+ useEffect(()=>setHoveredPhase(''),[periods]);
  useLayoutEffect(()=>{if(hoveredPhase)positionPhaseTooltip(phasePointerRef.current.x,phasePointerRef.current.y)},[hoveredPhase]);
  useEffect(()=>{if(!hoveredPhase)return;const hide=()=>setHoveredPhase('');window.addEventListener('scroll',hide,true);return()=>window.removeEventListener('scroll',hide,true)},[hoveredPhase]);
  function positionPhaseTooltip(x:number,y:number){
@@ -163,17 +165,17 @@ export default function ProjectTimelineRows({project,months,density,expandAllDet
  return <>
   <TableRow className="project-main-row">
    <TableCell><div className="project-name-cell"><button type="button" className="project-expand" aria-label={project.name+' kritik konularını '+(expanded?'gizle':'göster')} aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?<ChevronDown size={14}/>:<Plus size={14}/>}</button><div className="project-name-copy"><button className="textbutton" disabled={!isAdmin} onClick={onProjectInfo}>{project.name}</button><ProjectResponsible project={project}/><small>{project.start} → {project.end}</small></div>{milestones.length>0&&<span className="milestone-count" title={milestones.length+' kritik konu'}>{milestones.length}</span>}</div></TableCell>
-   {months.map(month=>{const phaseText=month>=project.start&&month<=project.end?project.phases[month]?.trim():'';return <TableCell key={month}><button className="phasebutton" disabled={month<project.start||month>project.end} style={phaseStyle(project,month)} aria-label={project.name+' / '+monthLabel(month)+' aşama ayrıntısı'+(phaseText?': '+phaseText:'')} onMouseEnter={phaseText?event=>{phasePointerRef.current={x:event.clientX,y:event.clientY};setHoveredPhase(phaseText)}:undefined} onMouseMove={phaseText?event=>positionPhaseTooltip(event.clientX,event.clientY):undefined} onMouseLeave={()=>setHoveredPhase('')} onFocus={phaseText?event=>{const rect=event.currentTarget.getBoundingClientRect();phasePointerRef.current={x:rect.left+rect.width/2,y:rect.bottom};setHoveredPhase(phaseText)}:undefined} onBlur={()=>setHoveredPhase('')} onContextMenu={event=>{setHoveredPhase('');onPhaseContextMenu(event,month)}} onClick={()=>{setHoveredPhase('');onPhaseClick(month)}}><span className="phasepreview">{month<project.start||month>project.end?'-':density==='overview'?(phaseText?<strong className="phase-initial">{phaseInitial(phaseText)}</strong>:'-'):phaseText||'-'}</span></button></TableCell>})}
+   {periods.map(period=>{const active=periodOverlapsProject(period,project);const month=phaseMonthForPeriod(period,project);const phaseText=active?project.phases[month]?.trim():'';return <TableCell key={period.key}><button className="phasebutton" disabled={!active} style={phaseStyle(project,month)} aria-label={project.name+' / '+(period.kind==='week'?period.fullLabel:monthLabel(month))+' aşama ayrıntısı'+(phaseText?': '+phaseText:'')} onMouseEnter={phaseText?event=>{phasePointerRef.current={x:event.clientX,y:event.clientY};setHoveredPhase(phaseText)}:undefined} onMouseMove={phaseText?event=>positionPhaseTooltip(event.clientX,event.clientY):undefined} onMouseLeave={()=>setHoveredPhase('')} onFocus={phaseText?event=>{const rect=event.currentTarget.getBoundingClientRect();phasePointerRef.current={x:rect.left+rect.width/2,y:rect.bottom};setHoveredPhase(phaseText)}:undefined} onBlur={()=>setHoveredPhase('')} onContextMenu={event=>{setHoveredPhase('');onPhaseContextMenu(event,month)}} onClick={()=>{setHoveredPhase('');onPhaseClick(month)}}><span className="phasepreview">{!active?'-':density==='overview'?(phaseText?<strong className="phase-initial">{phaseInitial(phaseText)}</strong>:'-'):phaseText||'-'}</span></button></TableCell>})}
   </TableRow>
   {expanded&&<>
-   {isAdmin&&<TableRow className="milestone-section-row"><TableCell colSpan={months.length+1}><div className="milestone-section"><button type="button" className="button milestone-add" disabled={saving} onClick={onAddMilestone}><Plus size={14}/>Kritik Konu Ekle</button></div></TableCell></TableRow>}
+   {isAdmin&&<TableRow className="milestone-section-row"><TableCell colSpan={periods.length+1}><div className="milestone-section"><button type="button" className="button milestone-add" disabled={saving} onClick={onAddMilestone}><Plus size={14}/>Kritik Konu Ekle</button></div></TableCell></TableRow>}
    {milestones.map(milestone=>{
     const ranges=milestoneRanges(milestone);
-    const bars=milestoneBars(ranges,months);
+    const bars=milestoneBarsForPeriods(ranges,periods);
     const color=phasePalette.find(item=>item.id===(milestone.barColor||'red'))||phasePalette[3];
     return <TableRow className="milestone-row" key={milestone.id}>
      <TableCell><div className="milestone-name-cell"><span className="milestone-symbol" aria-hidden="true" style={{borderColor:color.border}}/><div className="milestone-name-copy"><strong title={milestone.name}>{milestone.name}</strong><small title={ranges.map(range=>dateLabel(range.start)+' – '+dateLabel(range.end)).join('\n')}>{ranges.length===0?'Kritik detay konu eklenmedi':ranges.length===1?dateLabel(ranges[0].start)+' – '+dateLabel(ranges[0].end):ranges.length+' tarih aralığı'}</small></div>{isAdmin&&<div className="milestone-actions"><button type="button" title="Kritik Konu Düzenle" aria-label={milestone.name+' düzenle'} disabled={saving} onClick={()=>onEditMilestone(milestone)}><Pencil size={13}/></button><button type="button" title="Kritik Konuyu Sil" aria-label={milestone.name+' sil'} disabled={saving} onClick={()=>onDeleteMilestone(milestone)}><Trash2 size={13}/></button></div>}</div></TableCell>
-     <TableCell colSpan={months.length} className="milestone-month milestone-track-cell">{ranges.length?<MilestoneTrack project={project} milestone={milestone} ranges={ranges} bars={bars} months={months} isAdmin={isAdmin} saving={saving} onEditMilestone={onEditMilestone} onMilestoneContextMenu={onMilestoneContextMenu} onChangeMilestoneRange={onChangeMilestoneRange}/>:<div className="milestone-track milestone-track-empty">Kritik detay konu eklenmedi</div>}</TableCell>
+     <TableCell colSpan={periods.length} className="milestone-month milestone-track-cell">{ranges.length?<MilestoneTrack project={project} milestone={milestone} ranges={ranges} bars={bars} periods={periods} isAdmin={isAdmin} saving={saving} onEditMilestone={onEditMilestone} onMilestoneContextMenu={onMilestoneContextMenu} onChangeMilestoneRange={onChangeMilestoneRange}/>:<div className="milestone-track milestone-track-empty">Kritik detay konu eklenmedi</div>}</TableCell>
     </TableRow>;
    })}
   </>}

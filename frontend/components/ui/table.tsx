@@ -19,8 +19,8 @@ function Table({ className, todayDate, todayMonthsKey, ...props }: TableProps) {
     const marker = markerRef.current
     if (!container || !marker || !todayDate) return
     const table = container.querySelector("table")
-    const header = Array.from(container.querySelectorAll<HTMLTableCellElement>("thead th[data-month]"))
-      .find(cell => cell.dataset.month === todayDate.slice(0, 7))
+    const header = Array.from(container.querySelectorAll<HTMLTableCellElement>("thead th[data-month], thead th[data-date-start]"))
+      .find(cell => cell.dataset.month === todayDate.slice(0, 7) || !!cell.dataset.dateStart && cell.dataset.dateStart <= todayDate && todayDate <= (cell.dataset.dateEnd || ""))
     if (!table || !header) {
       marker.style.display = "none"
       return
@@ -28,7 +28,11 @@ function Table({ className, todayDate, todayMonthsKey, ...props }: TableProps) {
     const update = () => {
       const containerRect = container.getBoundingClientRect()
       const headerRect = header.getBoundingClientRect()
-      marker.style.left = `${headerRect.left - containerRect.left + container.scrollLeft + headerRect.width * todayMonthProgress(todayDate)}px`
+      const start=header.dataset.dateStart
+      const end=header.dataset.dateEnd
+      const progress=start&&end?((Date.parse(todayDate+'T12:00:00Z')-Date.parse(start+'T12:00:00Z'))/86400000+0.5)/((Date.parse(end+'T12:00:00Z')-Date.parse(start+'T12:00:00Z'))/86400000+1):todayMonthProgress(todayDate)
+      const zoom=Number.parseFloat(getComputedStyle(document.documentElement).zoom)||1
+      marker.style.left = `${(headerRect.left - containerRect.left + headerRect.width * progress)/zoom + container.scrollLeft}px`
       marker.style.top = `${container.scrollTop}px`
       marker.style.height = `${container.clientHeight}px`
       marker.style.display = "block"
