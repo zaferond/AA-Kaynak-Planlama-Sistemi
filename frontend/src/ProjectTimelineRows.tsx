@@ -2,7 +2,6 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {CSSProperties,MouseEvent,PointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronDown,Pencil,Plus,Trash2} from 'lucide-react';
-import {Tooltip} from 'radix-ui';
 import {TableRow,TableCell} from '@/components/ui/table';
 import type {Milestone,Project} from './model';
 import {phasePalette,phaseStyle} from './model';
@@ -141,12 +140,29 @@ function MilestoneTrack({project,milestone,ranges,bars,months,isAdmin,saving,onE
 
 export default function ProjectTimelineRows({project,months,density,expandAllDetails,isAdmin,saving,onProjectInfo,onPhaseClick,onPhaseContextMenu,onAddMilestone,onEditMilestone,onDeleteMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:Props){
  const [expanded,setExpanded]=useState(expandAllDetails);
+ const [hoveredPhase,setHoveredPhase]=useState('');
+ const phaseTooltipRef=useRef<HTMLDivElement>(null);
+ const phasePointerRef=useRef({x:0,y:0});
  useLayoutEffect(()=>setExpanded(expandAllDetails),[expandAllDetails]);
+ useLayoutEffect(()=>{if(hoveredPhase)positionPhaseTooltip(phasePointerRef.current.x,phasePointerRef.current.y)},[hoveredPhase]);
+ useEffect(()=>{if(!hoveredPhase)return;const hide=()=>setHoveredPhase('');window.addEventListener('scroll',hide,true);return()=>window.removeEventListener('scroll',hide,true)},[hoveredPhase]);
+ function positionPhaseTooltip(x:number,y:number){
+  phasePointerRef.current={x,y};
+  const tooltip=phaseTooltipRef.current;
+  if(!tooltip)return;
+  const {width,height}=tooltip.getBoundingClientRect();
+  const gap=12;
+  const left=Math.max(8,Math.min(x+gap,window.innerWidth-width-8));
+  const top=y+gap+height+8<=window.innerHeight?y+gap:Math.max(8,y-height-gap);
+  const zoom=Number.parseFloat(getComputedStyle(document.documentElement).zoom)||1;
+  tooltip.style.left=left/zoom+'px';
+  tooltip.style.top=top/zoom+'px';
+ }
  const milestones=[...(project.milestones||[])].sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end)||a.name.localeCompare(b.name,'tr'));
- return <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
+ return <>
   <TableRow className="project-main-row">
    <TableCell><div className="project-name-cell"><button type="button" className="project-expand" aria-label={project.name+' kritik konularını '+(expanded?'gizle':'göster')} aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?<ChevronDown size={14}/>:<Plus size={14}/>}</button><div className="project-name-copy"><button className="textbutton" disabled={!isAdmin} onClick={onProjectInfo}>{project.name}</button><ProjectResponsible project={project}/><small>{project.start} → {project.end}</small></div>{milestones.length>0&&<span className="milestone-count" title={milestones.length+' kritik konu'}>{milestones.length}</span>}</div></TableCell>
-   {months.map(month=>{const phaseText=month>=project.start&&month<=project.end?project.phases[month]?.trim():'';const button=<button className="phasebutton" disabled={month<project.start||month>project.end} style={phaseStyle(project,month)} aria-label={project.name+' / '+monthLabel(month)+' aşama ayrıntısı'} onContextMenu={event=>onPhaseContextMenu(event,month)} onClick={()=>onPhaseClick(month)}><span className="phasepreview">{month<project.start||month>project.end?'-':density==='overview'?(phaseText?'●':'-'):phaseText||'-'}</span></button>;return <TableCell key={month}>{phaseText?<Tooltip.Root><Tooltip.Trigger asChild>{button}</Tooltip.Trigger><Tooltip.Portal><Tooltip.Content className="project-phase-tooltip" side="top" sideOffset={8} collisionPadding={12}>{phaseText}<Tooltip.Arrow className="project-phase-tooltip-arrow" width={10} height={5}/></Tooltip.Content></Tooltip.Portal></Tooltip.Root>:button}</TableCell>})}
+   {months.map(month=>{const phaseText=month>=project.start&&month<=project.end?project.phases[month]?.trim():'';return <TableCell key={month}><button className="phasebutton" disabled={month<project.start||month>project.end} style={phaseStyle(project,month)} aria-label={project.name+' / '+monthLabel(month)+' aşama ayrıntısı'+(phaseText?': '+phaseText:'')} onMouseEnter={phaseText?event=>{phasePointerRef.current={x:event.clientX,y:event.clientY};setHoveredPhase(phaseText)}:undefined} onMouseMove={phaseText?event=>positionPhaseTooltip(event.clientX,event.clientY):undefined} onMouseLeave={()=>setHoveredPhase('')} onFocus={phaseText?event=>{const rect=event.currentTarget.getBoundingClientRect();phasePointerRef.current={x:rect.left+rect.width/2,y:rect.bottom};setHoveredPhase(phaseText)}:undefined} onBlur={()=>setHoveredPhase('')} onContextMenu={event=>{setHoveredPhase('');onPhaseContextMenu(event,month)}} onClick={()=>{setHoveredPhase('');onPhaseClick(month)}}><span className="phasepreview">{month<project.start||month>project.end?'-':density==='overview'?(phaseText?'●':'-'):phaseText||'-'}</span></button></TableCell>})}
   </TableRow>
   {expanded&&<>
    {isAdmin&&<TableRow className="milestone-section-row"><TableCell colSpan={months.length+1}><div className="milestone-section"><button type="button" className="button milestone-add" disabled={saving} onClick={onAddMilestone}><Plus size={14}/>Kritik Konu Ekle</button></div></TableCell></TableRow>}
@@ -160,5 +176,6 @@ export default function ProjectTimelineRows({project,months,density,expandAllDet
     </TableRow>;
    })}
   </>}
- </Tooltip.Provider>;
+  {hoveredPhase&&createPortal(<div ref={phaseTooltipRef} className="project-phase-tooltip" role="tooltip" style={{left:-10000,top:-10000}}>{hoveredPhase}</div>,document.body)}
+ </>;
 }
