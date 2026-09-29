@@ -4,6 +4,7 @@ import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@
 import type {Data,Risk} from './model';
 import type {Principal} from './access';
 import {riskAssessment} from './risk-score';
+import {riskValidationError} from './risk-validation';
 import RiskTable from './RiskTable';
 import {downloadRiskPlan} from './risk-export';
 import './risk.css';
@@ -25,7 +26,7 @@ export default function RiskManagement({data,user,onSave,onDelete}:{data:Data;us
  const canEdit=(risk:Risk)=>user.role==='admin'||user.role==='manager'||risk.createdBy===user.id;
  const set=<K extends keyof Risk>(key:K,value:Risk[K])=>setDraft(old=>old?{...old,[key]:value}:old);
  const start=(risk?:Risk)=>{setError('');setDraft(risk?structuredClone(risk):blank(projectId,user))};
- async function save(){if(!draft||busy)return;setError('');if(!draft.description.trim()||!draft.reportedBy.trim()||!draft.reportedAt){setError('Risk tanımı, bildirim yapan birim/sorumlu ve bildirim tarihi zorunludur.');return}if(!riskAssessment(draft.likelihood,draft.impact)){setError('İlk değerlendirme için 1–5 arası olasılık ve etki seçin.');return}if((draft.residualLikelihood===null)!==(draft.residualImpact===null)){setError('Aksiyon sonrası olasılık ve etki birlikte girilmeli.');return}if(draft.residualLikelihood!==null&&!draft.implementedAt){setError('Aksiyon sonrası değerlendirme için devreye alınma tarihi girin.');return}setBusy(true);try{await onSave(draft);setDraft(null)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
+ async function save(){if(!draft||busy)return;setError('');const validationError=riskValidationError(draft);if(validationError){setError(validationError);return}setBusy(true);try{await onSave(draft);setDraft(null)}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  async function remove(risk:Risk){if(busy||!confirm('“'+risk.description.slice(0,90)+'” risk kaydı silinsin mi?'))return;setBusy(true);try{await onDelete(risk);setDraft(null);setError('')}catch(e){setError((e as Error).message)}finally{setBusy(false)}}
  const riskCount=risks.filter(r=>r.status!=='Kapalı').length;
  const highCount=risks.filter(r=>r.status!=='Kapalı'&&(riskAssessment(r.likelihood,r.impact)?.score||0)>=15).length;
@@ -35,7 +36,7 @@ export default function RiskManagement({data,user,onSave,onDelete}:{data:Data;us
    {!project?<div className="risk-placeholder"><ShieldAlert size={32}/><strong>Risk planını açmak için bir proje seçin</strong><span>Seçilen projenin riskleri tüm kullanıcılar tarafından görüntülenebilir.</span></div>:<>
     <div className="risk-summary"><div><small>TOPLAM RİSK</small><strong>{risks.length}</strong></div><div><small>AÇIK / TAKİPTE</small><strong>{riskCount}</strong></div><div><small>YÜKSEK / TOLERE EDİLEMEZ</small><strong>{highCount}</strong></div><div><small>HEDEF TARİHİ GEÇEN</small><strong>{lateCount}</strong></div></div>
     {exportError&&<div className="risk-export-error" role="alert">{exportError}</div>}
-    <RiskTable risks={risks} canEdit={canEdit} onEdit={start}/>
+    <RiskTable risks={risks} canEdit={canEdit} onEdit={start} onSave={onSave}/>
     <details className="risk-matrix-panel"><summary>Etki–olasılık matrisini göster</summary><div className="risk-matrix-scroll"><table><thead><tr><th>Olasılık / Etki</th>{impactNames.map((name,i)=><th key={name}>{i+1} · {name}</th>)}</tr></thead><tbody>{likelihoodNames.map((name,i)=><tr key={name}><th>{i+1} · {name}</th>{impactNames.map((_,j)=><td key={j}><Score likelihood={i+1} impact={j+1}/></td>)}</tr>)}</tbody></table></div></details>
     <div className="risk-legend"><span>Risk matrisi: Olasılık × Etki</span><Score likelihood={1} impact={1}/><Score likelihood={1} impact={2}/><Score likelihood={2} impact={4}/><Score likelihood={3} impact={5}/><Score likelihood={5} impact={5}/></div>
    </>}
