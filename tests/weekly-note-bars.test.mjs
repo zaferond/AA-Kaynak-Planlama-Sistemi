@@ -44,10 +44,13 @@ test('notes outside the parent bar remain visible; undated legacy notes stay unp
  assert.equal(bars[0].color,'green');
 });
 
-test('dragging weekly boxes snaps to complete calendar weeks',()=>{
- assert.equal(daysForWeekDrag(46,700,10),7);
- assert.equal(daysForWeekDrag(-46,700,10),-7);
- assert.equal(daysForWeekDrag(20,700,10),0);
- assert.equal(daysForWeekDrag(140,700,10),14);
- assert.equal(daysForWeekDrag(100,0,10),0);
+test('weekly dragging follows individual days across full and partial week columns',()=>{
+ const periods=projectTimelinePeriods(['2026-10'],true);
+ const width=periods.length*70;
+ assert.equal(daysForWeekDrag(8,26,0,width,periods),1);
+ assert.equal(daysForWeekDrag(26,8,0,width,periods),-1);
+ assert.equal(daysForWeekDrag(8,78,0,width,periods),4);
+ assert.equal(daysForWeekDrag(70,140,0,width,periods),7);
+ assert.equal(daysForWeekDrag(100,85,0,width,periods),-2);
+ assert.equal(daysForWeekDrag(8,26,0,0,periods),0);
 });

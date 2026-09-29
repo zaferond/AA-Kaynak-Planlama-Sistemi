@@ -22,7 +22,7 @@ export function dateAtPeriodPosition(clientX:number,left:number,width:number,per
  const position=Math.min(periods.length-1e-9,Math.max(0,(clientX-left)/width*periods.length));
  const index=Math.floor(position),period=periods[index];
  const days=calendarDayDifference(period.start,period.end)+1;
- return new Date(Date.parse(period.start+'T12:00:00Z')+Math.floor((position-index)*days)*86400000).toISOString().slice(0,10);
+ return new Date(Date.parse(period.start+'T12:00:00Z')+Math.floor((position-index)*days+1e-9)*86400000).toISOString().slice(0,10);
 }
 
 /** Position inclusive date ranges in equally sized week columns. */

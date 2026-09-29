@@ -121,6 +121,8 @@ test('moving and resizing a weekly detail updates its enclosing range and report
  assert.deepEqual([moved.start,moved.end],['2026-03-17','2026-03-25']);
  assert.deepEqual([moved.barNotes[0].start,moved.barNotes[0].end],['2026-03-17','2026-03-19']);
  assert.deepEqual([moved.barNotes[1].start,moved.barNotes[1].end],['2026-03-23','2026-03-25']);
+ const movedOneDay=changeMilestoneNoteDates(project,moved,0,0,'move',1);
+ assert.deepEqual([movedOneDay.barNotes[0].start,movedOneDay.barNotes[0].end,movedOneDay.start],['2026-03-18','2026-03-20','2026-03-18']);
  const expanded=changeMilestoneNoteDates(project,moved,0,1,'end',7);
  assert.deepEqual([expanded.start,expanded.end],['2026-03-17','2026-04-01']);
  assert.doesNotThrow(()=>validate(dataWith(expanded)));
