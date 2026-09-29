@@ -2,6 +2,7 @@ import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import type {CSSProperties,MouseEvent,PointerEvent} from 'react';
 import {createPortal} from 'react-dom';
 import {ChevronDown,Pencil,Plus,Trash2} from 'lucide-react';
+import {Tooltip} from 'radix-ui';
 import {TableRow,TableCell} from '@/components/ui/table';
 import type {Milestone,Project} from './model';
 import {phasePalette,phaseStyle} from './model';
@@ -142,10 +143,10 @@ export default function ProjectTimelineRows({project,months,density,expandAllDet
  const [expanded,setExpanded]=useState(expandAllDetails);
  useLayoutEffect(()=>setExpanded(expandAllDetails),[expandAllDetails]);
  const milestones=[...(project.milestones||[])].sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end)||a.name.localeCompare(b.name,'tr'));
- return <>
+ return <Tooltip.Provider delayDuration={180} skipDelayDuration={100}>
   <TableRow className="project-main-row">
    <TableCell><div className="project-name-cell"><button type="button" className="project-expand" aria-label={project.name+' kritik konularını '+(expanded?'gizle':'göster')} aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)}>{expanded?<ChevronDown size={14}/>:<Plus size={14}/>}</button><div className="project-name-copy"><button className="textbutton" disabled={!isAdmin} onClick={onProjectInfo}>{project.name}</button><ProjectResponsible project={project}/><small>{project.start} → {project.end}</small></div>{milestones.length>0&&<span className="milestone-count" title={milestones.length+' kritik konu'}>{milestones.length}</span>}</div></TableCell>
-   {months.map(month=><TableCell key={month}><button className="phasebutton" disabled={month<project.start||month>project.end} style={phaseStyle(project,month)} title={project.name+' / '+monthLabel(month)+'\n'+(project.phases[month]?.trim()||'-')} aria-label={project.name+' / '+monthLabel(month)+' aşama ayrıntısı'} onContextMenu={event=>onPhaseContextMenu(event,month)} onClick={()=>onPhaseClick(month)}><span className="phasepreview">{month<project.start||month>project.end?'-':density==='overview'?(project.phases[month]?.trim()?'●':'-'):project.phases[month]?.trim()||'-'}</span></button></TableCell>)}
+   {months.map(month=>{const phaseText=month>=project.start&&month<=project.end?project.phases[month]?.trim():'';const button=<button className="phasebutton" disabled={month<project.start||month>project.end} style={phaseStyle(project,month)} aria-label={project.name+' / '+monthLabel(month)+' aşama ayrıntısı'} onContextMenu={event=>onPhaseContextMenu(event,month)} onClick={()=>onPhaseClick(month)}><span className="phasepreview">{month<project.start||month>project.end?'-':density==='overview'?(phaseText?'●':'-'):phaseText||'-'}</span></button>;return <TableCell key={month}>{phaseText?<Tooltip.Root><Tooltip.Trigger asChild>{button}</Tooltip.Trigger><Tooltip.Portal><Tooltip.Content className="project-phase-tooltip" side="top" sideOffset={8} collisionPadding={12}>{phaseText}<Tooltip.Arrow className="project-phase-tooltip-arrow" width={10} height={5}/></Tooltip.Content></Tooltip.Portal></Tooltip.Root>:button}</TableCell>})}
   </TableRow>
   {expanded&&<>
    {isAdmin&&<TableRow className="milestone-section-row"><TableCell colSpan={months.length+1}><div className="milestone-section"><button type="button" className="button milestone-add" disabled={saving} onClick={onAddMilestone}><Plus size={14}/>Kritik Konu Ekle</button></div></TableCell></TableRow>}
@@ -159,5 +160,5 @@ export default function ProjectTimelineRows({project,months,density,expandAllDet
     </TableRow>;
    })}
   </>}
- </>;
+ </Tooltip.Provider>;
 }
