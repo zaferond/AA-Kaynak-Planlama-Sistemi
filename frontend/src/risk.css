@@ -33,7 +33,7 @@
 .risk-group-head th{position:sticky;top:0;height:36px;z-index:4;padding:8px 10px;border-right:1px solid #557a92;border-bottom:1px solid #6e9cb5;background:#194765;color:#fff;font-size:10px;font-weight:800;letter-spacing:.055em;text-align:center;text-transform:uppercase}
 .app .risk-table .risk-group-head th{color:#fff!important}
 .risk-group-head th:nth-child(3),.risk-group-head th:nth-child(6){background:#225474}
-.risk-group-head .risk-sticky-first,.risk-group-head .risk-sticky-last{height:79px;background:#143e5b;z-index:7}
+.risk-group-head .risk-sticky-first{height:79px;background:#143e5b;z-index:7}
 .risk-column-head th{position:sticky;top:36px;height:43px;z-index:5;padding:7px 9px;border-right:1px solid #bed0dd;border-bottom:2px solid #8eb2c7;background:#e5f0f6;color:#335a73;font-size:10px;font-weight:800;line-height:1.25;text-transform:uppercase;text-align:center;vertical-align:middle;white-space:normal}
 .app .risk-table .risk-column-head th{color:#335a73!important}
 .app .risk-table thead th{text-align:center!important;vertical-align:middle!important}
@@ -44,8 +44,7 @@
 .risk-table tbody tr:nth-child(even) td{background:#f8fbfd}
 .risk-table tbody td.risk-center{text-align:center;vertical-align:middle;font-variant-numeric:tabular-nums}
 .risk-table .risk-sticky-first{position:sticky;left:0;z-index:2;border-right:2px solid #a6c0d1;box-shadow:5px 0 9px -8px #224c69a8}
-.risk-table .risk-sticky-last{position:sticky;right:0;z-index:2;border-left:2px solid #a6c0d1;border-right:0;box-shadow:-5px 0 9px -8px #224c69a8}
-.risk-table thead .risk-sticky-first,.risk-table thead .risk-sticky-last{z-index:8}
+.risk-table thead .risk-sticky-first{z-index:8}
 .risk-definition{display:flex;align-items:center;gap:10px}
 .risk-definition strong{display:block;color:#173f5b;font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere}
 .risk-definition small{display:block;margin-top:5px;color:#8499a9;font-size:10px}
@@ -59,9 +58,6 @@
 .risk-grid-undefined{background:#e5e8eb;color:#4f5b65}.risk-grid-low{background:#d5f0fb;color:#0b658e}.risk-grid-medium{background:#fff0b5;color:#815b0b}.risk-grid-high{background:#fbd1cb;color:#9d2c27}.risk-grid-critical{background:#682d34;color:#fff}
 .risk-table tbody td.risk-assessment-cell{padding:8px}
 .risk-strategy-check{display:inline-flex;align-items:center;justify-content:center;width:25px;height:25px;border-radius:50%;background:#d9f0e8;color:#22845c;font-size:15px;font-weight:900}
-.risk-edit-cell{padding:4px!important;text-align:center;vertical-align:middle!important}
-.risk-edit-cell button{display:inline-flex;align-items:center;justify-content:center;width:31px;height:31px;border:1px solid #bbd1df;border-radius:7px;background:#eff7fb;color:#28688c;cursor:pointer}
-.risk-edit-cell button:hover{background:#dceef8;border-color:#8dbbd3}
 .risk-cell-trigger{display:block;width:100%;min-height:25px;padding:0;border:0;background:transparent;color:inherit;font:inherit;line-height:inherit;text-align:inherit;cursor:pointer}
 .risk-cell-trigger:focus-visible{outline:2px solid #338dbd;outline-offset:4px;border-radius:3px}
 .risk-cell-trigger:disabled{cursor:default;color:inherit}
@@ -72,10 +68,8 @@
 .risk-inline-textarea{min-height:62px;resize:vertical;overflow-wrap:anywhere}
 .risk-inline-strategy{display:inline-flex;align-items:center;justify-content:center;min-width:42px;min-height:29px;padding:4px 8px;border:1px solid #bcd3df;border-radius:6px;background:#fff;color:#52768b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
 .risk-inline-strategy.selected{border-color:#92d1b7;background:#d9f0e8;color:#207a55}
-.risk-edit-actions{display:flex;align-items:center;justify-content:center;gap:4px}
-.risk-edit-cell .risk-save-cell{border-color:#79c3a4;background:#def3e9;color:#187448}
-.risk-edit-cell .risk-save-cell:hover{background:#c7e9d9}
-.risk-edit-cell button:disabled{opacity:.5;cursor:wait}
+.risk-inline-delete{margin-top:6px;padding:2px 0;border:0;background:transparent;color:#ad514b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+.risk-inline-delete:hover{text-decoration:underline}
 .risk-inline-error{padding:9px 16px;border-bottom:1px solid #eab7b1;background:#fff1ef;color:#a6312a;font-size:12px;font-weight:650}
 .risk-empty-row td{padding:35px 18px!important;color:#748a9c;text-align:center;font-size:12px}
 .risk-score{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;border-radius:7px;padding:5px 8px;white-space:nowrap;font-size:11px;font-weight:800}
