@@ -524,8 +524,10 @@
 .app.tab-plan .capacitystrip .planning-grid :is(th,td):first-child{width:var(--label-width);border-right:2px solid #b8cbdc;box-shadow:7px 0 8px -9px #1a3b59}
 .app.tab-plan .capacitystrip .planning-grid tbody td:first-child{background:#f7fafc}
 
-/* Leave a dedicated track for the horizontal scrollbar below the last resource row. */
-.app.tab-plan .capacitystrip [data-slot=table-container]{padding-bottom:17px}
+/* Keep horizontal scrollbars below the last visible row in planning and reports. */
+.app.tab-plan [data-slot=table-container]:has(>.allocation-grid),
+.app.tab-overview [data-slot=table-container]:has(>.remaining-report),
+.app.tab-overview .absence-report [data-slot=table-container]{padding-bottom:24px}
 .app.tab-plan .capacitystrip .planning-grid .summary td{height:24px;padding-top:2px!important;padding-bottom:2px!important}
 
 /* Show more project rows before the project timeline needs vertical scrolling. */
