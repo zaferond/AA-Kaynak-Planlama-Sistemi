@@ -284,7 +284,7 @@ html{zoom:80%}
 .app .projectmatrix .gantt-note-list .gantt-note-text{font-weight:700}
 .app .projectmatrix .gantt-note-list li.completed .gantt-note-text{text-decoration:line-through;text-decoration-thickness:1.5px;text-decoration-color:currentColor;opacity:.8}
 .app .projectmatrix .gantt-note-list li.completed .gantt-note-dates{opacity:1}
-.app .projectmatrix .gantt-note-dates{display:block;width:fit-content;max-width:calc(100% - 9px);margin:1px 0 0 9px;padding:1px 3px;border-radius:3px;background:#ffffffeb;color:#17212e;opacity:1;font-size:9px;font-weight:800;line-height:1.35;white-space:normal;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.app .projectmatrix .gantt-note-dates{display:block;margin:1px 0 0 9px;color:#17212e;opacity:1;font-size:9px;font-weight:800;line-height:1.35;white-space:normal;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .app .projectmatrix .gantt-note-dates time{white-space:normal;overflow-wrap:anywhere}
 .app .projectmatrix .gantt-bar{position:relative;display:flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:6px;min-height:22px;height:auto;padding:4px 6px;border:1px solid var(--gantt-color);background:var(--gantt-color);color:#fff;box-shadow:0 1px 2px #1c38502a;cursor:context-menu}
 .app .projectmatrix .gantt-bar.editable{cursor:grab;touch-action:pan-x pan-y;user-select:none}
