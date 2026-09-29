@@ -1,4 +1,4 @@
-import {Plus,Trash2} from 'lucide-react';
+import {ArrowRight,Plus,Trash2} from 'lucide-react';
 import type {CSSProperties} from 'react';
 import {phasePalette} from './model';
 import type {Milestone,MilestoneNote,MilestoneRange} from './model';
@@ -25,15 +25,16 @@ export default function MilestoneDateEditor({value,isEmpty,projectStart,projectE
  function addRange(){
   onChange(addDraftMilestoneRange(value,projectEnd,isEmpty),false);
  }
- return <fieldset className="milestone-ranges"><legend>Kritik Konular</legend><p className="milestone-date-hint">Açıklama tarihleri ana barın başlangıç ve bitişini otomatik belirler. Ana bar tarihlerini ayrıca elle değiştirebilirsiniz.</p>
+ return <fieldset className="milestone-ranges"><legend>Kritik Konular</legend><p className="milestone-date-hint">Detay açıklama tarihleri üstteki tarih aralığını otomatik belirler. Üstteki tarihleri ayrıca elle değiştirebilirsiniz.</p>
   {isEmpty&&<p className="milestone-range-empty">Henüz kritik konu eklenmedi. İlk konuyu aşağıdaki düğmeyle ekleyin.</p>}
   <div className="milestone-range-list">{ranges.map((range,index)=>{const notes=rangeNotes(range);return <div className="milestone-range-row" key={index}>
    <span className="milestone-range-number">{index+1}</span>
    <div className="milestone-range-dates">
-    <strong>Ana Bar Tarihleri</strong><div><label>Başlangıç Tarihi<input type="date" min={min} max={max} value={range.start} onChange={event=>updateRange(index,{start:event.target.value})}/></label>
+    <strong>Açıklama</strong><div className="milestone-range-date-card"><label>Başlangıç Tarihi<input type="date" min={min} max={max} value={range.start} onChange={event=>updateRange(index,{start:event.target.value})}/></label>
+    <span className="milestone-range-date-arrow" aria-hidden="true"><ArrowRight size={16}/></span>
     <label>Bitiş Tarihi<input type="date" min={min} max={max} value={range.end} onChange={event=>updateRange(index,{end:event.target.value})}/></label></div>
    </div>
-   <div className="milestone-range-notes"><strong>Açıklamalar</strong>{notes.length===0&&<p className="milestone-note-empty">Bu tarih aralığında açıklama yok.</p>}{notes.map((note,noteIndex)=><div className="milestone-note-row" key={noteIndex}>
+   <div className="milestone-range-notes"><strong>Detay Açıklamalar</strong>{notes.length===0&&<p className="milestone-note-empty">Bu tarih aralığında açıklama yok.</p>}{notes.map((note,noteIndex)=><div className="milestone-note-row" key={noteIndex}>
     <label className="milestone-note-input"><span className="milestone-note-number">{index+1}.{noteIndex+1} Açıklama</span><textarea rows={3} value={note.text} placeholder="Açıklama yazın" onChange={event=>updateNote(index,noteIndex,{text:event.target.value})}/></label>
     <div className="milestone-note-dates"><label>Başlangıç<input type="date" min={min} max={max} value={noteDates(note,range).start} aria-label={`${index+1}.${noteIndex+1} açıklama başlangıç tarihi`} onChange={event=>updateNote(index,noteIndex,{start:event.target.value})}/></label><label>Bitiş<input type="date" min={min} max={max} value={noteDates(note,range).end} aria-label={`${index+1}.${noteIndex+1} açıklama bitiş tarihi`} onChange={event=>updateNote(index,noteIndex,{end:event.target.value})}/></label><div className="milestone-note-flags"><label className="milestone-note-report"><input type="checkbox" checked={note.includeInReport} onChange={event=>updateNote(index,noteIndex,{includeInReport:event.target.checked})}/>Rapora Ekle</label><label className="milestone-note-complete"><input type="checkbox" checked={!!note.completed} onChange={event=>updateNote(index,noteIndex,{completed:event.target.checked})}/>Tamamlandı</label></div></div>
     <button type="button" className="milestone-note-remove" aria-label={`${index+1}.${noteIndex+1} açıklamayı kaldır`} title="Açıklamayı kaldır" onClick={()=>onChange(removeMilestoneNote(value,index,noteIndex))}><Trash2 size={14}/></button>
