@@ -10,6 +10,8 @@ import {phasePalette,phaseStyle} from './model';
 import ProjectResponsible from './ProjectResponsible';
 import {milestoneRanges,noteDates,rangeNotes,resizeMilestoneRange,shiftCalendarDate,shiftMilestoneRange,visibleMilestoneBarStyle} from './milestone-ranges';
 import {calendarDayDifference,dateAtPeriodPosition,milestoneBarsForPeriods} from './milestone-bars';
+import {weeklyNoteLayout} from './weekly-note-bars';
+import type {WeeklyNoteBar} from './weekly-note-bars';
 
 const monthFormat=new Intl.DateTimeFormat('tr-TR',{month:'short',year:'numeric'});
 const monthLabel=(month:string)=>monthFormat.format(new Date(month+'-01T12:00:00'));
@@ -17,6 +19,17 @@ const dateFormat=new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'short',ye
 const dateLabel=(date:string)=>dateFormat.format(new Date(date+'T12:00:00'));
 const barDateFormat=new Intl.DateTimeFormat('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});
 const barDateLabel=(date:string)=>barDateFormat.format(new Date(date+'T12:00:00'));
+
+function positionPointerTooltip(tooltip:HTMLElement|null,x:number,y:number){
+ if(!tooltip)return;
+ const {width,height}=tooltip.getBoundingClientRect();
+ const gap=12;
+ const left=Math.max(8,Math.min(x+gap,window.innerWidth-width-8));
+ const top=y+gap+height+8<=window.innerHeight?y+gap:Math.max(8,y-height-gap);
+ const zoom=Number.parseFloat(getComputedStyle(document.documentElement).zoom)||1;
+ tooltip.style.left=left/zoom+'px';
+ tooltip.style.top=top/zoom+'px';
+}
 
 type Props={
  project:Project;
@@ -41,21 +54,28 @@ type MilestoneTrackProps=Pick<Props,'isAdmin'|'saving'|'onEditMilestone'|'onMile
  ranges:ReturnType<typeof milestoneRanges>;
  bars:ReturnType<typeof milestoneBarsForPeriods>;
  periods:TimelinePeriod[];
+ weeklyLayout:ReturnType<typeof weeklyNoteLayout>|null;
 };
 
 type DragMode='move'|'start'|'end';
 type DragState={pointerId:number;rangeIndex:number;mode:DragMode;startX:number;startDate:string;timer:ReturnType<typeof setTimeout>|null;active:boolean;cancelled:boolean;moved:boolean;days:number};
 type DragPreview={rangeIndex:number;mode:DragMode;days:number;start:string;end:string;message:string;x:number;y:number};
 
-function MilestoneTrack({project,milestone,ranges,bars,periods,isAdmin,saving,onEditMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:MilestoneTrackProps){
+function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAdmin,saving,onEditMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:MilestoneTrackProps){
  const trackRef=useRef<HTMLDivElement>(null);
  const dragRef=useRef<DragState|null>(null);
  const suppressClickRef=useRef(false);
  const [trackHeight,setTrackHeight]=useState(36);
  const [dragging,setDragging]=useState(false);
  const [preview,setPreview]=useState<DragPreview|null>(null);
+ const [hoveredNote,setHoveredNote]=useState<WeeklyNoteBar|null>(null);
+ const noteTooltipRef=useRef<HTMLDivElement>(null);
+ const notePointerRef=useRef({x:0,y:0});
 
  useEffect(()=>()=>{if(dragRef.current?.timer)clearTimeout(dragRef.current.timer)},[]);
+ useEffect(()=>setHoveredNote(null),[periods]);
+ useLayoutEffect(()=>{if(hoveredNote)positionPointerTooltip(noteTooltipRef.current,notePointerRef.current.x,notePointerRef.current.y)},[hoveredNote]);
+ useEffect(()=>{if(!hoveredNote)return;const hide=()=>setHoveredNote(null);window.addEventListener('scroll',hide,true);return()=>window.removeEventListener('scroll',hide,true)},[hoveredNote]);
 
  function beginDrag(event:PointerEvent<HTMLElement>,rangeIndex:number,mode:DragMode){
   if(!isAdmin||saving||event.pointerType!=='mouse'||event.button!==0||!trackRef.current)return;
@@ -115,6 +135,7 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,isAdmin,saving,on
  }
 
  useLayoutEffect(()=>{
+  if(weeklyLayout)return;
   const barElements=Array.from(trackRef.current?.querySelectorAll<HTMLButtonElement>('.gantt-bar')||[]);
   const updateHeight=()=>{
    const nextHeight=Math.max(36,...barElements.map(bar=>bar.offsetHeight+12));
@@ -124,10 +145,18 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,isAdmin,saving,on
   barElements.forEach(bar=>observer.observe(bar));
   updateHeight();
   return ()=>observer.disconnect();
- },[bars]);
+ },[bars,weeklyLayout]);
 
  const defaultColor=phasePalette.find(item=>item.id===(milestone.barColor||'red'))||phasePalette[3];
- return <div ref={trackRef} className="milestone-track" style={{'--milestone-period-width':100/periods.length+'%',height:trackHeight} as CSSProperties}>{bars.map((bar,index)=>{
+ let displayedWeeklyLayout=weeklyLayout;
+ if(weeklyLayout&&preview?.days&&!preview.message){
+  try{
+   const changed=preview.mode==='move'?shiftMilestoneRange(project,milestone,preview.rangeIndex,preview.days):resizeMilestoneRange(project,milestone,preview.rangeIndex,preview.mode,preview.days);
+   displayedWeeklyLayout=weeklyNoteLayout(milestoneRanges(changed),periods);
+  }catch{/* Keep the last valid layout while an invalid drag is shown in the status tooltip. */}
+ }
+ const weeklyTrackHeight=displayedWeeklyLayout?Math.max(36,28+displayedWeeklyLayout.laneCount*46):trackHeight;
+ return <div ref={trackRef} className={'milestone-track'+(weeklyLayout?' weekly-note-track':'')} style={{'--milestone-period-width':100/periods.length+'%',height:weeklyTrackHeight} as CSSProperties}>{bars.map((bar,index)=>{
   const rangeIndex=ranges.indexOf(bar.range);
   const changed=preview?.rangeIndex===rangeIndex&&preview.days?(preview.mode==='move'?shiftMilestoneRange(project,milestone,rangeIndex,preview.days):resizeMilestoneRange(project,milestone,rangeIndex,preview.mode,preview.days)):null;
   const displayed=changed?milestoneBarsForPeriods([milestoneRanges(changed)[rangeIndex]],periods)[0]||bar:bar;
@@ -136,8 +165,11 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,isAdmin,saving,on
   const details=entries.map(entry=>'• '+(entry.completed?'Tamamlandı: ':'')+entry.text+' · '+dateLabel(entry.start)+' – '+dateLabel(entry.end));
   const barColor=phasePalette.find(item=>item.id===bar.range.color)||defaultColor;
   const barStyle={'--gantt-color':barColor.ink,'--gantt-soft':barColor.bg,'--gantt-ink':barColor.ink,left:displayed.left+'%',width:displayed.width+'%'} as CSSProperties;
-  return <button type="button" key={index} className={'gantt-bar start end '+visibleMilestoneBarStyle(milestone.barStyle)+(isAdmin?' editable':'')+(dragging&&preview?.rangeIndex===rangeIndex?' dragging':'')} style={barStyle} title={`${milestone.name} · ${dateLabel(displayed.range.start)} – ${dateLabel(displayed.range.end)}\n${details.join('\n')}${isAdmin?'\nTıklayın: düzenle · Basılı tutup sürükleyin: taşı · Uçlardan sürükleyin: daralt / genişlet':''}`} aria-label={details.join(', ')} onClick={()=>{if(suppressClickRef.current){suppressClickRef.current=false;return}if(isAdmin&&!saving)onEditMilestone(milestone)}} onPointerDown={event=>beginDrag(event,rangeIndex,'move')} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onContextMenu={event=>onMilestoneContextMenu(event,milestone,rangeIndex)}><ul className="gantt-note-list">{entries.map((entry,noteIndex)=><li key={noteIndex} className={entry.completed?'completed':undefined}><strong className="gantt-note-text">{entry.text}</strong><small className="gantt-note-dates"><time dateTime={entry.start}>{barDateLabel(entry.start)}</time> – <time dateTime={entry.end}>{barDateLabel(entry.end)}</time></small></li>)}</ul>{isAdmin&&(['start','end'] as const).map(edge=><span key={edge} className={'gantt-resize-handle '+edge} role="presentation" title={edge==='start'?'Başlangıç tarihini sürükleyin':'Bitiş tarihini sürükleyin'} onPointerDown={event=>{event.stopPropagation();beginDrag(event,rangeIndex,edge)}} onPointerMove={event=>{event.stopPropagation();moveDrag(event)}} onPointerUp={event=>{event.stopPropagation();endDrag(event)}} onPointerCancel={event=>{event.stopPropagation();cancelDrag(event)}} onClick={event=>event.stopPropagation()}/>)}</button>;
- })}{preview&&createPortal(<div className={'gantt-drag-status'+(preview.message?' invalid':'')} role="status" style={{left:Math.max(8,Math.min(preview.x-105,window.innerWidth-222)),top:Math.max(8,preview.y-94)}}><strong>{preview.mode==='move'?'Taşınıyor':preview.mode==='start'?'Başlangıç ayarlanıyor':'Bitiş ayarlanıyor'} <span>{preview.days>0?'+':''}{preview.days} gün</span></strong><div><span><small>Başlangıç</small>{dateLabel(preview.start)}</span><span><small>Bitiş</small>{dateLabel(preview.end)}</span></div>{preview.message?<p>{preview.message}</p>:<em>{calendarDayDifference(preview.start,preview.end)+1} gün sürer</em>}</div>,document.body)}</div>;
+  return <button type="button" key={index} className={'gantt-bar start end '+visibleMilestoneBarStyle(milestone.barStyle)+(weeklyLayout?' weekly-parent-bar':'')+(isAdmin?' editable':'')+(dragging&&preview?.rangeIndex===rangeIndex?' dragging':'')} style={barStyle} title={`${milestone.name} · ${dateLabel(displayed.range.start)} – ${dateLabel(displayed.range.end)}\n${details.join('\n')}${isAdmin?'\nTıklayın: düzenle · Basılı tutup sürükleyin: taşı · Uçlardan sürükleyin: daralt / genişlet':''}`} aria-label={weeklyLayout?`${milestone.name} ana tarih aralığı: ${dateLabel(displayed.range.start)} – ${dateLabel(displayed.range.end)}`:details.join(', ')} onClick={()=>{if(suppressClickRef.current){suppressClickRef.current=false;return}if(isAdmin&&!saving)onEditMilestone(milestone)}} onPointerDown={event=>beginDrag(event,rangeIndex,'move')} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={cancelDrag} onContextMenu={event=>onMilestoneContextMenu(event,milestone,rangeIndex)}>{weeklyLayout?<span className="weekly-parent-label">Ana aralık</span>:<ul className="gantt-note-list">{entries.map((entry,noteIndex)=><li key={noteIndex} className={entry.completed?'completed':undefined}><strong className="gantt-note-text">{entry.text}</strong><small className="gantt-note-dates"><time dateTime={entry.start}>{barDateLabel(entry.start)}</time> – <time dateTime={entry.end}>{barDateLabel(entry.end)}</time></small></li>)}</ul>}{isAdmin&&(['start','end'] as const).map(edge=><span key={edge} className={'gantt-resize-handle '+edge} role="presentation" title={edge==='start'?'Başlangıç tarihini sürükleyin':'Bitiş tarihini sürükleyin'} onPointerDown={event=>{event.stopPropagation();beginDrag(event,rangeIndex,edge)}} onPointerMove={event=>{event.stopPropagation();moveDrag(event)}} onPointerUp={event=>{event.stopPropagation();endDrag(event)}} onPointerCancel={event=>{event.stopPropagation();cancelDrag(event)}} onClick={event=>event.stopPropagation()}/>)}</button>;
+ })}{displayedWeeklyLayout?.bars.map(note=>{
+  const color=phasePalette.find(item=>item.id===note.color)||defaultColor;
+  return <button type="button" key={`${note.rangeIndex}-${note.noteIndex}`} className={'weekly-note-box'+(note.completed?' completed':'')+(isAdmin?' editable':'')} style={{left:note.left+'%',width:note.width+'%',top:25+note.lane*46,'--gantt-color':color.ink,'--gantt-soft':color.bg,'--gantt-ink':color.ink} as CSSProperties} aria-label={`${note.text} · ${dateLabel(note.start)} – ${dateLabel(note.end)}${note.completed?' · Tamamlandı':''}`} onMouseEnter={event=>{notePointerRef.current={x:event.clientX,y:event.clientY};setHoveredNote(note)}} onMouseMove={event=>{notePointerRef.current={x:event.clientX,y:event.clientY};positionPointerTooltip(noteTooltipRef.current,event.clientX,event.clientY)}} onMouseLeave={()=>setHoveredNote(null)} onFocus={event=>{const rect=event.currentTarget.getBoundingClientRect();notePointerRef.current={x:rect.left+rect.width/2,y:rect.bottom};setHoveredNote(note)}} onBlur={()=>setHoveredNote(null)} onClick={()=>{setHoveredNote(null);if(isAdmin&&!saving)onEditMilestone(milestone)}} onContextMenu={event=>{setHoveredNote(null);onMilestoneContextMenu(event,milestone,note.rangeIndex)}}><span className="weekly-note-text">{note.text}</span><small>{barDateLabel(note.start)} – {barDateLabel(note.end)}</small></button>;
+ })}{hoveredNote&&createPortal(<div ref={noteTooltipRef} className="project-phase-tooltip weekly-note-tooltip" role="tooltip" style={{left:-10000,top:-10000}}><strong className={hoveredNote.completed?'completed':undefined}>{hoveredNote.text}</strong><small>{dateLabel(hoveredNote.start)} – {dateLabel(hoveredNote.end)}</small>{hoveredNote.completed&&<em>Tamamlandı</em>}</div>,document.body)}{preview&&createPortal(<div className={'gantt-drag-status'+(preview.message?' invalid':'')} role="status" style={{left:Math.max(8,Math.min(preview.x-105,window.innerWidth-222)),top:Math.max(8,preview.y-94)}}><strong>{preview.mode==='move'?'Taşınıyor':preview.mode==='start'?'Başlangıç ayarlanıyor':'Bitiş ayarlanıyor'} <span>{preview.days>0?'+':''}{preview.days} gün</span></strong><div><span><small>Başlangıç</small>{dateLabel(preview.start)}</span><span><small>Bitiş</small>{dateLabel(preview.end)}</span></div>{preview.message?<p>{preview.message}</p>:<em>{calendarDayDifference(preview.start,preview.end)+1} gün sürer</em>}</div>,document.body)}</div>;
 }
 
 export default function ProjectTimelineRows({project,periods,density,expandAllDetails,isAdmin,saving,onProjectInfo,onPhaseClick,onPhaseContextMenu,onAddMilestone,onEditMilestone,onDeleteMilestone,onMilestoneContextMenu,onChangeMilestoneRange}:Props){
@@ -173,9 +205,10 @@ export default function ProjectTimelineRows({project,periods,density,expandAllDe
     const ranges=milestoneRanges(milestone);
     const bars=milestoneBarsForPeriods(ranges,periods);
     const color=phasePalette.find(item=>item.id===(milestone.barColor||'red'))||phasePalette[3];
+    const weeklyLayout=periods[0]?.kind==='week'?weeklyNoteLayout(ranges,periods):null;
     return <TableRow className="milestone-row" key={milestone.id}>
-     <TableCell><div className="milestone-name-cell"><span className="milestone-symbol" aria-hidden="true" style={{borderColor:color.border}}/><div className="milestone-name-copy"><strong title={milestone.name}>{milestone.name}</strong><small title={ranges.map(range=>dateLabel(range.start)+' – '+dateLabel(range.end)).join('\n')}>{ranges.length===0?'Kritik detay konu eklenmedi':ranges.length===1?dateLabel(ranges[0].start)+' – '+dateLabel(ranges[0].end):ranges.length+' tarih aralığı'}</small></div>{isAdmin&&<div className="milestone-actions"><button type="button" title="Kritik Konu Düzenle" aria-label={milestone.name+' düzenle'} disabled={saving} onClick={()=>onEditMilestone(milestone)}><Pencil size={13}/></button><button type="button" title="Kritik Konuyu Sil" aria-label={milestone.name+' sil'} disabled={saving} onClick={()=>onDeleteMilestone(milestone)}><Trash2 size={13}/></button></div>}</div></TableCell>
-     <TableCell colSpan={periods.length} className="milestone-month milestone-track-cell">{ranges.length?<MilestoneTrack project={project} milestone={milestone} ranges={ranges} bars={bars} periods={periods} isAdmin={isAdmin} saving={saving} onEditMilestone={onEditMilestone} onMilestoneContextMenu={onMilestoneContextMenu} onChangeMilestoneRange={onChangeMilestoneRange}/>:<div className="milestone-track milestone-track-empty">Kritik detay konu eklenmedi</div>}</TableCell>
+     <TableCell><div className="milestone-name-cell"><span className="milestone-symbol" aria-hidden="true" style={{borderColor:color.border}}/><div className="milestone-name-copy"><strong title={milestone.name}>{milestone.name}</strong><small title={ranges.map(range=>dateLabel(range.start)+' – '+dateLabel(range.end)).join('\n')}>{ranges.length===0?'Kritik detay konu eklenmedi':ranges.length===1?dateLabel(ranges[0].start)+' – '+dateLabel(ranges[0].end):ranges.length+' tarih aralığı'}</small>{!!weeklyLayout?.undated.length&&<div className="weekly-undated-notes"><span>Tarihi belirtilmemiş detaylar</span>{weeklyLayout.undated.map(note=><button type="button" key={`${note.rangeIndex}-${note.noteIndex}`} title={note.text} className={note.completed?'completed':undefined} onClick={()=>{if(isAdmin&&!saving)onEditMilestone(milestone)}}>{note.text}</button>)}</div>}</div>{isAdmin&&<div className="milestone-actions"><button type="button" title="Kritik Konu Düzenle" aria-label={milestone.name+' düzenle'} disabled={saving} onClick={()=>onEditMilestone(milestone)}><Pencil size={13}/></button><button type="button" title="Kritik Konuyu Sil" aria-label={milestone.name+' sil'} disabled={saving} onClick={()=>onDeleteMilestone(milestone)}><Trash2 size={13}/></button></div>}</div></TableCell>
+     <TableCell colSpan={periods.length} className="milestone-month milestone-track-cell">{ranges.length?<MilestoneTrack project={project} milestone={milestone} ranges={ranges} bars={bars} periods={periods} weeklyLayout={weeklyLayout} isAdmin={isAdmin} saving={saving} onEditMilestone={onEditMilestone} onMilestoneContextMenu={onMilestoneContextMenu} onChangeMilestoneRange={onChangeMilestoneRange}/>:<div className="milestone-track milestone-track-empty">Kritik detay konu eklenmedi</div>}</TableCell>
     </TableRow>;
    })}
   </>}
