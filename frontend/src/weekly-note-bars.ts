@@ -6,6 +6,17 @@ import {noteDates,rangeNotes} from './milestone-ranges.ts';
 export type WeeklyNoteBar={rangeIndex:number;noteIndex:number;text:string;completed:boolean;start:string;end:string;left:number;width:number;firstPeriodIndex:number;lastPeriodIndex:number;lane:number;color?:string};
 export type UndatedWeeklyNote={rangeIndex:number;noteIndex:number;text:string;completed:boolean};
 
+/** Stack each week's overlapping note lane below the tallest wrapped box above it. */
+export function weeklyLaneGeometry(laneCount:number,measuredHeights:readonly number[]):{tops:number[];height:number}{
+ const tops:number[]=[];
+ let bottom=5;
+ for(let lane=0;lane<laneCount;lane++){
+  tops.push(bottom);
+  bottom+=Math.max(39,measuredHeights[lane]||0)+7;
+ }
+ return {tops,height:Math.max(36,bottom)};
+}
+
 /** Read the day under each pointer position, including partial weeks at month edges. */
 export function daysForWeekDrag(fromX:number,toX:number,trackLeft:number,trackWidth:number,periods:readonly TimelinePeriod[]):number{
  if(trackWidth<=0||!periods.length)return 0;

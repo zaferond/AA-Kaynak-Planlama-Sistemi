@@ -10,7 +10,7 @@ import {phasePalette,phaseStyle} from './model';
 import ProjectResponsible from './ProjectResponsible';
 import {changeMilestoneNoteDates,milestoneRanges,noteDates,rangeNotes,resizeMilestoneRange,shiftCalendarDate,shiftMilestoneRange,visibleMilestoneBarStyle} from './milestone-ranges';
 import {calendarDayDifference,dateAtPeriodPosition,milestoneBarsForPeriods} from './milestone-bars';
-import {daysForWeekDrag,weeklyNoteLayout} from './weekly-note-bars';
+import {daysForWeekDrag,weeklyLaneGeometry,weeklyNoteLayout} from './weekly-note-bars';
 import type {WeeklyNoteBar} from './weekly-note-bars';
 
 const monthFormat=new Intl.DateTimeFormat('tr-TR',{month:'short',year:'numeric'});
@@ -69,6 +69,7 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAd
  const dragRef=useRef<DragState|null>(null);
  const suppressClickRef=useRef(false);
  const [trackHeight,setTrackHeight]=useState(36);
+ const [weeklyLaneHeights,setWeeklyLaneHeights]=useState<number[]>([]);
  const [dragging,setDragging]=useState(false);
  const [preview,setPreview]=useState<DragPreview|null>(null);
  const noteDragRef=useRef<NoteDragState|null>(null);
@@ -216,7 +217,24 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAd
    displayedWeeklyLayout=weeklyNoteLayout(milestoneRanges(changed),periods);
   }catch{/* Keep the last valid layout while an invalid drag is shown in the status tooltip. */}
  }
- const weeklyTrackHeight=displayedWeeklyLayout?Math.max(36,displayedWeeklyLayout.laneCount*46+3):trackHeight;
+ const weeklyGeometry=weeklyLaneGeometry(displayedWeeklyLayout?.laneCount||0,weeklyLaneHeights);
+ useLayoutEffect(()=>{
+  if(!weeklyLayout)return;
+  const boxes=Array.from(trackRef.current?.querySelectorAll<HTMLButtonElement>('.weekly-note-box')||[]);
+  const update=()=>{
+   const heights:number[]=[];
+   for(const box of boxes){
+    const lane=Number(box.dataset.lane);
+    if(Number.isInteger(lane)&&lane>=0)heights[lane]=Math.max(heights[lane]||0,box.offsetHeight);
+   }
+   setWeeklyLaneHeights(previous=>previous.length===heights.length&&previous.every((height,index)=>height===heights[index])?previous:heights);
+  };
+  const observer=new ResizeObserver(update);
+  boxes.forEach(box=>observer.observe(box));
+  update();
+  return ()=>observer.disconnect();
+ },[weeklyLayout,notePreview?.days]);
+ const weeklyTrackHeight=weeklyLayout?weeklyGeometry.height:trackHeight;
  const dragStatus=notePreview||preview;
  return <div ref={trackRef} className={'milestone-track'+(weeklyLayout?' weekly-note-track':'')} style={{'--milestone-period-width':100/periods.length+'%',height:weeklyTrackHeight} as CSSProperties}>{!weeklyLayout&&bars.map((bar,index)=>{
   const rangeIndex=ranges.indexOf(bar.range);
@@ -231,7 +249,7 @@ function MilestoneTrack({project,milestone,ranges,bars,periods,weeklyLayout,isAd
  })}{displayedWeeklyLayout?.bars.map(note=>{
   const color=phasePalette.find(item=>item.id===note.color)||defaultColor;
   const active=notePreview?.rangeIndex===note.rangeIndex&&notePreview.noteIndex===note.noteIndex;
-  return <button type="button" key={`${note.rangeIndex}-${note.noteIndex}`} className={'weekly-note-box'+(note.completed?' completed':'')+(isAdmin?' editable':'')+(active?' dragging':'')} style={{left:note.left+'%',width:note.width+'%',top:5+note.lane*46,'--gantt-color':color.ink,'--gantt-soft':color.bg,'--gantt-ink':color.ink} as CSSProperties} aria-label={`${note.text} · ${dateLabel(note.start)} – ${dateLabel(note.end)}${note.completed?' · Tamamlandı':''}`} onMouseEnter={event=>{if(noteDragRef.current)return;notePointerRef.current={x:event.clientX,y:event.clientY};setHoveredNote(note)}} onMouseMove={event=>{if(noteDragRef.current)return;notePointerRef.current={x:event.clientX,y:event.clientY};positionPointerTooltip(noteTooltipRef.current,event.clientX,event.clientY)}} onMouseLeave={()=>setHoveredNote(null)} onFocus={event=>{if(noteDragRef.current)return;const rect=event.currentTarget.getBoundingClientRect();notePointerRef.current={x:rect.left+rect.width/2,y:rect.bottom};setHoveredNote(note)}} onBlur={()=>setHoveredNote(null)} onClick={()=>{setHoveredNote(null);if(suppressClickRef.current){suppressClickRef.current=false;return}if(isAdmin&&!saving)onEditMilestone(milestone)}} onContextMenu={event=>{setHoveredNote(null);onMilestoneContextMenu(event,milestone,note.rangeIndex)}} onPointerDown={event=>beginNoteDrag(event,note,'move')} onPointerMove={moveNoteDrag} onPointerUp={endNoteDrag} onPointerCancel={cancelNoteDrag}>
+  return <button type="button" key={`${note.rangeIndex}-${note.noteIndex}`} data-lane={note.lane} className={'weekly-note-box'+(note.completed?' completed':'')+(isAdmin?' editable':'')+(active?' dragging':'')} style={{left:note.left+'%',width:note.width+'%',top:weeklyGeometry.tops[note.lane]??5,'--gantt-color':color.ink,'--gantt-soft':color.bg,'--gantt-ink':color.ink} as CSSProperties} aria-label={`${note.text} · ${dateLabel(note.start)} – ${dateLabel(note.end)}${note.completed?' · Tamamlandı':''}`} onMouseEnter={event=>{if(noteDragRef.current)return;notePointerRef.current={x:event.clientX,y:event.clientY};setHoveredNote(note)}} onMouseMove={event=>{if(noteDragRef.current)return;notePointerRef.current={x:event.clientX,y:event.clientY};positionPointerTooltip(noteTooltipRef.current,event.clientX,event.clientY)}} onMouseLeave={()=>setHoveredNote(null)} onFocus={event=>{if(noteDragRef.current)return;const rect=event.currentTarget.getBoundingClientRect();notePointerRef.current={x:rect.left+rect.width/2,y:rect.bottom};setHoveredNote(note)}} onBlur={()=>setHoveredNote(null)} onClick={()=>{setHoveredNote(null);if(suppressClickRef.current){suppressClickRef.current=false;return}if(isAdmin&&!saving)onEditMilestone(milestone)}} onContextMenu={event=>{setHoveredNote(null);onMilestoneContextMenu(event,milestone,note.rangeIndex)}} onPointerDown={event=>beginNoteDrag(event,note,'move')} onPointerMove={moveNoteDrag} onPointerUp={endNoteDrag} onPointerCancel={cancelNoteDrag}>
    <span className="weekly-note-text">{note.text}</span><small>{barDateLabel(note.start)} – {barDateLabel(note.end)}</small>
    {isAdmin&&(['start','end'] as const).map(edge=><span key={edge} className={'weekly-note-resize '+edge} role="presentation" title={edge==='start'?'Başlangıç tarihini günlük olarak sürükleyin':'Bitiş tarihini günlük olarak sürükleyin'} onPointerDown={event=>{event.stopPropagation();beginNoteDrag(event,note,edge)}} onPointerMove={event=>{event.stopPropagation();moveNoteDrag(event)}} onPointerUp={event=>{event.stopPropagation();endNoteDrag(event)}} onPointerCancel={event=>{event.stopPropagation();cancelNoteDrag(event)}} onClick={event=>event.stopPropagation()}/>)}
   </button>;

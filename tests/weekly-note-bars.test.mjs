@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {projectTimelinePeriods} from '../frontend/src/timeline-periods.ts';
-import {daysForWeekDrag,weeklyNoteLayout} from '../frontend/src/weekly-note-bars.ts';
+import {daysForWeekDrag,weeklyLaneGeometry,weeklyNoteLayout} from '../frontend/src/weekly-note-bars.ts';
 
 test('dated descriptions occupy their own weeks and overlapping dates use separate lanes',()=>{
  const periods=projectTimelinePeriods(['2026-10'],true);
@@ -53,4 +53,9 @@ test('weekly dragging follows individual days across full and partial week colum
  assert.equal(daysForWeekDrag(70,140,0,width,periods),7);
  assert.equal(daysForWeekDrag(100,85,0,width,periods),-2);
  assert.equal(daysForWeekDrag(8,26,0,0,periods),0);
+});
+
+test('wrapped weekly boxes push following lanes down without covering them',()=>{
+ assert.deepEqual(weeklyLaneGeometry(0,[]),{tops:[],height:36});
+ assert.deepEqual(weeklyLaneGeometry(2,[84,28]),{tops:[5,96],height:142});
 });

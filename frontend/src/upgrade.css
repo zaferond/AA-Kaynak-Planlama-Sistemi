@@ -307,7 +307,9 @@ html{zoom:80%}
 .app .projectmatrix .gantt-bar.outline{background:var(--gantt-soft);color:var(--gantt-ink);box-shadow:inset 0 0 0 1px var(--gantt-color)}
 .app .projectmatrix .gantt-bar:focus-visible{outline:2px solid #245d90;outline-offset:2px}
 .app .projectmatrix .gantt-bar span{display:block;min-width:0;max-height:160px;width:100%;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;text-align:center;font-size:10px;font-weight:700;line-height:1.35}
-.app .projectmatrix .weekly-note-box{position:absolute;z-index:2;display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;height:39px;min-width:0;padding:4px 11px;border:1px solid var(--gantt-color);border-left-width:3px;border-radius:5px;background:var(--gantt-soft);color:var(--gantt-ink);box-shadow:0 1px 2px #1c38501c;text-align:left;overflow:hidden;cursor:default}
+.app .projectmatrix .weekly-note-box{position:absolute;z-index:2;display:flex;flex-direction:column;justify-content:center;box-sizing:border-box;height:auto;min-height:39px;min-width:0;padding:4px 11px;border:1px solid var(--gantt-color);border-left-width:3px;border-radius:5px;background:var(--gantt-soft);color:var(--gantt-ink);box-shadow:0 1px 2px #1c38501c;text-align:left;overflow:hidden;cursor:default}
+.app.dense-overview .projectmatrix .weekly-note-box{padding:4px 5px}
+.app.dense-compact .projectmatrix .weekly-note-box{padding:4px 8px}
 .app .projectmatrix .weekly-note-box.editable{cursor:grab;touch-action:pan-x pan-y;user-select:none}
 .app .projectmatrix .weekly-note-box:hover,.app .projectmatrix .weekly-note-box:focus-visible{z-index:3;outline:2px solid #2d70a6;outline-offset:1px;box-shadow:0 3px 8px #1c38503b}
 .app .projectmatrix .weekly-note-box.dragging{z-index:4;cursor:grabbing;box-shadow:0 4px 12px #183b6280}
@@ -316,8 +318,8 @@ html{zoom:80%}
 .app .projectmatrix .weekly-note-box .weekly-note-resize.end{right:0;border-radius:0 4px 4px 0}
 .app .projectmatrix .weekly-note-box:hover .weekly-note-resize,.app .projectmatrix .weekly-note-box:focus-visible .weekly-note-resize,.app .projectmatrix .weekly-note-box.dragging .weekly-note-resize{opacity:.72}
 .app .projectmatrix .weekly-note-box .weekly-note-resize::after{content:'';position:absolute;top:50%;left:50%;width:2px;height:13px;border-radius:2px;background:#fff;transform:translate(-50%,-50%)}
-.app .projectmatrix .weekly-note-box .weekly-note-text{display:block;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700;line-height:1.3}
-.app .projectmatrix .weekly-note-box small{display:block;width:100%;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#17212e;font-size:9px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;opacity:1}
+.app .projectmatrix .weekly-note-box .weekly-note-text{display:block;width:100%;white-space:pre-wrap;overflow-wrap:anywhere;font-size:10px;font-weight:700;line-height:1.3}
+.app .projectmatrix .weekly-note-box small{display:block;width:100%;margin-top:2px;white-space:normal;overflow-wrap:anywhere;color:#17212e;font-size:9px;font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;opacity:1}
 .app .projectmatrix .weekly-note-box.completed .weekly-note-text{text-decoration:line-through;text-decoration-thickness:1.5px;opacity:.8}
 .weekly-note-tooltip{display:flex;flex-direction:column;gap:5px;min-width:180px;max-width:min(390px,calc(100vw - 24px));white-space:normal}
 .weekly-note-tooltip strong{font-size:11px;line-height:1.4}.weekly-note-tooltip strong.completed{text-decoration:line-through;color:#36845a}

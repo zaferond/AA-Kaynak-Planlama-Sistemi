@@ -109,7 +109,7 @@ const cellSet=useMemo(()=>new Set(cells),[cells]);
 const months=useMemo(()=>monthsFrom(start,count),[start,count]);
 const projectPeriods=useMemo(()=>projectTimelinePeriods(months,projectWeekly),[months,projectWeekly]);
 const projectYearBands=useMemo(()=>[...new Set(projectPeriods.map(period=>period.year))],[projectPeriods]);
-const projectPeriodWidth=projectWeekly?(density==='overview'?64:density==='compact'?76:96):monthWidth;
+const projectPeriodWidth=monthWidth;
 useEffect(()=>{
   if(tab!=='plan'||view!=='project'||!showCapacity)return;
   const capacity=capacityTableRef.current?.parentElement;
