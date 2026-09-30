@@ -12,6 +12,17 @@
 .risk-field input,.risk-field select,.risk-field textarea{width:100%;min-height:38px;border:1px solid #cad7e3;border-radius:8px;background:#fff;color:#183049;padding:8px 10px;font:inherit;font-size:13px;font-weight:500;outline:none}
 .risk-field textarea{resize:vertical;min-height:72px;line-height:1.5}
 .risk-field input:focus,.risk-field select:focus,.risk-field textarea:focus{border-color:#4b91b7;box-shadow:0 0 0 3px #4b91b726}
+.risk-project-field{min-width:270px}
+.risk-project-picker{position:relative;width:100%}
+.risk-project-toggle{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;height:40px;padding:8px 11px;border:1px solid #cad7e3;border-radius:8px;background:#fff;color:#183049;font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer}
+.risk-project-toggle>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.risk-project-toggle:focus-visible{outline:2px solid #78b8da;outline-offset:2px}
+.risk-project-menu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;width:max(100%,310px);max-width:min(440px,calc(100vw - 36px));padding:6px;border:1px solid #b9cfde;border-radius:9px;background:#fff;box-shadow:0 12px 28px #0d304a35;color:#24435a}
+.risk-project-options{max-height:270px;overflow-y:auto}
+.risk-project-option{display:flex;align-items:center;gap:9px;min-height:36px;padding:7px 9px;border-radius:5px;color:#284b62;font-size:12px;font-weight:650;cursor:pointer}
+.risk-project-option:hover{background:#edf5f9}
+.risk-field .risk-project-option input{flex:none;width:15px;height:15px;min-height:0;margin:0;padding:0;accent-color:#197eae}
+.risk-project-all{margin-bottom:5px;border-bottom:1px solid #e0eaf0;border-radius:5px 5px 0 0;font-weight:800}
 .risk-placeholder{min-height:250px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;color:#8193a5}
 .risk-placeholder strong{font-size:16px;color:#36536e}.risk-placeholder span{font-size:13px}
 .risk-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding:20px 28px}
@@ -23,8 +34,13 @@
 .risk-register{margin:0 28px;border:1px solid #cddce7;border-radius:10px;background:#fff;overflow:hidden;box-shadow:0 4px 18px #1f47600b}
 .risk-register-head{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:13px 16px;border-bottom:1px solid #d7e4ed;background:#fff}
 .risk-register-head h3{margin:0;color:#1c405a;font-size:15px;font-weight:800}
-.risk-register-head>div span{display:block;margin-top:2px;color:#778ca0;font-size:11px}
+.risk-register-title span{display:block;margin-top:2px;color:#778ca0;font-size:11px}
+.risk-register-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
 .risk-scroll-hint{color:#688397;font-size:11px;font-weight:600}
+.risk-cancel-new{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 11px;border:1px solid #c8d7e1;border-radius:7px;background:#f4f8fa;color:#375b72;font:inherit;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
+.risk-cancel-new:hover:not(:disabled){border-color:#9bb9ca;background:#eaf3f8;color:#234d67}
+.risk-cancel-new:focus-visible,.risk-inline-delete:focus-visible{outline:2px solid #3288b7;outline-offset:2px}
+.risk-cancel-new:disabled{opacity:.55;cursor:wait}
 .risk-table-scroll{width:100%;max-height:66vh;overflow:auto;padding-bottom:12px;scrollbar-color:#a5bdce #edf3f7}
 .risk-table{table-layout:fixed;border-collapse:separate;border-spacing:0;color:#2a465b;font-size:12px}
 .risk-table th,.risk-table td{box-sizing:border-box}
@@ -43,6 +59,7 @@
 .risk-definition{display:flex;align-items:center;gap:10px}
 .risk-definition strong{display:block;color:#173f5b;font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere}
 .risk-definition small{display:block;margin-top:5px;color:#8499a9;font-size:10px}
+.risk-project-name{display:block;color:#285b78;font-weight:750;white-space:pre-wrap;overflow-wrap:anywhere}
 .risk-row-number{display:inline-flex;align-items:center;justify-content:center;min-width:27px;height:25px;border-radius:6px;background:#dfeef6;color:#2b6c90;font-size:10px;font-weight:800}
 .risk-wrap{display:block;white-space:pre-wrap;overflow-wrap:anywhere}
 .risk-dash{color:#a0afbc}
@@ -63,10 +80,8 @@
 .risk-inline-textarea{min-height:62px;resize:vertical;overflow-wrap:anywhere}
 .risk-inline-strategy{display:inline-flex;align-items:center;justify-content:center;min-width:42px;min-height:29px;padding:4px 8px;border:1px solid #bcd3df;border-radius:6px;background:#fff;color:#52768b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
 .risk-inline-strategy.selected{border-color:#92d1b7;background:#d9f0e8;color:#207a55}
-.risk-inline-delete{margin-top:6px;padding:2px 0;border:0;background:transparent;color:#ad514b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
-.risk-inline-delete:hover{text-decoration:underline}
-.risk-inline-cancel{margin-top:6px;padding:2px 0;border:0;background:transparent;color:#386d8b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
-.risk-inline-cancel:hover{text-decoration:underline}
+.risk-inline-delete{display:inline-flex;align-items:center;justify-content:center;gap:6px;margin-top:9px;min-height:32px;padding:6px 10px;border:1px solid #e2aaa5;border-radius:6px;background:#fff1ef;color:#9b342e;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+.risk-inline-delete:hover{border-color:#c97c75;background:#ffe5e1;color:#842820}
 .risk-new-badge{display:inline-block;margin-bottom:6px;padding:3px 7px;border-radius:4px;background:#d8edfa;color:#256889;font-size:10px;font-weight:800;letter-spacing:.06em}
 .risk-edit-description-head{display:flex;align-items:center;gap:7px;margin-bottom:6px}
 .risk-edit-description-head .risk-new-badge{margin-bottom:0}

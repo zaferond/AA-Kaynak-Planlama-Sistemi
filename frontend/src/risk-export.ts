@@ -69,22 +69,40 @@ function matrixSheet(){
  rows.push(rowXml(9,27,[textCell(9,1,'Puan = Olasılık × Etki',styles.axis)]));
  return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${ns}"><dimension ref="A1:F9"/><sheetViews><sheetView workbookViewId="0" showGridLines="0" zoomScale="100"/></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols><col min="1" max="1" width="23" customWidth="1"/><col min="2" max="6" width="22" customWidth="1"/></cols><sheetData>${rows.join('')}</sheetData><mergeCells count="3"><mergeCell ref="A1:F1"/><mergeCell ref="B2:F2"/><mergeCell ref="A9:F9"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="1"/></worksheet>`;
 }
-export function riskWorkbook(project:Project,risks:Risk[]):Uint8Array{
- if(!project?.id||!project.name)throw Error('Excel için bir proje seçin.');
- if(risks.some(risk=>risk.projectId!==project.id))throw Error('Risk kayıtları seçili projeye ait olmalı.');
+export function riskWorkbooks(projects:Project[],risks:Risk[]):Uint8Array{
+ if(!projects.length||projects.some(project=>!project.id||!project.name))throw Error('Excel için proje seçin.');
+ const projectIds=new Set(projects.map(project=>project.id));
+ if(projectIds.size!==projects.length||risks.some(risk=>!projectIds.has(risk.projectId)))throw Error('Risk kayıtları seçili projeye ait olmalı.');
+ const names=new Set<string>(['etki-olasılık tablosu']);
+ const sheetNames=projects.map((project,index)=>{
+  if(projects.length===1)return 'FT.540.001-1';
+  const base=project.name.replace(/[\\/\[\]*?:]/g,' ').trim().replace(/^'+|'+$/g,'').slice(0,31)||`Proje ${index+1}`;
+  let name=base,serial=2;
+  while(names.has(name.toLocaleLowerCase('tr-TR'))){const suffix=` (${serial++})`;name=base.slice(0,31-suffix.length)+suffix}
+  names.add(name.toLocaleLowerCase('tr-TR'));
+  return name;
+ });
+ const matrixIndex=projects.length+1;
+ const sheets=[...sheetNames,'Etki-Olasılık Tablosu'];
+ const overrides=sheets.map((_,index)=>`<Override PartName="/xl/worksheets/sheet${index+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('');
+ const workbookSheets=sheets.map((name,index)=>`<sheet name="${xml(name)}" sheetId="${index+1}" r:id="rId${index+1}"/>`).join('');
+ const relationships=sheets.map((_,index)=>`<Relationship Id="rId${index+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index+1}.xml"/>`).join('');
  const files:Record<string,string>={
-  '[Content_Types].xml':'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
+  '[Content_Types].xml':`<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${overrides}</Types>`,
   '_rels/.rels':'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
-  'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="FT.540.001-1" sheetId="1" r:id="rId1"/><sheet name="Etki-Olasılık Tablosu" sheetId="2" r:id="rId2"/></sheets><calcPr calcId="0" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`,
-  'xl/_rels/workbook.xml.rels':'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
+  'xl/workbook.xml':`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${workbookSheets}</sheets><calcPr calcId="0" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`,
+  'xl/_rels/workbook.xml.rels':`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationships}<Relationship Id="rId${matrixIndex+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
   'xl/styles.xml':stylesXml(),
-  'xl/worksheets/sheet1.xml':registerSheet(project,risks),
-  'xl/worksheets/sheet2.xml':matrixSheet(),
  };
+ projects.forEach((project,index)=>{files[`xl/worksheets/sheet${index+1}.xml`]=registerSheet(project,risks.filter(risk=>risk.projectId===project.id))});
+ files[`xl/worksheets/sheet${matrixIndex}.xml`]=matrixSheet();
  return zipFiles(files);
 }
-export function downloadRiskPlan(project:Project,risks:Risk[]){
- const bytes=riskWorkbook(project,risks),url=URL.createObjectURL(new Blob([bytes as BlobPart],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
- const anchor=document.createElement('a');anchor.href=url;anchor.download=`AA-Risk-Plani-${project.name.replace(/[^\p{L}\p{N}]+/gu,'-').slice(0,60)}-${new Date().toISOString().slice(0,10)}.xlsx`;anchor.click();
+export function riskWorkbook(project:Project,risks:Risk[]):Uint8Array{return riskWorkbooks([project],risks)}
+export function downloadRiskPlans(projects:Project[],risks:Risk[]){
+ const bytes=riskWorkbooks(projects,risks),url=URL.createObjectURL(new Blob([bytes as BlobPart],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+ const label=projects.length===1?projects[0].name.replace(/[^\p{L}\p{N}]+/gu,'-').slice(0,60):`${projects.length}-Proje`;
+ const anchor=document.createElement('a');anchor.href=url;anchor.download=`AA-Risk-Plani-${label}-${new Date().toISOString().slice(0,10)}.xlsx`;anchor.click();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
+export function downloadRiskPlan(project:Project,risks:Risk[]){downloadRiskPlans([project],risks)}

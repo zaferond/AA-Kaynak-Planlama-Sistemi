@@ -1,4 +1,5 @@
 import {useEffect,useRef,useState,type KeyboardEvent,type ReactNode} from 'react';
+import {Trash2,X} from 'lucide-react';
 import type {Risk} from './model';
 import {riskAssessment} from './risk-score';
 import {riskValidationError} from './risk-validation';
@@ -65,14 +66,16 @@ function cellContent(risk:Risk,column:Column,index:number):ReactNode{
   default:return <span className={risk.strategy===strategyKeys[column.key]?'risk-strategy-check':'risk-dash'}>{risk.strategy===strategyKeys[column.key]?'✓':'—'}</span>;
  }
 }
-export default function RiskTable({risks,projectId,createSignal,createRisk,canEdit,canDelete,onSave,onDelete}:{risks:Risk[];projectId:string;createSignal:number;createRisk:()=>Risk;canEdit:(risk:Risk)=>boolean;canDelete:boolean;onSave:(risk:Risk)=>Promise<void>;onDelete:(risk:Risk)=>Promise<void>}){
+export default function RiskTable({risks,selectedProjectIds,projectNames,createSignal,createRisk,canEdit,canDelete,onSave,onDelete}:{risks:Risk[];selectedProjectIds:string[];projectNames:Record<string,string>;createSignal:number;createRisk:()=>Risk;canEdit:(risk:Risk)=>boolean;canDelete:boolean;onSave:(risk:Risk)=>Promise<void>;onDelete:(risk:Risk)=>Promise<void>}){
  const [draft,setDraft]=useState<Risk|null>(null);
  const [isNew,setIsNew]=useState(false);
  const [focusField,setFocusField]=useState('');
  const [saving,setSaving]=useState(false);
  const [error,setError]=useState('');
  const scrollRef=useRef<HTMLDivElement>(null);
- const width=columns.reduce((total,column)=>total+column.width,0);
+ const showProject=selectedProjectIds.length>1;
+ const visibleColumns=showProject?[columns[0],{key:'project',label:'Proje',width:190,group:'record' as const,text:true},...columns.slice(1)]:columns;
+ const width=visibleColumns.reduce((total,column)=>total+column.width,0);
  const rows=isNew&&draft?[...risks,draft]:risks;
  function revealNewRow(){requestAnimationFrame(()=>{const element=scrollRef.current;if(element){element.scrollLeft=0;element.scrollTop=element.scrollHeight}})}
  useEffect(()=>{
@@ -81,8 +84,8 @@ export default function RiskTable({risks,projectId,createSignal,createRisk,canEd
   field?.focus();
  },[draft?.id,focusField]);
  useEffect(()=>{
-  if(draft&&(draft.projectId!==projectId||(!isNew&&!risks.some(risk=>risk.id===draft.id)))){setDraft(null);setIsNew(false);setError('')}
- },[risks,draft?.id,projectId,isNew]);
+  if(draft&&(!selectedProjectIds.includes(draft.projectId)||(!isNew&&!risks.some(risk=>risk.id===draft.id)))){setDraft(null);setIsNew(false);setError('')}
+ },[risks,draft?.id,selectedProjectIds.join('|'),isNew]);
  useEffect(()=>{
   if(!createSignal)return;
   if(isNew){revealNewRow();return}
@@ -122,7 +125,7 @@ export default function RiskTable({risks,projectId,createSignal,createRisk,canEd
    const row=document.querySelector('.risk-editing-row');
    if(row?.contains(event.target as Node))return;
    if(saving){event.preventDefault();event.stopPropagation();return}
-   if((event.target as Element).closest('[data-risk-add]'))return;
+   if((event.target as Element).closest('[data-risk-add],[data-risk-cancel]'))return;
    const nextRow=(event.target as Element).closest<HTMLTableRowElement>('tr[data-risk-id]');
    if(nextRow?.dataset.riskEditable==='true')return;
    const validationError=riskValidationError(draft);
@@ -134,7 +137,7 @@ export default function RiskTable({risks,projectId,createSignal,createRisk,canEd
  },[draft,saving,risks,onSave]);
  function onRowKeyDown(event:KeyboardEvent<HTMLTableRowElement>){
   if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancel()}
-  if((event.target as HTMLElement).closest('.risk-inline-delete,.risk-inline-cancel'))return;
+  if((event.target as HTMLElement).closest('.risk-inline-delete'))return;
   if(event.key==='Enter'&&!event.shiftKey&&!event.nativeEvent.isComposing){event.preventDefault();void save()}
  }
  function editor(column:Column,risk:Risk,index:number):ReactNode{
@@ -146,18 +149,18 @@ export default function RiskTable({risks,projectId,createSignal,createRisk,canEd
   if(key==='likelihood'||key==='impact')return <select className="risk-inline-input" data-risk-input={key} aria-label={column.label} value={risk[key]} onChange={event=>update(key,Number(event.target.value))}><option value={0}>Seçin</option>{[1,2,3,4,5].map(value=><option key={value} value={value}>{value}</option>)}</select>;
   if(key==='residualLikelihood'||key==='residualImpact')return <select className="risk-inline-input" data-risk-input={key} aria-label={column.label} value={risk[key]??''} onChange={event=>update(key,event.target.value?Number(event.target.value):null)}><option value="">—</option>{[1,2,3,4,5].map(value=><option key={value} value={value}>{value}</option>)}</select>;
   if(key==='reportedAt'||key==='targetAt'||key==='implementedAt')return <input type="date" className="risk-inline-input" data-risk-input={key} aria-label={column.label} value={risk[key]} onChange={event=>update(key,event.target.value)}/>;
-  if(key==='description'||key==='cause'||key==='actionPlan'||key==='actionResult')return <div>{key==='description'&&<div className="risk-edit-description-head"><span className="risk-row-number">{String(index+1).padStart(2,'0')}</span>{isNew&&<span className="risk-new-badge">YENİ RİSK</span>}</div>}<textarea className="risk-inline-input risk-inline-textarea" data-risk-input={key} aria-label={column.label} rows={3} maxLength={5000} value={risk[key]} onChange={event=>update(key,event.target.value)}/>{key==='description'&&(isNew?<button type="button" className="risk-inline-cancel" onClick={cancel}>Vazgeç</button>:canDelete&&<button type="button" className="risk-inline-delete" onClick={()=>void remove()}>Riski sil</button>)}</div>;
+  if(key==='description'||key==='cause'||key==='actionPlan'||key==='actionResult')return <div>{key==='description'&&<div className="risk-edit-description-head"><span className="risk-row-number">{String(index+1).padStart(2,'0')}</span>{isNew&&<span className="risk-new-badge">YENİ RİSK</span>}</div>}<textarea className="risk-inline-input risk-inline-textarea" data-risk-input={key} aria-label={column.label} rows={3} maxLength={5000} value={risk[key]} onChange={event=>update(key,event.target.value)}/>{key==='description'&&!isNew&&canDelete&&<button type="button" className="risk-inline-delete" onClick={()=>void remove()}><Trash2 size={14} aria-hidden="true"/>Riski Sil</button>}</div>;
   if(key==='reportedBy'||key==='system'||key==='owner')return <input type="text" className="risk-inline-input" data-risk-input={key} aria-label={column.label} maxLength={200} value={risk[key]} onChange={event=>update(key,event.target.value)}/>;
   return null;
  }
  return <div className="risk-register">
-  <div className="risk-register-head"><div><h3>Risk Kayıtları</h3><span>{risks.length} kayıt · 24 plan alanı{isNew?' · Yeni risk ekleniyor':''}</span></div><span className="risk-scroll-hint" role="status">{saving?'Kaydediliyor…':draft?'Enter veya satır dışına tıklayarak kaydedin · Shift+Enter yeni satır · Esc iptal':'Düzenlemek için hücreye tıklayın · Tüm sütunlar yatay kaydırılabilir'}</span></div>
+  <div className="risk-register-head"><div className="risk-register-title"><h3>Risk Kayıtları</h3><span>{risks.length} kayıt · 24 plan alanı{isNew?' · Yeni risk ekleniyor':''}</span></div><div className="risk-register-actions"><span className="risk-scroll-hint" role="status">{saving?'Kaydediliyor…':draft?'Enter veya satır dışına tıklayarak kaydedin · Shift+Enter yeni satır · Esc iptal':'Düzenlemek için hücreye tıklayın · Tüm sütunlar yatay kaydırılabilir'}</span>{isNew&&<button type="button" className="risk-cancel-new" data-risk-cancel disabled={saving} onClick={cancel}><X size={15} aria-hidden="true"/>Risk Eklemeyi İptal Et</button>}</div></div>
   {error&&<div className="risk-inline-error" role="alert">{error}</div>}
   <div className="risk-table-scroll" ref={scrollRef} role="region" aria-label="Proje risk planı tablosu" tabIndex={0}>
    <table className="risk-table" style={{width}}>
-    <colgroup>{columns.map(column=><col key={column.key} style={{width:column.width}}/>)}</colgroup>
-    <thead><tr className="risk-group-head"><th colSpan={10}>Risk Bildirimi ve Aksiyon Planı</th><th colSpan={4}>İlk Risk Değerlendirmesi</th><th colSpan={4}>Risk Stratejisi</th><th colSpan={2}>Uygulanan Aksiyon</th><th colSpan={4}>Aksiyon Sonrası Değerlendirme</th></tr><tr className="risk-column-head">{columns.map(column=><th key={column.key} className={'risk-head-'+column.group+(column.center?' risk-center':'')}>{column.label}</th>)}</tr></thead>
-    <tbody>{rows.length?rows.map((risk,index)=>{const editing=draft?.id===risk.id,display=editing?draft:risk,editable=(isNew&&editing)||canEdit(risk);return <tr key={risk.id} data-risk-id={risk.id} data-risk-editable={editable} className={[editing?'risk-editing-row':'',isNew&&editing?'risk-new-row':''].filter(Boolean).join(' ')} onKeyDown={editing?onRowKeyDown:undefined} onClick={!editing&&editable?event=>{const key=(event.target as HTMLElement).closest<HTMLTableCellElement>('td[data-risk-column]')?.dataset.riskColumn||'description';void activate(risk,key)}:undefined}>{columns.map(column=><td key={column.key} data-risk-column={column.key} className={['risk-cell','risk-cell-'+column.group,column.text?'risk-text-cell':'',column.center?'risk-center':'',column.key==='score'||column.key==='level'||column.key==='residualScore'||column.key==='residualLevel'?'risk-assessment-cell':'',editing?'risk-cell-editing':''].filter(Boolean).join(' ')}>{editing?editor(column,display,index):editable?<button type="button" className="risk-cell-trigger" title="Satırda düzenle" aria-label={column.label+' alanını satırda düzenle'} disabled={saving}>{cellContent(risk,column,index)}</button>:cellContent(risk,column,index)}</td>)}</tr>}):<tr className="risk-empty-row"><td colSpan={columns.length}>Bu proje için henüz risk kaydı yok. İlk kaydı oluşturmak için Risk Ekle’yi kullanın.</td></tr>}</tbody>
+    <colgroup>{visibleColumns.map(column=><col key={column.key} style={{width:column.width}}/>)}</colgroup>
+    <thead><tr className="risk-group-head"><th colSpan={showProject?11:10}>Risk Bildirimi ve Aksiyon Planı</th><th colSpan={4}>İlk Risk Değerlendirmesi</th><th colSpan={4}>Risk Stratejisi</th><th colSpan={2}>Uygulanan Aksiyon</th><th colSpan={4}>Aksiyon Sonrası Değerlendirme</th></tr><tr className="risk-column-head">{visibleColumns.map(column=><th key={column.key} className={'risk-head-'+column.group+(column.center?' risk-center':'')}>{column.label}</th>)}</tr></thead>
+    <tbody>{rows.length?rows.map((risk,index)=>{const editing=draft?.id===risk.id,display=editing?draft:risk,editable=(isNew&&editing)||canEdit(risk);return <tr key={risk.id} data-risk-id={risk.id} data-risk-editable={editable} className={[editing?'risk-editing-row':'',isNew&&editing?'risk-new-row':''].filter(Boolean).join(' ')} onKeyDown={editing?onRowKeyDown:undefined} onClick={!editing&&editable?event=>{const key=(event.target as HTMLElement).closest<HTMLTableCellElement>('td[data-risk-column]')?.dataset.riskColumn||'description';void activate(risk,key)}:undefined}>{visibleColumns.map(column=><td key={column.key} data-risk-column={column.key} className={['risk-cell','risk-cell-'+column.group,column.text?'risk-text-cell':'',column.center?'risk-center':'',column.key==='score'||column.key==='level'||column.key==='residualScore'||column.key==='residualLevel'?'risk-assessment-cell':'',editing?'risk-cell-editing':''].filter(Boolean).join(' ')}>{column.key==='project'?<span className="risk-project-name">{projectNames[risk.projectId]||'—'}</span>:editing?editor(column,display,index):editable?<button type="button" className="risk-cell-trigger" title="Satırda düzenle" aria-label={column.label+' alanını satırda düzenle'} disabled={saving}>{cellContent(risk,column,index)}</button>:cellContent(risk,column,index)}</td>)}</tr>}):<tr className="risk-empty-row"><td colSpan={visibleColumns.length}>Seçili projelerde henüz risk kaydı yok. İlk kaydı oluşturmak için Risk Ekle’yi kullanın.</td></tr>}</tbody>
    </table>
   </div>
  </div>

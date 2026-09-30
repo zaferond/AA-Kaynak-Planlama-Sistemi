@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {riskWorkbook} from '../frontend/src/risk-export.ts';
+import {riskWorkbook,riskWorkbooks} from '../frontend/src/risk-export.ts';
 
 function zipEntry(bytes,name){
  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),decode=new TextDecoder();
@@ -52,4 +52,18 @@ test('risk export keeps 20 editable rows for an empty plan and rejects cross-pro
  assert.match(empty,/<row r="25"/);
  assert.match(empty,/<c r="N25"[^>]*><f>/);
  assert.throws(()=>riskWorkbook(project,[{...risk,projectId:'other'}]),/seçili projeye/);
+});
+
+test('selected projects export as separate plan sheets with one shared risk matrix',()=>{
+ const second={...project,id:'p2',name:'Deneme & ARMA'};
+ const bytes=riskWorkbooks([project,second],[risk,{...risk,id:'r2',projectId:'p2',description:'İkinci proje riski'}]);
+ const workbook=zipEntry(bytes,'xl/workbook.xml');
+ assert.match(workbook,/sheet name="Deneme &amp; ARMA" sheetId="1"/);
+ assert.match(workbook,/sheet name="Deneme &amp; ARMA \(2\)" sheetId="2"/);
+ assert.match(workbook,/sheet name="Etki-Olasılık Tablosu" sheetId="3"/);
+ assert.match(zipEntry(bytes,'xl/worksheets/sheet1.xml'),/=SUM\(1,2\)/);
+ assert.doesNotMatch(zipEntry(bytes,'xl/worksheets/sheet1.xml'),/İkinci proje riski/);
+ assert.match(zipEntry(bytes,'xl/worksheets/sheet2.xml'),/İkinci proje riski/);
+ assert.match(zipEntry(bytes,'xl/worksheets/sheet3.xml'),/Tolere Edilemez/);
+ assert.throws(()=>riskWorkbooks([project],[{...risk,projectId:'p2'}]),/seçili projeye/);
 });
