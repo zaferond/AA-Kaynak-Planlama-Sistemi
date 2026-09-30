@@ -3,6 +3,7 @@ import {Plus,ShieldAlert,Download} from 'lucide-react';
 import type {Data,Risk} from './model';
 import type {Principal} from './access';
 import {riskAssessment} from './risk-score';
+import {riskCreationOrder} from './risk-order';
 import RiskTable from './RiskTable';
 import {downloadRiskPlan} from './risk-export';
 import './risk.css';
@@ -16,7 +17,7 @@ function Field({label,children}:{label:string;children:ReactNode}){return <label
 export default function RiskManagement({data,user,onSave,onDelete}:{data:Data;user:Principal;onSave:(risk:Risk)=>Promise<void>;onDelete:(risk:Risk)=>Promise<void>}){
  const [projectId,setProjectId]=useState(''),[createSignal,setCreateSignal]=useState(0),[exportError,setExportError]=useState('');
  const project=data.projects.find(item=>item.id===projectId);
- const risks=(data.risks||[]).filter(item=>item.projectId===projectId).sort((a,b)=>b.reportedAt.localeCompare(a.reportedAt)||a.id.localeCompare(b.id));
+ const risks=riskCreationOrder((data.risks||[]).filter(item=>item.projectId===projectId));
  const canEdit=(risk:Risk)=>user.role==='admin'||user.role==='manager'||risk.createdBy===user.id;
  const riskCount=risks.filter(r=>r.status!=='Kapalı').length;
  const highCount=risks.filter(r=>r.status!=='Kapalı'&&(riskAssessment(r.likelihood,r.impact)?.score||0)>=15).length;

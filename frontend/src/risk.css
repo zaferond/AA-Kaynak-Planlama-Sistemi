@@ -30,8 +30,7 @@
 .risk-table th,.risk-table td{box-sizing:border-box}
 .risk-group-head th{position:sticky;top:0;height:36px;z-index:4;padding:8px 10px;border-right:1px solid #557a92;border-bottom:1px solid #6e9cb5;background:#194765;color:#fff;font-size:10px;font-weight:800;letter-spacing:.055em;text-align:center;text-transform:uppercase}
 .app .risk-table .risk-group-head th{color:#fff!important}
-.risk-group-head th:nth-child(3),.risk-group-head th:nth-child(6){background:#225474}
-.risk-group-head .risk-sticky-first{height:79px;background:#143e5b;z-index:7}
+.risk-group-head th:nth-child(2),.risk-group-head th:nth-child(5){background:#225474}
 .risk-column-head th{position:sticky;top:36px;height:43px;z-index:5;padding:7px 9px;border-right:1px solid #bed0dd;border-bottom:2px solid #8eb2c7;background:#e5f0f6;color:#335a73;font-size:10px;font-weight:800;line-height:1.25;text-transform:uppercase;text-align:center;vertical-align:middle;white-space:normal}
 .app .risk-table .risk-column-head th{color:#335a73!important}
 .app .risk-table thead th{text-align:center!important;vertical-align:middle!important}
@@ -41,8 +40,6 @@
 .risk-table tbody td{padding:12px 11px;border-right:1px solid #dce6ee;border-bottom:1px solid #d5e1ea;background:#fff;vertical-align:middle!important;line-height:1.45}
 .risk-table tbody tr:nth-child(even) td{background:#f8fbfd}
 .risk-table tbody td.risk-center{text-align:center;vertical-align:middle;font-variant-numeric:tabular-nums}
-.risk-table .risk-sticky-first{position:sticky;left:0;z-index:2;border-right:2px solid #a6c0d1;box-shadow:5px 0 9px -8px #224c69a8}
-.risk-table thead .risk-sticky-first{z-index:8}
 .risk-definition{display:flex;align-items:center;gap:10px}
 .risk-definition strong{display:block;color:#173f5b;font-weight:800;white-space:pre-wrap;overflow-wrap:anywhere}
 .risk-definition small{display:block;margin-top:5px;color:#8499a9;font-size:10px}
@@ -71,8 +68,10 @@
 .risk-inline-cancel{margin-top:6px;padding:2px 0;border:0;background:transparent;color:#386d8b;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
 .risk-inline-cancel:hover{text-decoration:underline}
 .risk-new-badge{display:inline-block;margin-bottom:6px;padding:3px 7px;border-radius:4px;background:#d8edfa;color:#256889;font-size:10px;font-weight:800;letter-spacing:.06em}
+.risk-edit-description-head{display:flex;align-items:center;gap:7px;margin-bottom:6px}
+.risk-edit-description-head .risk-new-badge{margin-bottom:0}
 .risk-table tbody tr.risk-new-row td{background:#edf7fc}
-.risk-table tbody tr.risk-new-row .risk-sticky-first{box-shadow:inset 3px 0 0 #3a97be,5px 0 9px -8px #224c69a8}
+.risk-table tbody tr.risk-new-row td:first-child{box-shadow:inset 3px 0 0 #3a97be}
 .risk-inline-error{padding:9px 16px;border-bottom:1px solid #eab7b1;background:#fff1ef;color:#a6312a;font-size:12px;font-weight:650}
 .risk-empty-row td{padding:35px 18px!important;color:#748a9c;text-align:center;font-size:12px}
 .risk-score{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;border-radius:7px;padding:5px 8px;white-space:nowrap;font-size:11px;font-weight:800}
