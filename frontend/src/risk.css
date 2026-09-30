@@ -37,10 +37,10 @@
 .risk-register-title span{display:block;margin-top:2px;color:#778ca0;font-size:11px}
 .risk-register-actions{display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap}
 .risk-scroll-hint{color:#688397;font-size:11px;font-weight:600}
-.risk-cancel-new{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:34px;padding:6px 11px;border:1px solid #c8d7e1;border-radius:7px;background:#f4f8fa;color:#375b72;font:inherit;font-size:11px;font-weight:800;white-space:nowrap;cursor:pointer}
-.risk-cancel-new:hover:not(:disabled){border-color:#9bb9ca;background:#eaf3f8;color:#234d67}
-.risk-cancel-new:focus-visible,.risk-inline-delete:focus-visible{outline:2px solid #3288b7;outline-offset:2px}
-.risk-cancel-new:disabled{opacity:.55;cursor:wait}
+.risk-row-cancel{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:35px;padding:7px 14px;border:1px solid #a7c5d5;border-radius:7px;background:#fff;color:#28566f;font:inherit;font-size:12px;font-weight:800;white-space:nowrap;cursor:pointer}
+.risk-row-cancel:hover:not(:disabled){border-color:#6f9fba;background:#e5f2f9;color:#174665}
+.risk-row-cancel:focus-visible,.risk-inline-delete:focus-visible{outline:2px solid #3288b7;outline-offset:2px}
+.risk-row-cancel:disabled{opacity:.55;cursor:wait}
 .risk-table-scroll{width:100%;max-height:66vh;overflow:auto;padding-bottom:12px;scrollbar-color:#a5bdce #edf3f7}
 .risk-table{table-layout:fixed;border-collapse:separate;border-spacing:0;color:#2a465b;font-size:12px}
 .risk-table th,.risk-table td{box-sizing:border-box}
@@ -87,6 +87,7 @@
 .risk-edit-description-head .risk-new-badge{margin-bottom:0}
 .risk-table tbody tr.risk-new-row td{background:#edf7fc}
 .risk-table tbody tr.risk-new-row td:first-child{box-shadow:inset 3px 0 0 #3a97be}
+.risk-table tbody tr.risk-new-actions-row td{padding:10px 12px;border-bottom:1px solid #c6dbe8;background:#eaf4f9;box-shadow:inset 3px 0 0 #3a97be}
 .risk-inline-error{padding:9px 16px;border-bottom:1px solid #eab7b1;background:#fff1ef;color:#a6312a;font-size:12px;font-weight:650}
 .risk-empty-row td{padding:35px 18px!important;color:#748a9c;text-align:center;font-size:12px}
 .risk-score{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;border-radius:7px;padding:5px 8px;white-space:nowrap;font-size:11px;font-weight:800}
