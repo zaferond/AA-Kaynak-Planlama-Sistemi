@@ -24,6 +24,16 @@ export function rangeWithNoteDates(range:MilestoneRange,notes:MilestoneNote[]):M
  return {...next,start:dated.reduce((first,note)=>note.start<first?note.start:first,dated[0].start),end:dated.reduce((last,note)=>note.end>last?note.end:last,dated[0].end)};
 }
 
+/** A date edited in the form expands its enclosing range without narrowing manually set bounds. */
+export function expandRangeToNoteDates(range:MilestoneRange,notes:MilestoneNote[]):MilestoneRange{
+ const dated=notes.map(note=>noteDates(note,range)).filter(note=>note.start&&note.end&&note.start<=note.end);
+ return {
+  ...range,description:notes[0]?.text||'',notes,
+  start:dated.reduce((first,note)=>!first||note.start<first?note.start:first,range.start),
+  end:dated.reduce((last,note)=>!last||note.end>last?note.end:last,range.end),
+ };
+}
+
 /** Use the same date checks in the project editor and the critical topics report. */
 export function assertMilestoneDateRanges(project:Pick<Project,'start'|'end'>,ranges:MilestoneRange[]):void{
  const sorted=[...ranges].sort((a,b)=>a.start.localeCompare(b.start)||a.end.localeCompare(b.end));

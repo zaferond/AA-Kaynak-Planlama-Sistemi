@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {assertMilestoneDateRanges,changeMilestoneNoteDates,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,datedNotes,milestoneRanges,noteDates,rangeWithNoteDates,resizeMilestoneRange,shiftMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
+import {assertMilestoneDateRanges,changeMilestoneNoteDates,cleanMilestoneRanges,CRITICAL_DATE_OVERLAP_MESSAGE,datedNotes,expandRangeToNoteDates,milestoneRanges,noteDates,rangeWithNoteDates,resizeMilestoneRange,shiftMilestoneRange,withMilestoneRanges} from '../frontend/src/milestone-ranges.ts';
 import {buildProjectInfoReport,updateReportedTopic} from '../frontend/src/project-info-report.ts';
 import {projectInfoReportSheet} from '../frontend/src/project-info-report-export.ts';
 import {calendarDayDifference,dateAtTrackPosition,milestoneBars} from '../frontend/src/milestone-bars.ts';
@@ -41,6 +41,16 @@ test('manual parent dates preserve subtask dates, including old notes',()=>{
  const saved=withMilestoneRanges(milestone,[manual]);
  assert.deepEqual([saved.start,saved.end],['2026-04-25','2026-06-05']);
  assert.deepEqual(buildProjectInfoReport([{...project,milestones:[saved]}])[0].infos[0].topics.map(topic=>[topic.start,topic.end]),[['2026-05-01','2026-05-31']]);
+});
+
+test('editing detail dates extends the parent in either direction and keeps wider manual bounds',()=>{
+ const range={start:'2026-04-10',end:'2026-04-20',color:'blue',notes:[{text:'',includeInReport:false,start:'2026-04-10',end:'2026-04-20'}]};
+ const earlier=expandRangeToNoteDates(range,[{...range.notes[0],start:'2026-04-05'}]);
+ assert.deepEqual([earlier.start,earlier.end],['2026-04-05','2026-04-20']);
+ const later=expandRangeToNoteDates(earlier,[{...earlier.notes[0],end:'2026-04-25'}]);
+ assert.deepEqual([later.start,later.end],['2026-04-05','2026-04-25']);
+ const inside=expandRangeToNoteDates(later,[{...later.notes[0],start:'2026-04-12',end:'2026-04-18'}]);
+ assert.deepEqual([inside.start,inside.end],['2026-04-05','2026-04-25']);
 });
 
 test('separate ranges recalculate independently and invalid subtask dates are rejected',()=>{

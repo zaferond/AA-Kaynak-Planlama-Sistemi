@@ -2,7 +2,7 @@ import {ArrowRight,Plus,Trash2} from 'lucide-react';
 import type {CSSProperties} from 'react';
 import {phasePalette} from './model';
 import type {Milestone,MilestoneNote,MilestoneRange} from './model';
-import {addDraftMilestoneRange,addMilestoneNote,datedNotes,milestoneRanges,noteDates,rangeNotes,rangeWithNoteDates,removeDraftMilestoneRange,removeMilestoneNote,withMilestoneRanges} from './milestone-ranges';
+import {addDraftMilestoneRange,addMilestoneNote,datedNotes,expandRangeToNoteDates,milestoneRanges,noteDates,rangeNotes,rangeWithNoteDates,removeDraftMilestoneRange,removeMilestoneNote,withMilestoneRanges} from './milestone-ranges';
 
 type Props={value:Milestone;isEmpty:boolean;projectStart:string;projectEnd:string;onChange:(value:Milestone,isEmpty?:boolean)=>void};
 const endAfterStart=(start:string,end:string)=>end>start?end:start;
@@ -17,8 +17,9 @@ export default function MilestoneDateEditor({value,isEmpty,projectStart,projectE
   const range=ranges[index];
   const notes=datedNotes(range);
   const next=notes.map((note,i)=>i===noteIndex?{...note,...changes}:note);
-  const recalculate='start' in changes||'end' in changes||('text' in changes&&(!notes[noteIndex]?.text.trim()||!changes.text?.trim()));
-  onChange(withMilestoneRanges(value,ranges.map((item,i)=>i===index?(recalculate?rangeWithNoteDates(item,next):{...item,notes:next,description:next[0]?.text||''}):item)));
+  const dateChanged='start' in changes||'end' in changes;
+  const recalculate='text' in changes&&(!notes[noteIndex]?.text.trim()||!changes.text?.trim());
+  onChange(withMilestoneRanges(value,ranges.map((item,i)=>i===index?(dateChanged?expandRangeToNoteDates(item,next):recalculate?rangeWithNoteDates(item,next):{...item,notes:next,description:next[0]?.text||''}):item)));
  }
  function addNote(index:number){
   onChange(addMilestoneNote(value,index));
