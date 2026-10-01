@@ -64,3 +64,36 @@ Parametre ölçümü ağ trafiği, SQL günlük dosyası veya disk yazma miktar�
 En büyük maliyet tam veri okuması olduğu için sıradaki inceleme, planlanan hücre kaydının sorgu ve yanıt kapsamını daraltmak. Önce mevcut endpoint sözleşmesi ve istemcinin tam snapshot ihtiyacı belirlenmeli. Hedefli okuma; takım/proje yetkisi, revision, referans bütünlüğü, toplu kayıt atomikliği, audit ve generation kontrollerini korumalı. Gerçekleşen kaynak, takvim ve restore yolları daha geniş ortak kontroller gerektirdiğinden ayrı değerlendirilmelidir.
 
 Global işlem kilidini kaldırmak veya tam snapshot'ı önbelleğe almak bu ölçümün sonucu olarak uygulanmadı. Çok sunuculu tutarlılık ve MSSQL davranışı ayrı ortamda doğrulanmadan bu karar verilemez. Audit saklama/arşivleme politikası da ayrıca açık.
+
+## Devam ölçümü — planlanan hücre kaydında ikinci okumanın kaldırılması
+
+On beşinci adımda, yalnız `allocation` kayıtlarından oluşan `/api/changes` paketleri için yanıt aynı yazma işleminde hazırlanıyor. Bu seçim yeni bir yetki yolu değildir; aynı `applyChanges` şeması, yetki, revision, son veri doğrulaması ve audit kuralları çalışıyor. Karışık paketler ve diğer işlem türleri mevcut kayıt + yeniden okuma yolunda kalıyor.
+
+`backend/change-service.mjs` yanıt yolunu seçiyor. `Store.projectView` hem normal okuma hem kayıt yanıtında aynı görünürlük kurallarını ve admin kullanıcı listesini kullanıyor. Admin olmayan kullanıcıya hesap listesi/arşiv veya yetki kapsamı dışındaki çalışan/takvim verileri eklenmiyor. Kullanıcı işlem kilidi altında veritabanından yeniden doğrulanıyor; generation yanıtı aynı commit'in numarası oluyor.
+
+Değişmeyen proje/takım/çalışan verileri ilk SQL okumasının biçimiyle korunuyor; yalnız tahsis ve revision haritaları doğrulanmış sonuçtan alınıyor. Doğrulama eski metadata'yı normalize ettiyse aynı transaction içinde SQL'den tekrar okunuyor. Böylece veritabanına yansıyan varsayılanlar ile yanıtın farklılaşması önleniyor. Yanıt, adapter commit ve SQL.js dosya kaydı başarıyla bittikten sonra HTTP'ye veriliyor. Paylaşılan veri önbelleği veya istemci API değişikliği eklenmedi.
+
+Yeni betikle eski ve yeni yanıt yolları sırayla, aynı veri boyutlarında tekrar ölçüldü. Varsayılan `--response=separate` önceki kayıt + ayrı view yolunu korur; yeni yol için `--response=planning` kullanılır:
+
+```sh
+npm run bench:store -- --response=separate --output=/tmp/aa-separate-new.json
+npm run bench:store -- --response=planning --output=/tmp/aa-planning-new.json
+```
+
+Node 24.21.0, beş örnek, bir ısınma kaydı, 200 çalışan / 1.000 izin kaydı / sıfır başlangıç audit geçmişi. Ölçüm: 16:08 UTC (19:08 İstanbul). İki yol da aynı Store kaynak hash'iyle ölçüldü: `ad937539159ce091ada2c89b2a0e17a99fef37ce14ad69bebc5d1c1874ad438e`. Süreler yerel milisaniye medyanlarıdır; HTTP/ağ/MSSQL dahil değildir.
+
+| Planlanan hücre | Ayrı view | İşlem içinde yanıt | Tam okuma süresi önce / sonra | Okunan SQL satırı önce / sonra | Yanıt boyutu, iki yolda aynı |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.000 | 44,67 | 32,86 | 16,35 / 9,00 | 4.929 / 2.465 | 191.203 bayt |
+| 10.000 | 165,60 | 117,46 | 98,54 / 49,36 | 40.937 / 20.469 | 764.447 bayt |
+| 50.000 | 761,04 | 548,62 | 452,84 / 229,49 | 200.977 / 100.489 | 3.371.253 bayt |
+
+Her veri boyutunda tam veri okuma **2'den 1'e** indi; yazılan satır sayısı **4**, yazma parametre boyutu **334 bayt** olarak kaldı. 50.000 hücrede bu deneyde toplam medyan yaklaşık **%27,9 azaldı**. Bu oran üretim/MSSQL hız garantisi değildir. Beş örneğin p95 değerleri sırasıyla 47,68 / 36,14; 180,05 / 123,17; 774,70 / 558,01 ms; üretim p95 tahmini olarak kullanılmamalı. Yanıt JSON serileştirme süresi bu tabloda toplam süreye dahil değil; 50.000 hücrede yaklaşık 18–19 ms ve ayrıca ölçülüyor.
+
+### Doğrulama ve kalan maliyet
+
+- Beş yeni regresyon testi: oluşturma/0/aynı değer/toplu kayıt/silme yanıtının fresh SQL view ile eşitliği ve bir okuma; manager kapsamı/yetkisiz/eski revision/kapalı hesap; karışık paketlerde SQL varsayılanları/geçersiz paketin atomikliği; eski metadata normalizasyonunda güvenli yeniden okuma; yanıt hazırlanmışken dosya commit hatasında yanıtın reddedilmesi ve yeniden açılışta tüm verinin korunması.
+- SQL.js ve MSSQL için ortak HTTP eşzamanlılık suite'inde 24 kayıt yanıtının her biri kendi commit'inin generation/tahsis/revision görüntüsü olarak kontrol ediliyor. Native MSSQL ortamı yok; bu geliştirilmiş senaryo SQL.js üzerinde çalıştı.
+- Mevcut istemci testleri eski yanıtların yeni görüntü/yetkileri geri almamasını, oturum değişimini ve kayıt/okuma sırasını doğrulamaya devam ediyor. İstemci sözleşmesi ve ön yüz değişmedi.
+- `npm run verify`: **186/186** test; biçim, TypeScript ve üretim derlemesi başarılı.
+- Tek tam veri okuması, tam veri kopyalama/doğrulama/diff ve tam JSON yanıt hâlâ mevcut. İlk sorguyu da daraltmak daha kapsamlı bir kayıt/yanıt sözleşmesi gerektiriyor. Sıradaki inceleme bu kalan maliyetleri ve özellikle iki katmanlı doğrulamanın sorumluluğunu ayırmak; yetki, FK, toplu işlem ve audit doğrulaması korunmalı.

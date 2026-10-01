@@ -13,10 +13,12 @@ import { hashPassword } from "../backend/auth.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|calendar-days|audit-events|output)=(.+)$/.exec(arg);
+      /^--(sizes|samples|calendar-days|audit-events|response|output)=(.+)$/.exec(
+        arg,
+      );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --calendar-days=1000 --audit-events=0 --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --calendar-days=1000 --audit-events=0 --response=separate|planning --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -34,6 +36,9 @@ if (sizes.length > 5) throw Error("At most five data sizes per run.");
 const samples = integer(options.get("samples") || "5", 1, 20);
 const calendarDays = integer(options.get("calendar-days") || "1000", 0, 100000);
 const auditEvents = integer(options.get("audit-events") || "0", 0, 100000);
+const responseMode = options.get("response") || "separate";
+if (!["separate", "planning"].includes(responseMode))
+  throw Error("Expected --response=separate or --response=planning.");
 const percentile = (values, p) =>
   [...values].sort((a, b) => a - b)[
     Math.max(0, Math.ceil(values.length * p) - 1)
@@ -238,15 +243,18 @@ for (const size of sizes) {
     const key = await seed(store, size);
     let state = await store.view(user);
     // Warm up the same code paths, including SQL and file commit, outside measurements.
-    await store.mutate(user, (data, active) =>
-      applyChanges(data, active, [
-        {
-          kind: "allocation",
-          id: key,
-          value: 0.5,
-          revision: data.revisions["allocation:" + key],
-        },
-      ]),
+    await store.mutate(
+      user,
+      (data, active) =>
+        applyChanges(data, active, [
+          {
+            kind: "allocation",
+            id: key,
+            value: 0.5,
+            revision: data.revisions["allocation:" + key],
+          },
+        ]),
+      { returnPlanningView: responseMode === "planning" },
     );
     state = await store.view(user);
     const initialGeneration = state.generation,
@@ -256,22 +264,27 @@ for (const size of sizes) {
     for (let i = 0; i < samples; i++) {
       const observation = metrics.start(),
         start = performance.now();
-      await store.mutate(user, (data, active) => {
-        const domainStart = performance.now();
-        applyChanges(data, active, [
-          {
-            kind: "allocation",
-            id: key,
-            value: i % 2 ? 0.5 : 0.25,
-            revision: state.data.revisions["allocation:" + key],
-          },
-        ]);
-        observation.domainMs += performance.now() - domainStart;
-      });
+      const result = await store.mutate(
+        user,
+        (data, active) => {
+          const domainStart = performance.now();
+          applyChanges(data, active, [
+            {
+              kind: "allocation",
+              id: key,
+              value: i % 2 ? 0.5 : 0.25,
+              revision: state.data.revisions["allocation:" + key],
+            },
+          ]);
+          observation.domainMs += performance.now() - domainStart;
+        },
+        { returnPlanningView: responseMode === "planning" },
+      );
       observation.mutateMs = performance.now() - start;
       const viewStart = performance.now();
-      state = await store.view(user);
-      observation.viewMs = performance.now() - viewStart;
+      state = responseMode === "planning" ? result : await store.view(user);
+      observation.viewMs =
+        responseMode === "planning" ? 0 : performance.now() - viewStart;
       observation.pipelineMs = performance.now() - start;
       metrics.stop();
       const jsonStart = performance.now(),
@@ -305,6 +318,7 @@ for (const size of sizes) {
     );
     const result = {
       allocations: size,
+      responseMode,
       resources: 200,
       calendarDays,
       initialAuditEvents: auditEvents,
@@ -322,6 +336,7 @@ for (const size of sizes) {
     console.log(
       JSON.stringify({
         allocations: size,
+        responseMode,
         calendarDays,
         initialAuditEvents: auditEvents,
         medians,
@@ -342,11 +357,12 @@ const report = {
   node: process.version,
   provider: "sqljs",
   samples,
+  responseMode,
   storeSha256: createHash("sha256")
     .update(await fs.readFile(new URL("../backend/store.mjs", import.meta.url)))
     .digest("hex"),
   scope:
-    "Local synthetic Store.mutate + Store.view pipeline; no HTTP/network or native MSSQL performance claim. All databases created and removed in os.tmpdir().",
+    "Local synthetic write + full response pipeline (separate Store.view or planning view within mutation); no HTTP/network or native MSSQL performance claim. All databases created and removed in os.tmpdir().",
   results,
 };
 if (options.has("output"))

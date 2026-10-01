@@ -169,14 +169,33 @@ export async function concurrencySuite(store, t) {
             (i + 1) / 10,
           ),
         );
-        const elapsed = await Promise.all(
+        const responses = await Promise.all(
           edits.map(async (edit, i) => {
             const start = performance.now();
             const result = await write([edit], i);
             assert.equal(result.status, 200, JSON.stringify(result.json));
-            return performance.now() - start;
+            return {
+              edit,
+              view: result.json,
+              elapsed: performance.now() - start,
+            };
           }),
         );
+        assert.deepEqual(
+          responses.map(({ view }) => view.generation).sort((a, b) => a - b),
+          edits.map((_, i) => before.generation + i + 1),
+        );
+        for (const { edit, view } of responses) {
+          assert.equal(view.data.allocations[edit.id], edit.value);
+          assert.equal(view.data.revisions["allocation:" + edit.id], 1);
+          // Each full snapshot describes this commit, not a later queued write.
+          assert.equal(
+            edits.filter((item) =>
+              Object.hasOwn(view.data.allocations, item.id),
+            ).length,
+            view.generation - before.generation,
+          );
+        }
         const after = await state();
         for (const edit of edits) {
           assert.equal(after.data.allocations[edit.id], edit.value);
@@ -184,7 +203,9 @@ export async function concurrencySuite(store, t) {
         }
         assert.equal(after.generation, before.generation + edits.length);
         assert.equal((await history()).total, audit.total + edits.length);
-        elapsed.sort((a, b) => a - b);
+        const elapsed = responses
+          .map((item) => item.elapsed)
+          .sort((a, b) => a - b);
         t.diagnostic(
           "Local client latency, 24 requests: median=" +
             Math.round(elapsed[11]) +

@@ -12,12 +12,12 @@ import {
   fail,
 } from "./auth.mjs";
 import {
-  applyChanges,
   applyLeaderChange,
   reset,
   importRows,
   restore,
 } from "./operations.mjs";
+import { changeAndView } from "./change-service.mjs";
 export function createApp(
   store,
   {
@@ -183,10 +183,7 @@ export function createApp(
     res.json({ generation: await store.generation() });
   });
   app.post("/api/changes", async (req, res) => {
-    await store.mutate(req.user, (d, u) =>
-      applyChanges(d, u, req.body.changes),
-    );
-    res.json(await store.view(req.user));
+    res.json(await changeAndView(store, req.user, req.body.changes));
   });
   app.post("/api/leaders/change", async (req, res) => {
     await store.mutate(

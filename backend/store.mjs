@@ -980,17 +980,17 @@ export class Store {
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
       const { data, generation } = await this.read(c);
-      if (active.role === "admin") {
-        const users = await this.users(c);
-        data.users = users.map(publicUser);
-        for (const x of users) data.revisions["user:" + x._id] = x.revision;
-      }
-      return {
-        data: scopeData(data, publicUser(active)),
-        generation,
-        user: publicUser(active),
-      };
+      return this.projectView(data, generation, active, c);
     }, true);
+  }
+  async projectView(data, generation, active, c) {
+    if (active.role === "admin") {
+      const users = await this.users(c);
+      data.users = users.map(publicUser);
+      for (const x of users) data.revisions["user:" + x._id] = x.revision;
+    }
+    const principal = publicUser(active);
+    return { data: scopeData(data, principal), generation, user: principal };
   }
   async auditLog(u, { offset = 0, limit = 50 } = {}) {
     if (
@@ -1029,7 +1029,7 @@ export class Store {
       };
     }, true);
   }
-  async mutate(u, fn, { auditUsers = false } = {}) {
+  async mutate(u, fn, { auditUsers = false, returnPlanningView = false } = {}) {
     return this.transaction(async (c) => {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
@@ -1071,6 +1071,27 @@ export class Store {
         "UPDATE kp_settings SET " + assignments.join(",") + " WHERE id=1",
         values,
       );
+      if (returnPlanningView) {
+        // Preserve the SQL read representation of unchanged entities. If
+        // validation normalized metadata, re-read within the same transaction.
+        const metadataKeys = new Set([
+          ...Object.keys(before),
+          ...Object.keys(valid),
+        ]);
+        metadataKeys.delete("allocations");
+        metadataKeys.delete("revisions");
+        const unchanged = [...metadataKeys].every(
+          (key) => JSON.stringify(before[key]) === JSON.stringify(valid[key]),
+        );
+        const responseData = unchanged
+          ? {
+              ...before,
+              allocations: valid.allocations,
+              revisions: { ...valid.revisions },
+            }
+          : (await this.read(c)).data;
+        return this.projectView(responseData, generation + 1, active, c);
+      }
       return result;
     });
   }
