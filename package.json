@@ -11,6 +11,7 @@
     "build": "npm run typecheck && npm --prefix frontend run build",
     "test": "node --test tests/*.test.mjs",
     "test:db": "node --env-file=.env --test tests/mssql.integration.mjs",
+    "bench:store": "node scripts/benchmark-store.mjs",
     "admin:password": "node --env-file=.env backend/admin-password.mjs",
     "setup": "node backend/setup.mjs",
     "db:migrate": "node --env-file=.env backend/migrate.mjs",

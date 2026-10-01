@@ -1045,13 +1045,31 @@ export class Store {
         "audit_events",
         auditEntries(before, valid, active, { beforeUsers, afterUsers }),
       );
-      await c.query(
-        "UPDATE kp_settings SET generation=generation+1,legacy_archive=@p0,calendar_days=@p1,person_calendar=@p2 WHERE id=1",
+      const assignments = ["generation=generation+1"],
+        values = [];
+      // Column names are fixed here; changed JSON values remain SQL parameters.
+      for (const [column, oldValue, newValue] of [
         [
-          data.legacyArchive ? JSON.stringify(data.legacyArchive) : null,
-          JSON.stringify(data.workCalendar || {}),
-          JSON.stringify(data.personCalendar || {}),
+          "legacy_archive",
+          before.legacyArchive || null,
+          valid.legacyArchive || null,
         ],
+        ["calendar_days", before.workCalendar || {}, valid.workCalendar || {}],
+        [
+          "person_calendar",
+          before.personCalendar || {},
+          valid.personCalendar || {},
+        ],
+      ]) {
+        const oldJson = JSON.stringify(oldValue),
+          newJson = JSON.stringify(newValue);
+        if (oldJson === newJson) continue;
+        assignments.push(ident(column) + "=@p" + values.length);
+        values.push(newValue === null ? null : newJson);
+      }
+      await c.query(
+        "UPDATE kp_settings SET " + assignments.join(",") + " WHERE id=1",
+        values,
       );
       return result;
     });
@@ -1074,10 +1092,17 @@ export class Store {
     }
     await c.upsert(
       "leaders",
-      (next.leaders || []).map((name) => ({
-        name,
-        manager_name: next.leaderManagers?.[name] || "",
-      })),
+      (next.leaders || [])
+        .filter(
+          (name) =>
+            !before.leaders?.includes(name) ||
+            (before.leaderManagers?.[name] || "") !==
+              (next.leaderManagers?.[name] || ""),
+        )
+        .map((name) => ({
+          name,
+          manager_name: next.leaderManagers?.[name] || "",
+        })),
     );
     const changed = {};
     for (const [kind, t] of Object.entries(kinds)) {

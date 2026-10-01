@@ -559,5 +559,7 @@ export function restore(d, u, backup) {
       next.revisions[prefix + id] = (d.revisions[prefix + id] || 0) + 1;
   }
   next.revisions["calendar:shared"] = (d.revisions["calendar:shared"] || 0) + 1;
+  // An absent optional archive in the backup must clear the current archive.
+  if (!Object.hasOwn(next, "legacyArchive")) delete d.legacyArchive;
   Object.assign(d, next);
 }

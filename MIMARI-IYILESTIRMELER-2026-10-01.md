@@ -248,3 +248,15 @@ Referans: 30 Eylül 2026 tarihli mimari ve güvenlik incelemesi; başlangıç Gi
 - Sıradaki teknik iş: kayıt katmanının tam veri okuma/yazma maliyetlerini ayrı geçici veritabanında ölçüp hedefli sorgu ihtiyacını belirlemek. Tarayıcı/MSSQL ortamı ve audit saklama/arşivleme politikası açık.
 
 - Sunucu yeni ortak hesap koduyla yeniden başlatıldı. Yerel veritabanındaki 20 `kp_` tablosunun tüm satırları yedekle aynı; ana sayfa ve JS/CSS varlıkları HTTP üzerinden doğrulandı. Çalışan kopyada TypeScript ve 27 hedefli giriş/takvim/eşzamanlılık testi geçti. Yeni ön yüz kodu tarayıcı yenilendiğinde yüklenir.
+
+
+## On dördüncü adım — veri kayıt maliyetleri ve gereksiz yazmalar
+
+- Başlangıçta önceki paket `c97f021` commit'inde ve Git çalışma alanı temizdi. Ayrı geçici SQL.js veritabanlarında 1.000 / 10.000 / 50.000 planlanan hücre, 200 çalışan ve 1.000 izin kaydıyla gerçek `Store.mutate + Store.view` zinciri ölçüldü. `.env` ve gerçek kullanıcı verileri kullanılmadı. Tekrarlanabilir `npm run bench:store` komutu eklendi; ayrıntılar `PERFORMANS-OLCUMU-2026-10-01.md` içinde.
+- Tek hücre değişirken değişmeyen yedi liderlik ve yaklaşık 82 KB takvim/arşiv parametresi yeniden yazılıyordu. Liderlikler yalnız yeni/değişmişse, settings JSON kolonları yalnız içerik değişmişse yazılıyor. Generation, revision, audit, FK sırası ve işlem atomikliği korunuyor. Bu senaryoda değiştirilen satır 11'den 4'e, yazma parametrelerinin JSON boyutu 82.103'ten 334 bayta indi. Bu ölçüm gerçek ağ veya disk yazma miktarı değildir.
+- Tam veri hâlâ iki kez okunuyor. 50.000 hücrede toplam medyan 796,78'den 792,26 ms'ye geldi; belirgin hızlanma iddia edilmiyor. Yaklaşık 460 ms okuma maliyeti devam ediyor. Native MSSQL/HTTP/ağ performansı ölçülmedi; beş örnek üretim p95 hesabına yeterli değil.
+- Yeni testlerde restore'un opsiyonel `legacyArchive` alanını, yedekte bulunmadığında yanlışlıkla koruduğu hata yeniden üretildi. Gelen yedek tamamen doğrulandıktan sonra eksik arşiv temizleniyor; geçersiz yedek veri değiştirmiyor, migrasyonun oluşturduğu arşiv taşınıyor. Gerçek kullanıcı verileri üzerinde restore yapılmadı.
+- Beş yeni regresyon testi; değişmeyen hücrede revision/generation, değişen JSON kolonları, restore temizliği, liderlik/FK sırası ve settings güncellemesinden sonra yapay hata/yeniden açılışta rollback'i kapsıyor. Hedefli persistence/restore/eşzamanlılık testleri **20/20** geçti. `npm run verify`: **181/181 test**, biçim, TypeScript ve üretim derlemesi başarılı.
+- Şema, kullanıcı verileri, güvenlik kontrolleri, global kilit ve SQL.js disk kayıt düzeni değiştirilmedi. Sıradaki konu, planlanan hücre kayıtlarının hedefli veri okuma/yanıt sözleşmesi. Tarayıcı erişimi, ayrı MSSQL ortamı ve audit saklama politikası hâlâ açık.
+
+- İlgili kaynaklar ve yerel veritabanı `AA Kaynak Yedekleri/store-performance-20261001-165820` dizinine yedeklendi; sekiz ilgili dosya çalışan kopyaya aktarıldı. Sunucu yeniden başlatıldı. Veritabanındaki 20 `kp_` tablosunun tüm satır içerikleri yedekle aynı; ana sayfa ve iki JS/CSS varlığı HTTP 200 ve mevcut derlemeyle birebir doğrulandı. Ön yüz değişmedi. Çalışan kopyada TypeScript ve 20 hedefli test geçti.

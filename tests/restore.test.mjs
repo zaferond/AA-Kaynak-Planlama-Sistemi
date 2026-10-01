@@ -113,6 +113,33 @@ test("an invalid restore leaves the source unchanged and normal users cannot res
   );
 });
 
+test("restore replaces an optional legacy archive, including its absence, only after validation", () => {
+  const current = fixture();
+  const archive = {
+    teams: [],
+    allocations: { archived: 0.25 },
+    resourceTeams: {},
+  };
+  current.legacyArchive = structuredClone(archive);
+  const invalid = fixture();
+  invalid.projects.push({ ...invalid.projects[0] });
+  const original = structuredClone(current);
+  assert.throws(() => restore(current, admin, invalid), /Tekrarlanan/);
+  assert.deepEqual(current, original);
+
+  const backup = fixture();
+  const untouched = structuredClone(backup);
+  restore(current, admin, backup);
+  assert.equal(Object.hasOwn(current, "legacyArchive"), false);
+  assert.deepEqual(backup, untouched);
+
+  backup.legacyArchive = structuredClone(archive);
+  const withArchive = structuredClone(backup);
+  restore(current, admin, backup);
+  assert.deepEqual(current.legacyArchive, archive);
+  assert.deepEqual(backup, withArchive);
+});
+
 test("HTTP restore keeps revision conflict protection across deleted entries and restart", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-restore-"));
   const env = {
