@@ -18,11 +18,11 @@ export function assertActualMonthlyLimits(
   data: LimitData,
   selectedMonths?: Iterable<string>,
 ): void {
+  const selected =
+    selectedMonths === undefined ? undefined : new Set(selectedMonths);
+  if (selected?.size === 0) return;
   const index = createActualMonthIndex(data);
-  const months =
-    selectedMonths === undefined
-      ? new Set(index.projectMonths())
-      : new Set(selectedMonths);
+  const months = selected ?? new Set(index.projectMonths());
   if (selectedMonths === undefined)
     for (const key of Object.keys(data.personCalendar || {})) {
       const [resourceId, date] = key.split("|");

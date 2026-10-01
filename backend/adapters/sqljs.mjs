@@ -87,7 +87,25 @@ export class SqlJsAdapter {
     try {
       st.bind(params);
       const rows = [];
-      while (st.step()) rows.push(st.getAsObject());
+      let columns;
+      while (st.step()) {
+        // A prepared statement has the same result columns for every row.
+        columns ??= st.getColumnNames();
+        const values = st.get(),
+          row = {};
+        for (let i = 0; i < columns.length; i++) {
+          const key = columns[i];
+          if (key === "__proto__")
+            Object.defineProperty(row, key, {
+              value: values[i],
+              enumerable: true,
+              writable: true,
+              configurable: true,
+            });
+          else row[key] = values[i];
+        }
+        rows.push(row);
+      }
       return {
         rows,
         rowCount: /^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql)

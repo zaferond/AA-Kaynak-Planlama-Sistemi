@@ -161,3 +161,64 @@ Persist süresi önce 1,66 / 8,28 / 40,49 ms, sonra 3,05 / 7,19 / 31,94 ms. **Fa
 - Operations/service kodları önceki ölçümle aynı. Ham sentetik sonuçlar yerelde `/tmp/aa-shared-diff-before-20261001.json` ve `/tmp/aa-shared-diff-after-20261001.json` dosyalarında; geçici dosyalar kalıcı raporun parçası değildir.
 - Beş yeni regresyon testi ile **194/194** test, biçim, TypeScript ve üretim derlemesi başarılı. Audit'e hazır fark verildiğinde tüm allocation haritasının yeniden taranmadığı, özel metinlerin kaydedilip audit'e alınmadığı, bağlantılı silmelerin ve `constructor` kimlikli proje CRUD işlemlerinin doğruluğu kontrol edildi. Mevcut rollback/eşzamanlılık/snapshot/restore kontrolleri geçti.
 - Metadata kayıt isimleri ve hesap audit'i için ayrı indeksler, revision/settings karşılaştırması, tam model doğrulaması/kopyası ve tam JSON yanıt devam ediyor. Tam okuma büyük ölçümün yaklaşık 229 ms'sini oluşturuyor; native MSSQL sonuçları ve daha geniş veri/audit profilleri ayrıca gerekli.
+
+
+## Devam ölçümü — yoğun gerçekleşen veri ve uzun işlem geçmişi
+
+### Profil ve ölçüm kapsamı
+
+Node 24.21.0 / SQL.js, aynı bilgisayar, her profilde bir ısınma kaydı ve **yedi örnek**. Önceki backend kaynakları `abc9835`; her iki ölçümde de aynı genişletilmiş benchmark betiği kullanıldı. Önce 18:05 UTC (21:05 İstanbul), sonra 18:10–18:11 UTC (21:10–21:11 İstanbul), 1 Ekim 2026. Profiller aynı anda değil, sırayla çalıştırıldı. Canlı veritabanı veya `.env` kullanılmadı.
+
+| Profil | Planlanan hücre | Gerçekleşen hücre | Çalışan | Kişisel izin kaydı | Başlangıç audit kaydı |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 50.000 | 0 | 200 | 1.000 | 0 |
+| B | 50.000 | 0 | 200 | 1.000 | 50.000 |
+| C | 100.000 | 50.000 | 2.000 | 10.000 | 50.000 |
+
+Planlanan veri 48 aya yayılıyor; gerçekleşen veri Ocak–Eylül 2026'da oluşturuluyor. Sentetik gerçekleşen toplamları sınır altında tutuluyor. Audit UUID'leri rastgele üretildiğinden aynı satır sayısında B-tree/dosya yerleşimi ve dosya boyutu az miktarda farklı olabilir. Sonuçlar gerçek veri şekli, makine yükü, audit metin uzunluğu veya ağ maliyetini temsil etmez.
+
+Yeni profil seçenekleri ile güncel ölçümler tekrar çalıştırılabilir (çıktı dosyaları yeni olmalı; mevcut dosya üzerine yazılmaz):
+
+```sh
+npm run bench:store -- --sizes=50000 --samples=7 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=planning --validation=single --output=/tmp/aa-profile-a-new.json
+npm run bench:store -- --sizes=50000 --samples=7 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=50000 --response=planning --validation=single --output=/tmp/aa-profile-b-new.json
+npm run bench:store -- --sizes=100000 --samples=7 --resources=2000 --actuals=50000 --calendar-days=10000 --audit-events=50000 --response=planning --validation=single --output=/tmp/aa-profile-c-new.json
+```
+
+Eski sonuçları yeniden üretmek için genişletilmiş betik ayrı `abc9835` çalışma kopyasında kullanılmalı; canlı kaynakları/veritabanını geri almak gerekmez. Betiğin eski commit'teki sürümü yeni çalışan/gerçekleşen seçeneklerini tanımaz. Ölçüm Store zincirini kullanır; HTTP, ağ, tarayıcı çizimi ve native MSSQL içermez.
+
+### Yapılan değişiklikler
+
+1. SQL.js satır çözümlemesinde prepared statement'ın sütun adları bir kez alınıyor. Önce `getAsObject` her satırda sütun adlarını yeniden okuyor/çözümlüyordu (kurulu sql.js kaynağında doğrulandı). Satır değerleri her step'te yeniden okunuyor; auth/veri sonucu önbelleği eklenmedi. SQL, sorgu kapsamı ve seçilen satırlar aynı.
+2. Açıkça boş gerçekleşen ay kapsamı için aylık toplam indeksi hazırlanmıyor. Planlanan kayıt bu küme boş olduğu için gereksiz 50.000 gerçekleşen hücre taraması yapıyordu. Restore'un kapsamsız tam kontrolü ve dolu kapsamın hesapları korunuyor; son model doğrulaması Store içinde devam ediyor.
+3. Ölçüm betiği SQL tablosu başına raw okuma süresini, satırı ve çağrıyı; geçici veritabanı dosyasının open/write/sync/close/rename toplamını ayrı kaydediyor. Bunlar iç içe fazlar; medyanlar toplanarak toplam hesaplanamaz. Dosya commit ölçümü DB export süresini kapsamaz. Diğer dosyalar bu ölçüme dahil edilmez.
+
+### Yerel sonuçlar
+
+| Profil | Önce kayıt + yanıt | Sonra kayıt + yanıt | Medyan azalma | Tam okuma önce / sonra | Komut hazırlama önce / sonra | JSON serileştirme önce / sonra |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | 424,91 ms | 328,41 ms | %22,7 | 232,14 / 128,78 ms | 0,11 / 0,08 ms | 19,26 / 19,70 ms |
+| B | 458,82 ms | 346,98 ms | %24,4 | 231,81 / 136,11 ms | 0,12 / 0,08 ms | 19,84 / 19,74 ms |
+| C | 1.530,34 ms | 1.151,21 ms | %24,8 | 723,51 / 404,21 ms | 37,88 / 0,09 ms | 74,98 / 75,00 ms |
+
+Bu azalmalar yalnız bu yerel deneyi anlatır. Yedi örneğin p95 değerleri A'da 452,08 / 344,04; B'de 512,80 / 383,53; C'de 1.542,54 / 1.204,54 ms. Bunlar üretim p95 veya kapasite tahmini değildir. JSON serileştirmesi toplam Store zincirinden **ayrı** ölçülüyor; tabloda kayıt+yanıta dahil değil.
+
+| Profil | DB boyutu önce / sonra, bayt | Export süresi önce / sonra | Dosya commit önce / sonra | Tam kopya önce / sonra | Persist önce / sonra |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| A | 9.601.024 / 9.601.024 | 1,70 / 1,78 ms | 18,86 / 13,77 ms | 42,15 / 42,19 ms | 32,15 / 34,55 ms |
+| B | 25.780.224 / 25.812.992 | 4,12 / 4,20 ms | 18,41 / 21,85 ms | 43,71 / 45,45 ms | 32,87 / 33,22 ms |
+| C | 48.353.280 / 48.345.088 | 8,13 / 7,00 ms | 40,44 / 38,79 ms | 155,22 / 155,02 ms | 124,90 / 133,44 ms |
+
+Her profilde tek tam okuma ve tek structuredClone kaldı. Okunan SQL satırları A/B'de **100.489**, C'de **304.113**; yanıt boyutları sırasıyla **3.371.253 / 3.371.253 / 11.479.658 bayt**. Önce/sonra bu sayılar ve tahsis/revision/audit/settings için dört satırlık yazma, 334 bayt yazma parametresi aynı olarak doğrulandı. Uzun audit geçmişi `/api/changes` snapshot'ına eklenmez; A/B yanıt boyutu aynı.
+
+SQL.js hâlâ işlem başına **iki DB export** yapar: rollback snapshot'ı ve commit dosyası. B/C audit geçmişi veritabanını büyüttüğü için bu export/dosya yolu daha fazla bayt taşır. Bu küçük ölçümden geçmiş büyüklüğüne bağlı doğrusal gecikme veya tüm ek maliyetin tek fazdan kaynaklandığı sonucu çıkarılamaz. Geçmiş silinmedi, fsync/rename veya rollback koruması azaltılmadı.
+
+### İzlenebilirlik, doğrulama ve kalan maliyet
+
+- SQL.js adapter önce `3eb5dbe626def1a3b694eb5a2d9a461ead2f2ade812c62b627ddf4cea89d81dd`, sonra `e7ead29cad3a25a926a52763e5f99a6258c004ac2a85d65703f193f3b7da035d`.
+- Ortak aylık sınır kaynağı önce `32d5721b710e922a05cc456c279e93b09319f404ff32a8ec33eafb77073d2df3`, sonra `73b761ddb5550b9231e9cb367617d6e6e124f596c1760213a8a60f84243115c6` (kaynaklardan ayrıca hesaplandı; ham JSON'da bu alan yok).
+- Her iki seride betik hash'i `e380f3dddd6dd24c9fcd54c3f703b3b49dc41af3a7153266e3e67d73a14706b4`, Store `970ed8f6733ee3009d3d032a31c44302fb7e6b2437344d559cd0ac42ab6ed880`; operations/service/schema/audit/change-set hash'leri JSON'da mevcut ve iki seride aynı. Ham dosyalar yerelde `/tmp/aa-profile-{plain,history,dense}-{before,after}-20261001.json`; geçici dosyalar Git raporunun kalıcı parçası değildir.
+- Üç yeni SQL.js testi: Unicode/falsy/BLOB/parametrelerde aynı satır sonucu; 100 satırda tek metadata hazırlığı ve sonraki şema/alias değişimleri; decode hatasında statement free/transaction rollback ve yeniden okuma. Bir yeni aylık kapsam testi: boş array/Set/generator tarihsel veriyi taramaz; kapsam verilmezse veya ilgili ay seçilirse %100 aşımı yine reddedilir.
+- `npm run verify`: **208/208 test**, biçim, TypeScript ve üretim derlemesi başarılı. HTTP yetki/revision/eşzamanlılık, disk commit hatası/rollback, restore ve aylık sınır regresyonları geçti. Native MSSQL üzerinde ölçüm/entegrasyon iddiası yok.
+- Yoğun profilde **11,48 MB** tam yanıt, yaklaşık **75 ms** JSON serileştirmesi, **155 ms** kopya, **133 ms** persist ve **404 ms** tam okuma devam ediyor. Son model doğrulaması ve metadata karşılaştırması bu tabloda ayrıca ölçülmüş fazlar değildir. Bunları veya iç içe medyanları toplayarak toplam hesaplamayın.
+- Sonraki mimari inceleme hedefli sorgu/yanıt sözleşmesi ve istemcinin büyük snapshot maliyeti. Bu paket yalnız tek kayıt zincirini ölçtü; yüksek eşzamanlı hacim/global işlem kilidi kapasitesi, tarayıcı performansı ve native MSSQL ayrı doğrulama gerektiriyor.

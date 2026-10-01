@@ -13,12 +13,12 @@ import { hashPassword } from "../backend/auth.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|calendar-days|audit-events|response|validation|output)=(.+)$/.exec(
+      /^--(sizes|samples|resources|actuals|calendar-days|audit-events|response|validation|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --calendar-days=1000 --audit-events=0 --response=separate|planning --validation=double|single --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=separate|planning --validation=double|single --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -34,6 +34,8 @@ const sizes = (options.get("sizes") || "1000,10000,50000")
   .map((value) => integer(value, 1, 100000));
 if (sizes.length > 5) throw Error("At most five data sizes per run.");
 const samples = integer(options.get("samples") || "5", 1, 20);
+const resources = integer(options.get("resources") || "200", 1, 10000);
+const actuals = integer(options.get("actuals") || "0", 0, 100000);
 const calendarDays = integer(options.get("calendar-days") || "1000", 0, 100000);
 const auditEvents = integer(options.get("audit-events") || "0", 0, 100000);
 const responseMode = options.get("response") || "separate";
@@ -57,7 +59,11 @@ async function seed(store, size) {
     (_, i) =>
       `${2026 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`,
   );
-  const projectCount = Math.ceil(size / (teams.length * months.length));
+  const actualMonths = months.slice(0, 9);
+  const projectCount = Math.max(
+    Math.ceil(size / (teams.length * months.length)),
+    Math.ceil(actuals / (resources * actualMonths.length)),
+  );
   data.projects = Array.from({ length: projectCount }, (_, i) => ({
     id: "bench-p" + i,
     name: "Synthetic project " + i,
@@ -65,7 +71,7 @@ async function seed(store, size) {
     end: "2029-12",
     phases: {},
   }));
-  data.resources = Array.from({ length: 200 }, (_, i) => {
+  data.resources = Array.from({ length: resources }, (_, i) => {
     const team = teams[i % teams.length];
     return {
       id: "bench-r" + i,
@@ -95,6 +101,18 @@ async function seed(store, size) {
     data.allocations[key] = 0.25;
     data.revisions["allocation:" + key] = 1;
   }
+  for (let i = 0; i < actuals; i++) {
+    const key =
+      data.resources[i % resources].id +
+      "|" +
+      data.projects[Math.floor(i / (resources * actualMonths.length))].id +
+      "|" +
+      actualMonths[Math.floor(i / resources) % actualMonths.length];
+    data.actualAllocations[key] = Math.min(0.01, 0.5 / projectCount);
+    data.revisions["actual:" + key] = 1;
+  }
+  assert.equal(Object.keys(data.allocations).length, size);
+  assert.equal(Object.keys(data.actualAllocations).length, actuals);
   for (let i = 0; i < calendarDays; i++) {
     const date = new Date(
       Date.UTC(2026, 0, 1 + Math.floor(i / data.resources.length)),
@@ -186,12 +204,22 @@ function instrument(store) {
     "raw",
     (original) =>
       function (sql, values) {
+        const start = performance.now();
         const result = original.call(this, sql, values);
         if (current) {
           current.sqlStatements++;
-          if (/^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql))
+          if (/^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql)) {
+            const name = /\bkp_([a-z_]+)/i.exec(sql)?.[1] || "other";
+            const group = (current.sqlReads[name] ??= {
+              calls: 0,
+              rows: 0,
+              ms: 0,
+            });
+            group.calls++;
+            group.rows += result.rows.length;
+            group.ms += performance.now() - start;
             current.selectedRows += result.rows.length;
-          else {
+          } else {
             const name = /\bkp_([a-z_]+)/i.exec(sql)?.[1] || "other";
             current.writtenRows[name] =
               (current.writtenRows[name] || 0) + result.rowCount;
@@ -218,6 +246,53 @@ function instrument(store) {
         return result;
       },
   );
+  // Time only the disposable database's file commit, never arbitrary files.
+  wrap(
+    fs,
+    "open",
+    (original) =>
+      async function (...args) {
+        if (args[0] !== store.db.file + ".tmp")
+          return original.apply(this, args);
+        const start = performance.now();
+        const handle = await original.apply(this, args);
+        if (current) current.fileCommitMs += performance.now() - start;
+        for (const name of ["writeFile", "sync", "close"])
+          wrap(
+            handle,
+            name,
+            (method) =>
+              async function (...values) {
+                const start = performance.now();
+                try {
+                  return await method.apply(this, values);
+                } finally {
+                  if (current)
+                    current.fileCommitMs += performance.now() - start;
+                }
+              },
+          );
+        return handle;
+      },
+  );
+  wrap(
+    fs,
+    "rename",
+    (original) =>
+      async function (...args) {
+        const start = performance.now();
+        try {
+          return await original.apply(this, args);
+        } finally {
+          if (
+            current &&
+            args[0] === store.db.file + ".tmp" &&
+            args[1] === store.db.file
+          )
+            current.fileCommitMs += performance.now() - start;
+        }
+      },
+  );
   return {
     start() {
       current = {
@@ -231,6 +306,8 @@ function instrument(store) {
         exportMs: 0,
         exportCalls: 0,
         exportBytes: 0,
+        fileCommitMs: 0,
+        sqlReads: {},
         sqlStatements: 0,
         selectedRows: 0,
         writtenRows: {},
@@ -337,6 +414,7 @@ for (const size of sizes) {
         "domainMs",
         "cloneMs",
         "exportMs",
+        "fileCommitMs",
         "jsonMs",
       ].map((key) => [
         key,
@@ -352,7 +430,8 @@ for (const size of sizes) {
       allocations: size,
       responseMode,
       validationMode,
-      resources: 200,
+      resources,
+      actualAllocations: actuals,
       calendarDays,
       initialAuditEvents: auditEvents,
       databaseBytes: (await fs.stat(file)).size,
@@ -371,12 +450,33 @@ for (const size of sizes) {
         allocations: size,
         responseMode,
         validationMode,
+        resources,
+        actualAllocations: actuals,
         calendarDays,
         initialAuditEvents: auditEvents,
         medians,
         readCalls: observations[0].readCalls,
         cloneCalls: observations[0].cloneCalls,
         selectedRows: observations[0].selectedRows,
+        exportCalls: observations[0].exportCalls,
+        exportBytes: observations[0].exportBytes,
+        databaseBytes: result.databaseBytes,
+        responseBytes: observations[0].responseBytes,
+        sqlReads: Object.fromEntries(
+          Object.keys(observations[0].sqlReads).map((name) => [
+            name,
+            {
+              calls: observations[0].sqlReads[name].calls,
+              rows: observations[0].sqlReads[name].rows,
+              medianMs: round(
+                percentile(
+                  observations.map((item) => item.sqlReads[name].ms),
+                  0.5,
+                ),
+              ),
+            },
+          ]),
+        ),
         writtenRows: observations[0].writtenRows,
         changedRecords: observations[0].changedRecords,
         writeParameterBytes: observations[0].writeParameterBytes,
@@ -412,6 +512,21 @@ const report = {
     .digest("hex"),
   auditSha256: createHash("sha256")
     .update(await fs.readFile(new URL("../backend/audit.mjs", import.meta.url)))
+    .digest("hex"),
+  sqlJsAdapterSha256: createHash("sha256")
+    .update(
+      await fs.readFile(
+        new URL("../backend/adapters/sqljs.mjs", import.meta.url),
+      ),
+    )
+    .digest("hex"),
+  schemaSha256: createHash("sha256")
+    .update(
+      await fs.readFile(new URL("../shared/server-domain.ts", import.meta.url)),
+    )
+    .digest("hex"),
+  benchmarkSha256: createHash("sha256")
+    .update(await fs.readFile(new URL(import.meta.url)))
     .digest("hex"),
   changeSetSha256: createHash("sha256")
     .update(

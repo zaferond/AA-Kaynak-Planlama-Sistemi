@@ -116,3 +116,23 @@ test("API checks selected months; restore checks all months without mutating the
   assert.throws(() => assertActualMonthlyLimits(d), /2026-02.*%100/);
   assert.deepEqual(d, before);
 });
+
+test("an explicit empty monthly scope does not scan historical allocations, while omitted scope still checks all totals", () => {
+  const untouched = new Proxy(
+    {},
+    {
+      get() {
+        throw Error("Unrelated historical data read");
+      },
+    },
+  );
+  assert.doesNotThrow(() => assertActualMonthlyLimits(untouched, []));
+  assert.doesNotThrow(() => assertActualMonthlyLimits(untouched, new Set()));
+  const empty = function* () {};
+  assert.doesNotThrow(() => assertActualMonthlyLimits(untouched, empty()));
+  const all = fixture();
+  all.actualWorkedHours["r|2026-09"] = 180;
+  all.actualAllocations = { "r|p|2026-09": 1.1 };
+  assert.throws(() => assertActualMonthlyLimits(all), /%100/);
+  assert.throws(() => assertActualMonthlyLimits(all, ["r|2026-09"]), /%100/);
+});
