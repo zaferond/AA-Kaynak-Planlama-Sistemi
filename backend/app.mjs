@@ -183,7 +183,7 @@ export function createApp(
     res.json({ generation: await store.generation() });
   });
   app.post("/api/changes", async (req, res) => {
-    res.json(await changeAndView(store, req.user, req.body.changes));
+    res.json(await changeAndView(store, req.user, req.body.changes, req.body));
   });
   app.post("/api/leaders/change", async (req, res) => {
     await store.mutate(

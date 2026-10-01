@@ -222,3 +222,36 @@ SQL.js hâlâ işlem başına **iki DB export** yapar: rollback snapshot'ı ve c
 - `npm run verify`: **208/208 test**, biçim, TypeScript ve üretim derlemesi başarılı. HTTP yetki/revision/eşzamanlılık, disk commit hatası/rollback, restore ve aylık sınır regresyonları geçti. Native MSSQL üzerinde ölçüm/entegrasyon iddiası yok.
 - Yoğun profilde **11,48 MB** tam yanıt, yaklaşık **75 ms** JSON serileştirmesi, **155 ms** kopya, **133 ms** persist ve **404 ms** tam okuma devam ediyor. Son model doğrulaması ve metadata karşılaştırması bu tabloda ayrıca ölçülmüş fazlar değildir. Bunları veya iç içe medyanları toplayarak toplam hesaplamayın.
 - Sonraki mimari inceleme hedefli sorgu/yanıt sözleşmesi ve istemcinin büyük snapshot maliyeti. Bu paket yalnız tek kayıt zincirini ölçtü; yüksek eşzamanlı hacim/global işlem kilidi kapasitesi, tarayıcı performansı ve native MSSQL ayrı doğrulama gerektiriyor.
+
+
+## Planlanan hücre yanıtı — tam görüntü / küçük yanıt karşılaştırması
+
+1 Ekim 2026, 21:33–21:35 Europe/Istanbul; Node 24.21.0; geçici sentetik SQL.js veritabanı. Aynı kaynak koduyla tam yanıt (`--response=planning`) ve küçük yanıt (`--response=delta`) sırasıyla çalıştırıldı; bir ısınma + yedi örnek. Gerçek veri/.env kullanılmadı. Son istemci görüntüsü yeni SQL görüntüsüne tüm alanlarıyla eşit kontrol edildi. Her mod tek tam okuma, tek structuredClone ve aynı dört satırlık yazmayı kullanıyor; audit/generation/revision sonuçları kontrol ediliyor. İstemci simülasyonu Node'da gerçek ortak birleştirme işleviyle yapıldı; tarayıcı/HTTP/ağ gecikmesi ölçümü değildir.
+
+- medium: 50.000 planlanan hücre, 200 çalışan, 0 gerçekleşen hücre, 1.000 izin kaydı, 50.000 audit.
+- dense: 100.000 planlanan hücre, 2.000 çalışan, 50.000 gerçekleşen hücre, 10.000 izin kaydı, 50.000 audit.
+
+| Profil / yanıt | Yanıt bayt | Kayıt + görüntü ms | Sunucu JSON ms | İstemci JSON çözme ms | İstemci harita kopyası ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| medium / full | 3,371,253 | 357.04 | 20.93 | 24.90 | 0.00 |
+| medium / delta | 277 | 371.98 | 0.01 | 0.01 | 27.75 |
+| dense / full | 11,479,658 | 1222.86 | 78.42 | 95.66 | 0.00 |
+| dense / delta | 277 | 1225.22 | 0.01 | 0.01 | 97.10 |
+
+Süreler medyandır. Kayıt + görüntü sütunu JSON serileştirmesini, çözmeyi ve istemci birleştirmesini içermez; bunlar ayrı ölçülür. Ayrı medyanların toplamı toplam sürenin medyanı olarak sunulmaz. Sunucu kayıt zinciri hızlandırılmadı: medium 357,04 → 371,98 ms, dense 1.222,86 → 1.225,22 ms; ölçümde küçük yanıtın bu zincire hız kazancı görülmedi. Beklenen kazanç gönderilen bayt ve sunucu serileştirmesidir. JSON çözme yerine harita kopyalama hâlâ O(N) maliyet taşır: medium 24,90 ms tam çözme / 27,76 ms küçük çözme + kopya; dense 95,66 / 97,11 ms. Tarayıcı CPU iyileşmesi iddia edilmiyor.
+
+Tek hücre yanıtı iki profilde de 277 bayt; gerçek toplu yanıtta değişen hücre sayısı ve kullanıcı alanlarıyla büyür. Bu örnekte boyut azalışı %99,99'dan fazla. Sürüm uyuşmazlığı/metadata normalleşmesi/karma kayıt/ilk yüklemede tam görüntü korunur. Sık eşzamanlı değişikliklerde küçük yanıt yerine tam görüntü daha sık dönebilir. Yedi örnek üretim p95 veya kapasite garantisi değildir; native MSSQL performansı ölçülmedi. Sıkıştırma eklenmedi; kimlik/CSRF sözleşmesi değişmedi.
+
+Tekrar üretme: `node scripts/benchmark-store.mjs --sizes=50000 --samples=7 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=50000 --response=planning --output=/tmp/benzersiz-sonuc.json`. Küçük yanıt için `--response=delta` kullanın; her çalıştırmada ayrı çıktı adı seçin. Dense için `--sizes=100000 --resources=2000 --actuals=50000 --calendar-days=10000`. Çıktı yolu daha önce bulunmamalı. Betik geçici veritabanlarını sonunda siler.
+
+Ham çıktılar bu oturumun `/tmp/aa-response-{medium,dense}-{full,delta}-20261001.json` dosyalarında; kaynak kod, ölçüm zamanı, örnekler, SQL/file commit süreleri ve bayt sayıları içerir, kullanıcı verisi içermez. `/tmp` kalıcı arşiv değildir. Ölçülen kaynak hash'leri:
+
+- storeSha256: `bc8249c576f3073b91108d0e432a1da6814fdcd0775f58c31fffa241ffbd1e21`
+- operationsSha256: `41b0cd408246881e04f4536fdbec90fdc14eef2ebe3b576c357966f0778f60e9`
+- changeServiceSha256: `f618ff658fae7691436ddf012256eef3a3f666c5cadb0d83e11e2e3001daad7a`
+- auditSha256: `ae66df2889c7b5560371b840d01c138cc1abcf2ecab2df4b0fcb7f88f9b6e417`
+- sqlJsAdapterSha256: `e7ead29cad3a25a926a52763e5f99a6258c004ac2a85d65703f193f3b7da035d`
+- schemaSha256: `40774711b6218062d1ada75511d0c4973c5b338e38b6b951b3519b49b7a9e2d7`
+- benchmarkSha256: `0b8ae1bed0d8048901d9fcd02f48ed72b28863a76c7e1dad4c6aa80a19204dae`
+- changeSetSha256: `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8`
+- planningResponseSha256: `07371dd7395807708c1dd9a97bafaf4bb285b95775885760477afa7b622a4b53`

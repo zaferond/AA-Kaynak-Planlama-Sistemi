@@ -4,6 +4,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
+import { mergePlanningDelta } from "../shared/planning-response.ts";
 import { Store } from "../backend/store.mjs";
 import { applyChanges, stageChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
@@ -18,7 +19,7 @@ const options = new Map(
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=separate|planning --validation=double|single --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=separate|planning|delta --validation=double|single --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -39,8 +40,8 @@ const actuals = integer(options.get("actuals") || "0", 0, 100000);
 const calendarDays = integer(options.get("calendar-days") || "1000", 0, 100000);
 const auditEvents = integer(options.get("audit-events") || "0", 0, 100000);
 const responseMode = options.get("response") || "separate";
-if (!["separate", "planning"].includes(responseMode))
-  throw Error("Expected --response=separate or --response=planning.");
+if (!["separate", "planning", "delta"].includes(responseMode))
+  throw Error("Expected --response=separate, planning or delta.");
 const validationMode = options.get("validation") || "single";
 if (!["single", "double"].includes(validationMode))
   throw Error("Expected --validation=single or --validation=double.");
@@ -362,7 +363,13 @@ for (const size of sizes) {
             revision: data.revisions["allocation:" + key],
           },
         ]),
-      { returnPlanningView: responseMode === "planning" },
+      {
+        returnPlanningView: responseMode !== "separate",
+        planningDelta:
+          responseMode === "delta"
+            ? { baseGeneration: state.generation, ids: [key] }
+            : undefined,
+      },
     );
     state = await store.view(user);
     const initialGeneration = state.generation,
@@ -386,21 +393,39 @@ for (const size of sizes) {
           ]);
           observation.domainMs += performance.now() - domainStart;
         },
-        { returnPlanningView: responseMode === "planning" },
+        {
+          returnPlanningView: responseMode !== "separate",
+          planningDelta:
+            responseMode === "delta"
+              ? { baseGeneration: state.generation, ids: [key] }
+              : undefined,
+        },
       );
       observation.mutateMs = performance.now() - start;
       const viewStart = performance.now();
-      state = responseMode === "planning" ? result : await store.view(user);
+      const wire =
+        responseMode !== "separate" ? result : await store.view(user);
       observation.viewMs =
-        responseMode === "planning" ? 0 : performance.now() - viewStart;
+        responseMode !== "separate" ? 0 : performance.now() - viewStart;
       observation.pipelineMs = performance.now() - start;
       metrics.stop();
       const jsonStart = performance.now(),
-        json = JSON.stringify(state);
+        json = JSON.stringify(wire);
       observation.jsonMs = performance.now() - jsonStart;
       observation.responseBytes = Buffer.byteLength(json);
+      const parseStart = performance.now(),
+        decoded = JSON.parse(json);
+      observation.parseMs = performance.now() - parseStart;
+      const mergeStart = performance.now();
+      if (decoded.responseMode === "planning-delta-v1") {
+        const data = mergePlanningDelta(state, decoded);
+        assert(data, "delta must match the cached base");
+        state = { data, generation: decoded.generation, user: decoded.user };
+      } else state = decoded;
+      observation.mergeMs = performance.now() - mergeStart;
       observations.push(observation);
     }
+    assert.deepEqual(state, await store.view(user));
     assert.equal(state.generation, initialGeneration + samples);
     assert.equal((await store.auditLog(user)).total, initialAudit + samples);
     assert.equal(state.data.revisions["allocation:" + key], 2 + samples);
@@ -416,6 +441,8 @@ for (const size of sizes) {
         "exportMs",
         "fileCommitMs",
         "jsonMs",
+        "parseMs",
+        "mergeMs",
       ].map((key) => [
         key,
         round(
@@ -534,7 +561,7 @@ const report = {
     )
     .digest("hex"),
   scope:
-    "Local synthetic write + full response pipeline (separate Store.view or planning view within mutation); no HTTP/network or native MSSQL performance claim. All databases created and removed in os.tmpdir().",
+    "Local synthetic write + full/delta response pipeline with JSON encode/decode and immutable client merge; no HTTP/network or native MSSQL performance claim. All databases created and removed in os.tmpdir().",
   results,
 };
 if (options.has("output"))

@@ -1,6 +1,6 @@
 import { stageChanges } from "./operations.mjs";
 
-export async function changeAndView(store, user, changes) {
+export async function changeAndView(store, user, changes, response = {}) {
   // This only chooses the response path. Staging checks commands, permissions,
   // revisions and monthly limits; Store validates the final draft before writing.
   const planningOnly =
@@ -10,7 +10,19 @@ export async function changeAndView(store, user, changes) {
   const result = await store.mutate(
     user,
     (data, active) => stageChanges(data, active, changes),
-    { returnPlanningView: planningOnly },
+    {
+      returnPlanningView: planningOnly,
+      planningDelta:
+        planningOnly &&
+        response.responseMode === "planning-delta-v1" &&
+        Number.isSafeInteger(response.baseGeneration) &&
+        response.baseGeneration >= 0
+          ? {
+              baseGeneration: response.baseGeneration,
+              ids: changes.map((change) => change.id),
+            }
+          : undefined,
+    },
   );
   return planningOnly ? result : store.view(user);
 }

@@ -3,6 +3,7 @@ export type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
 import type { Data } from "./model";
 import type { Principal } from "./access";
 import type { ImportRow } from "./resource-import";
+import { mergePlanningDelta } from "../../shared/planning-response.ts";
 let principal: Principal | null = null,
   csrf = "",
   generation = -1;
@@ -44,13 +45,21 @@ async function api(path: string, body?: unknown) {
           },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const result = await response.json();
+  if (epoch !== sessionEpoch) throw new StaleSessionError();
+  let result = await response.json();
   if (epoch !== sessionEpoch) throw new StaleSessionError();
   if (!response.ok) {
     if (response.status === 401) {
       expireSession();
     }
     throw Error(result.error || "Sunucu hatası.");
+  }
+  if (result.responseMode === "planning-delta-v1") {
+    if (latestView && result.generation <= latestView.generation)
+      return { ...latestView };
+    const data = latestView && mergePlanningDelta(latestView, result);
+    if (!data) return api("/data");
+    result = { data, generation: result.generation, user: result.user };
   }
   // Reads and writes can complete out of order. All consumers receive the newest
   // accepted view; an old response must never replace newer data or permissions.
@@ -117,12 +126,21 @@ export async function checkUpdates() {
   return epoch === sessionEpoch && r.generation > generation;
 }
 export async function writeBatch(changes: Change[]): Promise<Data> {
-  // Each response contains the complete data snapshot. Preserve request order so
-  // quick edits in separate cells cannot replace a newer snapshot with an older one.
+  // Choose the base when the queued request starts, after the preceding response.
+  // Other edits and older servers keep the complete snapshot response contract.
   const epoch = sessionEpoch;
   const request = writeTail.then(() => {
     if (epoch !== sessionEpoch) throw new StaleSessionError();
-    return api("/changes", { changes });
+    const response =
+      latestView?.user &&
+      changes.length > 0 &&
+      changes.every((change) => change.kind === "allocation")
+        ? {
+            responseMode: "planning-delta-v1",
+            baseGeneration: latestView.generation,
+          }
+        : {};
+    return api("/changes", { changes, ...response });
   });
   writeTail = request.then(
     () => undefined,

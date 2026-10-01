@@ -7,6 +7,10 @@ import { Store } from "../backend/store.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 import { applyChanges } from "../backend/operations.mjs";
 import { changeAndView } from "../backend/change-service.mjs";
+import { mergePlanningDelta } from "../shared/planning-response.ts";
+import { createApp } from "../backend/app.mjs";
+import { createServer } from "node:http";
+import { once } from "node:events";
 
 const password = hashPassword("Snapshot-test-only-284!");
 async function setup(t) {
@@ -461,4 +465,222 @@ test("the before snapshot preserves old nested resource values for team-change a
   assert.deepEqual(resourceEdit.changes, [
     { path: ["versions", "0", "lead"], before: team.lead, after: other.lead },
   ]);
+});
+
+test("opt-in planning deltas reproduce SQL snapshots for create, zero, unchanged values, batches and deletion tombstones", async (t) => {
+  const { store, users, key, team } = await setup(t);
+  for (const user of [users.admin, users.manager]) {
+    let cached = await store.view(user);
+    const second = team.id + "|p|2026-10";
+    const changes = (id, value) => ({
+      kind: "allocation",
+      id,
+      value,
+      revision: cached.data.revisions["allocation:" + id] || 0,
+    });
+    for (const batch of [
+      () => [changes(key, 0.5)],
+      () => [changes(key, 0)],
+      () => [changes(key, 0)],
+      () => [changes(key, 1), changes(second, 0.25)],
+      () => [{ ...changes(key, null), operation: "delete" }],
+      () => [{ ...changes(key, null), operation: "delete" }],
+    ]) {
+      const old = structuredClone(cached);
+      const delta = await changeAndView(store, user, batch(), {
+        responseMode: "planning-delta-v1",
+        baseGeneration: cached.generation,
+      });
+      assert.equal(delta.responseMode, "planning-delta-v1");
+      assert.equal(Object.hasOwn(delta, "data"), false);
+      const data = mergePlanningDelta(cached, delta);
+      assert(data);
+      assert.deepEqual(
+        cached,
+        old,
+        "merge must not mutate a displayed snapshot",
+      );
+      cached = { data, generation: delta.generation, user: delta.user };
+      assert.deepEqual(cached, await store.view(user));
+      assert(
+        delta.allocations.every((entry) => entry.id.startsWith(team.id + "|")),
+      );
+      assert.equal(JSON.stringify(delta).includes("Private"), false);
+    }
+  }
+});
+
+test("stale bases, non-opt-in clients, mixed writes and normalized metadata get full snapshots", async (t) => {
+  const { store, users, key, team } = await setup(t);
+  let cached = await store.view(users.admin);
+  for (const response of [
+    {
+      responseMode: "planning-delta-v1",
+      baseGeneration: cached.generation - 1,
+    },
+    { responseMode: "unknown", baseGeneration: cached.generation },
+    { responseMode: "planning-delta-v1", baseGeneration: "1" },
+    {},
+  ]) {
+    const result = await changeAndView(
+      store,
+      users.admin,
+      [
+        {
+          kind: "allocation",
+          id: key,
+          value: 0.5,
+          revision: cached.data.revisions["allocation:" + key] || 0,
+        },
+      ],
+      response,
+    );
+    assert.deepEqual(result, await store.view(users.admin));
+    cached = result;
+  }
+  const project = cached.data.projects.find((item) => item.id === "p");
+  cached = await changeAndView(
+    store,
+    users.admin,
+    [
+      {
+        kind: "project",
+        id: "p",
+        value: { ...project, name: "Updated" },
+        revision: 1,
+      },
+    ],
+    { responseMode: "planning-delta-v1", baseGeneration: cached.generation },
+  );
+  assert.deepEqual(cached, await store.view(users.admin));
+  await store.transaction((c) =>
+    c.query("UPDATE kp_teams SET name=@p0 WHERE id=@p1", [" Legacy ", team.id]),
+  );
+  const result = await changeAndView(
+    store,
+    users.admin,
+    [
+      {
+        kind: "allocation",
+        id: key,
+        value: 1,
+        revision: cached.data.revisions["allocation:" + key],
+      },
+    ],
+    { responseMode: "planning-delta-v1", baseGeneration: cached.generation },
+  );
+  assert.deepEqual(result, await store.view(users.admin));
+  assert.equal(
+    result.data.teams.find((item) => item.id === team.id).name,
+    "Legacy",
+  );
+});
+
+test("delta negotiation preserves permissions, revisions and disk rollback", async (t) => {
+  const { store, users, key, hiddenKey } = await setup(t);
+  const before = await store.view(users.admin);
+  const response = {
+    responseMode: "planning-delta-v1",
+    baseGeneration: before.generation,
+  };
+  for (const [user, id, revision, status] of [
+    [users.manager, hiddenKey, 1, 403],
+    [users.normal, key, 0, 403],
+    [users.admin, key, 99, 409],
+  ])
+    await assert.rejects(
+      changeAndView(
+        store,
+        user,
+        [
+          {
+            kind: "allocation",
+            id,
+            value: 0.5,
+            revision,
+          },
+        ],
+        response,
+      ),
+      (error) => error.status === status,
+    );
+  const file = store.db.file;
+  const blocker = file + "-directory";
+  await fs.mkdir(blocker);
+  store.db.file = blocker;
+  try {
+    await assert.rejects(
+      changeAndView(
+        store,
+        users.admin,
+        [
+          {
+            kind: "allocation",
+            id: key,
+            value: 0.5,
+            revision: 0,
+          },
+        ],
+        response,
+      ),
+      (error) => ["EISDIR", "ENOTDIR"].includes(error.code),
+    );
+  } finally {
+    store.db.file = file;
+  }
+  assert.deepEqual(await store.view(users.admin), before);
+});
+
+test("authenticated HTTP delta writes fall back after another client's committed edit", async (t) => {
+  const { store, users, key, hiddenKey } = await setup(t);
+  const server = createServer();
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const origin = "http://127.0.0.1:" + server.address().port;
+  const app = createApp(store, { origin });
+  server.on("request", app);
+  t.after(async () => {
+    app.locals.close();
+    await new Promise((resolve) => server.close(resolve));
+  });
+  const login = await fetch(origin + "/api/auth/login", {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "X-Requested-With": "KaynakPortal",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      username: "snapshot.admin",
+      password: "Snapshot-test-only-284!",
+    }),
+  });
+  assert.equal(login.status, 200);
+  const auth = await login.json();
+  const headers = {
+    Origin: origin,
+    "X-Requested-With": "KaynakPortal",
+    "Content-Type": "application/json",
+    Cookie: login.headers.get("set-cookie").split(";")[0],
+    "X-CSRF-Token": auth.csrf,
+  };
+  const cached = await store.view(users.admin);
+  async function write(id, revision, baseGeneration) {
+    const response = await fetch(origin + "/api/changes", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        changes: [{ kind: "allocation", id, value: 0.5, revision }],
+        responseMode: "planning-delta-v1",
+        baseGeneration,
+      }),
+    });
+    assert.equal(response.status, 200);
+    return response.json();
+  }
+  const delta = await write(hiddenKey, 1, cached.generation);
+  assert.equal(delta.responseMode, "planning-delta-v1");
+  const result = await write(key, 0, cached.generation);
+  assert.deepEqual(result, await store.view(users.admin));
+  assert.equal(result.data.allocations[hiddenKey], 0.5);
 });

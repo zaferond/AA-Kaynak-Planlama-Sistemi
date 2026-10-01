@@ -1030,7 +1030,11 @@ export class Store {
       };
     }, true);
   }
-  async mutate(u, fn, { auditUsers = false, returnPlanningView = false } = {}) {
+  async mutate(
+    u,
+    fn,
+    { auditUsers = false, returnPlanningView = false, planningDelta } = {},
+  ) {
     return this.transaction(async (c) => {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
@@ -1095,7 +1099,38 @@ export class Store {
               revisions: { ...valid.revisions },
             }
           : (await this.read(c)).data;
-        return this.projectView(responseData, generation + 1, active, c);
+        const view = await this.projectView(
+          responseData,
+          generation + 1,
+          active,
+          c,
+        );
+        // Only an unchanged, matching base can receive a patch. Scope the entire
+        // view first so values and deletion revisions follow existing permissions.
+        if (unchanged && planningDelta?.baseGeneration === generation) {
+          const ids = new Set([
+            ...planningDelta.ids,
+            ...changeSet.allocation.map((change) => change.id),
+          ]);
+          return {
+            responseMode: "planning-delta-v1",
+            baseGeneration: generation,
+            generation: view.generation,
+            user: view.user,
+            allocations: [...ids]
+              .filter((id) =>
+                Object.hasOwn(view.data.revisions, "allocation:" + id),
+              )
+              .map((id) => ({
+                id,
+                value: Object.hasOwn(view.data.allocations, id)
+                  ? view.data.allocations[id]
+                  : null,
+                revision: view.data.revisions["allocation:" + id],
+              })),
+          };
+        }
+        return view;
       }
       return result;
     });
