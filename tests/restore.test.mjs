@@ -201,6 +201,23 @@ test("HTTP restore keeps revision conflict protection across deleted entries and
     await request("/changes", { changes: edits(2) });
     await request("/changes", { changes: edits(3, true) });
     const before = (await request("/data")).json;
+    const auditBeforeInvalid = (await request("/audit")).json.total;
+    const invalid = structuredClone(backup.data);
+    invalid.projects = [
+      fixture().projects[0],
+      { ...fixture().projects[0], id: "q" },
+    ];
+    invalid.actualAllocations = { "r|p|2026-01": 0.6, "r|q|2026-01": 0.6 };
+    invalid.actualPercentEntries = { "r|p|2026-01": 60, "r|q|2026-01": 60 };
+    invalid.actualWorkedHours = { [hoursKey]: 180 };
+    const rejected = await request(
+      "/restore",
+      { data: invalid, generation: before.generation },
+      400,
+    );
+    assert.match(rejected.json.error, /%100/);
+    assert.deepEqual((await request("/data")).json, before);
+    assert.equal((await request("/audit")).json.total, auditBeforeInvalid);
     await request(
       "/restore",
       { data: backup.data, generation: before.generation - 1 },

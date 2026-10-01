@@ -206,3 +206,16 @@ Referans: 30 Eylül 2026 tarihli mimari ve güvenlik incelemesi; başlangıç Gi
 - Yerel backend/test kaynakları aktarıldı; önceki kaynaklar, rapor ve veritabanı yedeklendi. Veritabanı şeması değişmedi. Tarayıcı erişimi ve gerçek MSSQL test ortamı sınırlamaları devam ediyor; global kilit/tam veri okuma ve audit saklama politikası açık.
 
 - Güncelleme sonrası sunulan HTML/JS/CSS dosyaları doğrulandı. Yerel veritabanının tüm kp_ tablolarının satır içerikleri yedekle karşılaştırıldı; uygulama verileri değişmedi.
+
+
+## On birinci adım — ortak aylık sınır doğrulaması
+
+- Başlangıçta yerel `main` ve `origin/main`, `09abd6d` commit’inde aynı ve temizdi; önceki değişiklikler zaten gönderilmişti.
+- Normal gerçekleşen dağılım girişinde uygulanan aylık %100 sınırının yedek geri yüklemede atlanabildiği gerçek HTTP/sql.js testiyle doğrulandı. Aynı çalışana iki projede %60 + %60 dağılım içeren yedek düzeltme öncesinde 200 ile kabul ediliyordu; artık 400 ve açıklayıcı hata ile reddediliyor. Başarısız işlemde veri, generation, revision ve audit değişmiyor.
+- Ortak `shared/actual-limits.ts` kuralı hem normal kayıt hem restore tarafından kullanılıyor. Dağılımlar tek geçişte çalışan/ay bazında toplanıyor; eğitim, hafta sonu, tam/yarım tatil, izin ve manuel çalışma saatleri mevcut ortak takvim hesapları üzerinden değerlendirilerek kopya kontrol kaldırıldı. Eğitim kaydı olup proje dağılımı olmayan aylar da restore kontrolüne dahil.
+- Normal kayıt yalnızca işlemden etkilenen ayları, restore gelen yedeğin tüm ilgili aylarını kontrol ediyor. Tarihsel veriler okunurken veya ilgisiz kayıtlar değiştirilirken yeni bir toplu engel uygulanmıyor. Veritabanı şeması değişmedi; mevcut veriler otomatik düzeltilmedi/silinmedi. Yerel veriler salt okunur olarak tarandı; kontrol edilen iki çalışan/ayda sınır aşımı bulunmadı.
+- Beş yeni regresyon testi; toplam sınırını, yalnız eğitim bulunan ayı, manuel fazla mesai/yarım tatil/izin birleşimini, hafta sonu/tatil eğitim hesabını ve seçili ay kapsamını doğruluyor. Mevcut HTTP restore testi geçersiz yedeğin tüm verileri ve audit toplamını korumasını ayrıca kontrol ediyor. TypeScript kontrol kapsamına tüm ortak `.ts` dosyaları eklendi.
+- `npm run verify`: **160/160 test başarılı**; biçim, TypeScript ve üretim derlemesi başarılı. Test verileri geçici veritabanlarında üretildi; gerçek kullanıcı kayıtlarına test verisi yazılmadı.
+- Kaynaklar, rapor ve yerel veritabanı yedeklendi; ilgili dosyalar çalışan kopyaya aktarıldı. Yerel `node_modules/@types` altında macOS kopyalarından kalan `node 2`, `react 2` vb. klasörlerin otomatik tip keşfini bozduğu görüldü. Git deposundaki açık `node`, `react`, `react-dom` tip listesi yerel yapılandırmaya da aktarıldı; bağımlılık klasörleri silinmedi. Ortak dosya kapsamı eklendi. Tarayıcı etkileşim testleri bilgisayar kullanım iznini, gerçek MSSQL testleri ayrı test ortamını bekliyor. Global kilit/tam veri okuma optimizasyonu ve audit saklama/arşivleme politikası açık.
+
+- Sunucu yeni backend ile yeniden başlatıldı; ana sayfa ve iki JS/CSS varlığı HTTP üzerinden doğrulandı. Veritabanındaki 20 `kp_` tablosunun tüm satır içerikleri yedekle aynı; gerçek kullanıcı verileri değişmedi.

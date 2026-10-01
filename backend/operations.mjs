@@ -1,3 +1,4 @@
+import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
 import { z } from "zod";
 import { fail, admin, publicUser } from "./auth.mjs";
 import {
@@ -9,8 +10,6 @@ import {
   actualVersionAt,
   currentPlanningMonth,
   actualInputToFte,
-  personHoursInMonth,
-  trainingHoursInMonth,
   effectivePersonHoursInMonth,
   DEFAULT_MONTHLY_HOURS,
   personDaySchema,
@@ -63,9 +62,6 @@ const effectiveHours = (d, resourceId, month) =>
     d.workCalendar,
     d.personCalendar,
   );
-const trainingFte = (d, resourceId, month) =>
-  trainingHoursInMonth(month, resourceId, d.workCalendar, d.personCalendar) /
-  DEFAULT_MONTHLY_HOURS;
 function recalculateActualPercentages(d, resourceId, month) {
   const hours = effectiveHours(d, resourceId, month);
   for (const [actualKey, percent] of Object.entries(
@@ -83,28 +79,6 @@ function recalculateActualPercentages(d, resourceId, month) {
       d.revisions["actual:" + actualKey] =
         (d.revisions["actual:" + actualKey] || 0) + 1;
     }
-  }
-}
-function assertActualMonthlyLimit(d, resourceId, month) {
-  const limit = actualInputToFte(
-    100,
-    "percent",
-    month,
-    effectiveHours(d, resourceId, month),
-  );
-  let total = trainingFte(d, resourceId, month);
-  for (const [key, amount] of Object.entries(d.actualAllocations || {})) {
-    const [person, , entryMonth] = key.split("|");
-    if (person === resourceId && entryMonth === month) total += amount;
-  }
-  if (total > limit + 1e-9) {
-    const name =
-      d.resources.find((resource) => resource.id === resourceId)?.name ||
-      resourceId;
-    fail(
-      400,
-      `${name} · ${month}: Proje dağılımı ve eğitim toplamı kişinin çalışma süresinin %100'ünü aşıyor. Lütfen dağılımı veya çalışma saatini kontrol edin.`,
-    );
   }
 }
 export function applyChanges(d, u, input) {
@@ -366,10 +340,10 @@ export function applyChanges(d, u, input) {
   // Validate the final batch: moving allocations between projects or adjusting
   // a calendar together with allocations must not fail on an intermediate total.
   // Recalculate only after explicit revisions have been checked for every change.
+  assertActualMonthlyLimits(d, affectedActualMonths);
   for (const key of affectedActualMonths) {
     const [resourceId, month] = key.split("|");
     if (!d.resources.some((resource) => resource.id === resourceId)) continue;
-    assertActualMonthlyLimit(d, resourceId, month);
     recalculateActualPercentages(d, resourceId, month);
   }
   Object.assign(d, validate(d));
@@ -548,6 +522,7 @@ export function restore(d, u, backup) {
     backup = { ...backup, allocations: totals };
   }
   const next = validate(migrate(backup));
+  assertActualMonthlyLimits(next);
   // Backup counters belong to another point in time. Rebuild from current
   // revisions, including deleted records, so no stale client becomes current.
   next.revisions = {};
