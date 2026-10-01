@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { tables, table, ident, validateRows } from "../tables.mjs";
+import { tableSpec, table, ident, validateRows } from "../tables.mjs";
 export function sqlConfig(env = process.env) {
   const bool = (k, fallback) =>
     env[k] === undefined ? fallback : env[k] === "true";
@@ -116,7 +116,7 @@ export class MssqlAdapter {
   async upsert(tx, name, rows) {
     if (!rows.length) return;
     validateRows(name, rows);
-    const spec = tables[name],
+    const spec = tableSpec(name),
       cols = Object.keys(spec.columns),
       others = cols.filter((c) => !spec.key.includes(c));
     const src = `OPENJSON(@p0) WITH (${cols.map((c) => `${ident(c)} ${spec.columns[c]} '$.${c}'`).join(",")})`;
@@ -138,7 +138,7 @@ export class MssqlAdapter {
   }
   async remove(tx, name, keys) {
     if (!keys.length) return;
-    const spec = tables[name];
+    const spec = tableSpec(name);
     await this.request(
       tx,
       `DELETE t FROM ${table(name)} t JOIN OPENJSON(@p0) WITH (${spec.key.map((c) => `${ident(c)} ${spec.columns[c]} '$.${c}'`).join(",")}) s ON ${spec.key.map((c) => `t.${ident(c)}=s.${ident(c)}${spec.columns[c].includes("char") ? " COLLATE Latin1_General_100_BIN2" : ""}`).join(" AND ")}`,

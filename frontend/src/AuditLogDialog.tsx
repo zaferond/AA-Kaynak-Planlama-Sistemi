@@ -1,3 +1,4 @@
+import { ownValue } from "../../shared/records";
 import { useEffect, useState } from "react";
 import { History, ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -110,13 +111,13 @@ const display = (value: AuditValue) =>
     ? "—"
     : typeof value === "number"
       ? value.toLocaleString("tr-TR")
-      : values[String(value)] || String(value);
+      : ownValue(values, String(value)) || String(value);
 const label = (path: string[]) =>
   path.length
     ? path
         .map(
           (part) =>
-            fields[part] ||
+            ownValue(fields, part) ||
             (/^\d+$/.test(part) ? String(Number(part) + 1) : part),
         )
         .join(" › ")
@@ -193,7 +194,8 @@ export default function AuditLogDialog({
                           : "Düzenlendi"}
                     </span>
                     <strong>
-                      {kinds[entry.kind] || entry.kind} · {entry.record_name}
+                      {ownValue(kinds, entry.kind) || entry.kind} ·{" "}
+                      {entry.record_name}
                     </strong>
                   </div>
                   <time>

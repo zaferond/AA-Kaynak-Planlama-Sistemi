@@ -1,3 +1,4 @@
+import { ownValue } from "../../shared/records";
 import WorkspaceHeader, { FullPlanHeader } from "./features/WorkspaceHeader";
 import WorkspaceNavigation from "./features/WorkspaceNavigation";
 import WorkspaceFilters from "./features/WorkspaceFilters";
@@ -946,7 +947,7 @@ export default function Portal() {
         name: group.name,
         manager: teamReport
           ? teams.find((t) => t.id === group.ids[0])?.managerName || "—"
-          : data.leaderManagers?.[group.leader || ""] || "—",
+          : ownValue(data.leaderManagers, group.leader || "") || "—",
         personnel: personCount(group.ids),
         months: months.map((month) => {
           const value = metric(group.ids, month);

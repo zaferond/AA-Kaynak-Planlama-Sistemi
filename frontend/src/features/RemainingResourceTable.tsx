@@ -1,3 +1,4 @@
+import { ownValue } from "../../../shared/records";
 import {
   TimelineMonthHead,
   TimelineYearRow,
@@ -99,7 +100,7 @@ export default function RemainingResourceTable({
                 <TableCell>
                   {teamReport
                     ? teams.find((t) => t.id === g.ids[0])?.managerName || "—"
-                    : data?.leaderManagers?.[g.leader || ""] || "—"}
+                    : ownValue(data?.leaderManagers, g.leader || "") || "—"}
                 </TableCell>
                 <TableCell>
                   <span className="report-unit-title">
@@ -107,7 +108,7 @@ export default function RemainingResourceTable({
                     {memberBadge(
                       g.name,
                       g.ids
-                        .flatMap((id) => currentTeamMembers[id] || [])
+                        .flatMap((id) => ownValue(currentTeamMembers, id) || [])
                         .sort((a, b) => a.localeCompare(b, "tr")),
                     )}
                   </span>

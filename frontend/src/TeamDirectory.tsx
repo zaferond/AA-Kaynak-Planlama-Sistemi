@@ -1,3 +1,4 @@
+import { ownValue } from "../../shared/records";
 import React, { useState } from "react";
 import type { Data, Team } from "./model";
 import { fold } from "./model";
@@ -43,7 +44,7 @@ export default function TeamDirectory({
     fold(
       lead +
         " " +
-        (data.leaderManagers?.[lead] || "") +
+        (ownValue(data.leaderManagers, lead) || "") +
         " " +
         t.name +
         " " +
@@ -58,9 +59,9 @@ export default function TeamDirectory({
       (g) =>
         !query ||
         g.teams.length ||
-        fold(g.lead + " " + (data.leaderManagers?.[g.lead] || "")).includes(
-          fold(query),
-        ),
+        fold(
+          g.lead + " " + (ownValue(data.leaderManagers, g.lead) || ""),
+        ).includes(fold(query)),
     );
   const done = (next: Data, message: string) => {
     setTeamDraft(null);
@@ -236,7 +237,7 @@ export default function TeamDirectory({
                       placeholder="Liderlik yöneticisi adı"
                     />
                   ) : (
-                    data.leaderManagers?.[lead] || "—"
+                    ownValue(data.leaderManagers, lead) || "—"
                   )}
                 </TableCell>
                 {canEdit && (
@@ -251,7 +252,7 @@ export default function TeamDirectory({
                               !leaderDraft.newName.trim() ||
                               (leaderDraft.newName.trim() === lead &&
                                 leaderDraft.managerName.trim() ===
-                                  (data.leaderManagers?.[lead] || ""))
+                                  (ownValue(data.leaderManagers, lead) || ""))
                             }
                             onClick={() => void saveLeader()}
                           >
@@ -275,7 +276,8 @@ export default function TeamDirectory({
                               setLeaderDraft({
                                 name: lead,
                                 newName: lead,
-                                managerName: data.leaderManagers?.[lead] || "",
+                                managerName:
+                                  ownValue(data.leaderManagers, lead) || "",
                               });
                               setError("");
                             }}

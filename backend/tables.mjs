@@ -1,3 +1,5 @@
+import { ownValue } from "../shared/records.ts";
+
 // Fixed identifiers only. Never accept table/column names from an API request.
 export const tables = {
   audit_events: {
@@ -192,15 +194,18 @@ export const tables = {
   },
 };
 export const ident = (s) => "[" + s + "]";
+export function tableSpec(name) {
+  const spec = ownValue(tables, name);
+  if (!spec) throw Error("Unknown table");
+  return spec;
+}
 export function table(name) {
-  if (!tables[name] && name !== "schema_migrations")
-    throw Error("Unknown table");
+  if (name !== "schema_migrations") tableSpec(name);
   return "[kp_" + name + "]";
 }
 // Validate before OPENJSON casts, which could otherwise truncate long string inputs.
 export function validateRows(name, rows) {
-  const spec = tables[name];
-  if (!spec) throw Error("Unknown table");
+  const spec = tableSpec(name);
   for (const row of rows)
     for (const [column, type] of Object.entries(spec.columns)) {
       const v = row[column];

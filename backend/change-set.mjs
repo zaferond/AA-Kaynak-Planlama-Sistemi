@@ -1,9 +1,8 @@
+import { ownValue } from "../shared/records.ts";
 import { entityCollections } from "../shared/entity-kinds.ts";
 
 const indexed = (items = []) =>
   Object.fromEntries(items.map((item) => [item.id, item]));
-const ownValue = (object, key) =>
-  Object.hasOwn(object, key) ? object[key] : undefined;
 
 export function recordChanges(before = {}, after = {}) {
   const changed = [];

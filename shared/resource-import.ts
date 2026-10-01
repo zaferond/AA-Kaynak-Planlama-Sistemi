@@ -1,3 +1,4 @@
+import { ownValue } from "./records.ts";
 import { validPlanningMonth, validPlanningDate } from "./planning-dates.ts";
 import { fold, statuses, isWorkingStatus } from "./model.ts";
 import {
@@ -65,7 +66,7 @@ export function sourceRows(rows: ExcelRow[], date1904 = false): ImportRow[] {
     const key = norm(c.value);
     const f =
       importColumns.find(([, label]) => norm(label) === key)?.[0] ||
-      aliases[key];
+      ownValue(aliases, key);
     if (f) {
       if (cols.has(f)) throw Error("Tekrarlanan sütun: " + c.value);
       cols.set(f, i);

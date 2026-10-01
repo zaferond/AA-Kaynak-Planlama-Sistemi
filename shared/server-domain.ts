@@ -100,7 +100,7 @@ const proj = z.object({
   end: mo,
   phases: z.record(z.string().max(3000)),
   phaseColors: z
-    .record(z.enum(phasePalette.map((x) => x.id) as [string, ...string[]]))
+    .record(mo, z.enum(phasePalette.map((x) => x.id) as [string, ...string[]]))
     .optional(),
   milestones: z.array(milestone).max(100).optional(),
 });
@@ -146,6 +146,21 @@ const accountSchema = z.object({
   active: z.boolean(),
   credential: credentialSchema.optional(),
 });
+// Validate entries before rebuilding the dictionary. z.record intentionally
+// drops __proto__, which is also a permitted leadership name in existing data.
+const leaderManagersSchema = z
+  .custom<Record<string, unknown>>(
+    (value) =>
+      value !== null &&
+      typeof value === "object" &&
+      (Object.getPrototypeOf(value) === Object.prototype ||
+        Object.getPrototypeOf(value) === null),
+    "Geçersiz liderlik yöneticisi kaydı.",
+  )
+  .transform((value) => Object.entries(value))
+  .pipe(z.array(z.tuple([z.string(), z.string().trim().max(200)])))
+  .transform((entries) => Object.fromEntries(entries));
+
 const schema = z.object({
   teams: z
     .array(
@@ -180,7 +195,7 @@ const schema = z.object({
   personCalendar: z.record(personDaySchema).default({}),
   revisions: z.record(z.number().int().min(0)),
   leaders: z.array(z.string()).optional(),
-  leaderManagers: z.record(z.string().trim().max(200)).default({}),
+  leaderManagers: leaderManagersSchema.default({}),
   catalogVersion: z.number().optional(),
   users: z.array(accountSchema).optional(),
   legacyArchive: z

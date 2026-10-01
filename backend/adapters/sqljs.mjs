@@ -1,7 +1,7 @@
 import initSqlJs from "sql.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { tables, table, ident, validateRows } from "../tables.mjs";
+import { tableSpec, table, ident, validateRows } from "../tables.mjs";
 export class SqlJsAdapter {
   constructor(file) {
     this.file = path.resolve(file);
@@ -148,7 +148,7 @@ export class SqlJsAdapter {
   async upsert(name, rows) {
     if (!rows.length) return;
     validateRows(name, rows);
-    const spec = tables[name],
+    const spec = tableSpec(name),
       cols = Object.keys(spec.columns),
       others = cols.filter((c) => !spec.key.includes(c));
     const q = `INSERT INTO ${table(name)} (${cols.map(ident)}) VALUES (${cols.map((_, i) => "@p" + i)}) ON CONFLICT (${spec.key.map(ident)}) ${others.length ? "DO UPDATE SET " + others.map((c) => `${ident(c)}=excluded.${ident(c)}`).join(",") : "DO NOTHING"}`;
@@ -159,7 +159,7 @@ export class SqlJsAdapter {
       );
   }
   async remove(name, keys) {
-    const spec = tables[name];
+    const spec = tableSpec(name);
     for (const row of keys)
       this.raw(
         `DELETE FROM ${table(name)} WHERE ${spec.key.map((c, i) => ident(c) + "=@p" + i).join(" AND ")}`,

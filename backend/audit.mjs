@@ -1,3 +1,4 @@
+import { ownValue } from "../shared/records.ts";
 import { randomUUID } from "node:crypto";
 import { entityCollections } from "../shared/entity-kinds.ts";
 import { publicUser } from "./auth.mjs";
@@ -16,7 +17,7 @@ function fields(before, after, path = [], out = []) {
       ...Object.keys(object(before) ? before : {}),
       ...Object.keys(object(after) ? after : {}),
     ])) {
-      fields(before?.[key], after?.[key], [...path, key], out);
+      fields(ownValue(before, key), ownValue(after, key), [...path, key], out);
     }
   } else out.push({ path, before: before ?? null, after: after ?? null });
   return out;
@@ -60,12 +61,12 @@ export function auditEntries(
     const [owner, projectOrDate, month] = id.split("|");
     if (kind === "allocation" || kind === "actual")
       return [
-        (kind === "actual" ? resources : teams)[owner] || owner,
-        projects[projectOrDate] || projectOrDate,
+        ownValue(kind === "actual" ? resources : teams, owner) || owner,
+        ownValue(projects, projectOrDate) || projectOrDate,
         month,
       ].join(" · ");
     if (kind === "workedHours" || kind === "personDay")
-      return [resources[owner] || owner, projectOrDate].join(" · ");
+      return [ownValue(resources, owner) || owner, projectOrDate].join(" · ");
     return fallback;
   };
   const collect = (kind, records) => {

@@ -1,3 +1,4 @@
+import { ownValue } from "../../../shared/records";
 import {
   Fragment,
   useMemo,
@@ -269,7 +270,7 @@ export default function PlannedAllocationPanel({
     );
   }
   function teamMemberBadge(t: Team) {
-    return memberBadge(t.name, currentTeamMembers[t.id] || []);
+    return memberBadge(t.name, ownValue(currentTeamMembers, t.id) || []);
   }
   function allocationRow(t: Team, p: Project) {
     return (

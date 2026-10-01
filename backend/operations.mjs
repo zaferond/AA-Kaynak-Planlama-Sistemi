@@ -1,3 +1,4 @@
+import { ownValue } from "../shared/records.ts";
 import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
 import { MAX_RECORDED_MONTHLY_HOURS } from "../shared/actual-units.ts";
 import { z } from "zod";
@@ -286,6 +287,10 @@ export function stageChanges(d, u, input) {
         )
           fail(409, "Kullanılan takım silinemez.");
         if (kind === "project") {
+          for (const risk of d.risks || [])
+            if (risk.projectId === id)
+              d.revisions["risk:" + risk.id] =
+                (d.revisions["risk:" + risk.id] || 0) + 1;
           d.risks = (d.risks || []).filter((risk) => risk.projectId !== id);
           for (const key of Object.keys(d.allocations))
             if (key.split("|")[1] === id) {
@@ -381,7 +386,7 @@ export async function applyLeaderChange(d, u, input, c, generation) {
   ).rows;
   if (change.action === "rename" || change.action === "update") {
     const newName = change.newName || change.name;
-    const oldManager = d.leaderManagers?.[change.name] || "";
+    const oldManager = ownValue(d.leaderManagers, change.name) || "";
     const managerName = change.managerName ?? oldManager;
     const renamed = newName !== change.name;
     if (change.action === "rename" && !renamed)
@@ -392,7 +397,8 @@ export async function applyLeaderChange(d, u, input, c, generation) {
       fail(400, "Değiştirilecek liderlik bilgisi yok.");
     d.leaderManagers ??= {};
     delete d.leaderManagers[change.name];
-    if (managerName) d.leaderManagers[newName] = managerName;
+    if (managerName)
+      d.leaderManagers = { ...d.leaderManagers, [newName]: managerName };
     if (renamed) {
       await c.upsert("leaders", [{ name: newName, manager_name: managerName }]);
       d.leaders = d.leaders.map((name) =>

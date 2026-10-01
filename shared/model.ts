@@ -359,7 +359,7 @@ export function capacity(
   return { current };
 }
 export function activeTeamMembers(data: Data, month: string) {
-  const byTeam: Record<string, string[]> = {};
+  const byTeam = new Map<string, string[]>();
   for (const resource of data.resources) {
     const version = versionAt(resource, month);
     if (
@@ -369,11 +369,13 @@ export function activeTeamMembers(data: Data, month: string) {
       !resource.name
     )
       continue;
-    (byTeam[version.team] ??= []).push(resource.name);
+    const members = byTeam.get(version.team);
+    if (members) members.push(resource.name);
+    else byTeam.set(version.team, [resource.name]);
   }
-  for (const names of Object.values(byTeam))
+  for (const names of byTeam.values())
     names.sort((a, b) => a.localeCompare(b, "tr"));
-  return byTeam;
+  return Object.fromEntries(byTeam);
 }
 export function allocated(
   data: Data,
