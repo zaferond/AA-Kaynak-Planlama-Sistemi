@@ -3,6 +3,11 @@ import http from "node:http";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 import { effectivePersonHoursInMonth } from "../shared/actual-units.ts";
+import {
+  startCalendarDraft,
+  addCalendarDates,
+  prepareCalendarChange,
+} from "../frontend/src/features/calendar-commands.ts";
 
 // Both adapters run this suite against a disposable, explicitly selected test DB.
 export async function concurrencySuite(store, t) {
@@ -305,6 +310,53 @@ export async function concurrencySuite(store, t) {
         );
         const delta = (await history()).total - audit.total;
         assert.equal(delta, results[1].status === 200 ? 2 : 1);
+      },
+    );
+    await t.test(
+      "an open calendar draft cannot overwrite a newer calendar after background refresh",
+      async () => {
+        const before = await state();
+        const input = (date) => ({
+          from: date,
+          to: "",
+          type: "official",
+          label: "Test",
+          fraction: 1,
+        });
+        const pendingDraft = addCalendarDates(
+          startCalendarDraft(before.data),
+          input("2026-12-01"),
+        );
+        const otherDraft = addCalendarDates(
+          startCalendarDraft(before.data),
+          input("2026-12-02"),
+        );
+        const saved = await write([prepareCalendarChange(otherDraft)], 1);
+        assert.equal(saved.status, 200, JSON.stringify(saved.json));
+        const refreshed = await state(),
+          audit = await history();
+        assert.equal(
+          refreshed.data.revisions["calendar:shared"],
+          pendingDraft.revision + 1,
+        );
+        const result = await write([prepareCalendarChange(pendingDraft)]);
+        assert.equal(result.status, 409, JSON.stringify(result.json));
+        assert.deepEqual(await state(), refreshed);
+        assert.equal((await history()).total, audit.total);
+        assert.equal(refreshed.data.workCalendar["2026-12-01"], undefined);
+        assert.equal(refreshed.data.workCalendar["2026-12-02"].label, "Test");
+        // Reopening takes the current snapshot; both administrators' dates can then be retained.
+        const reopened = addCalendarDates(
+          startCalendarDraft(refreshed.data),
+          input("2026-12-01"),
+        );
+        const retry = await write([prepareCalendarChange(reopened)]);
+        assert.equal(retry.status, 200, JSON.stringify(retry.json));
+        const after = await state();
+        assert.equal(after.data.workCalendar["2026-12-01"].label, "Test");
+        assert.equal(after.data.workCalendar["2026-12-02"].label, "Test");
+        assert.equal(after.generation, refreshed.generation + 1);
+        assert.equal((await history()).total, audit.total + 1);
       },
     );
     await t.test(

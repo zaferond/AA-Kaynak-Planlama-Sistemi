@@ -3,9 +3,17 @@ import {
   MAX_PLANNING_YEAR,
   MIN_PLANNING_DATE,
   MAX_PLANNING_DATE,
-  validPlanningDate as validDate,
 } from "../../shared/planning-dates";
-import { personDaySchema, PERSONAL_HOURS_STEP } from "./calendar-rules";
+import { PERSONAL_HOURS_STEP } from "./calendar-rules";
+import {
+  CALENDAR_DAY_TYPES as types,
+  addCalendarDates,
+  prepareCalendarChange,
+  preparePersonalDayChange,
+  preparePersonalDayRemoval,
+  startCalendarDraft,
+  type CalendarDraft,
+} from "./features/calendar-commands";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Plus, Trash2 } from "lucide-react";
 import {
@@ -20,11 +28,10 @@ import type { CalendarDay, WorkCalendar } from "./actual-units";
 import {
   calendarHoursInMonth,
   personCalendarHoursInMonth,
-  personDayKey,
   HOURS_PER_WORKDAY,
   workdaysInMonth,
 } from "./actual-units";
-import { writeLocal, writeBatch } from "./storage";
+import { writeBatch } from "./storage";
 
 const monthFormat = new Intl.DateTimeFormat("tr-TR", { month: "long" });
 const dateFormat = new Intl.DateTimeFormat("tr-TR", {
@@ -32,11 +39,7 @@ const dateFormat = new Intl.DateTimeFormat("tr-TR", {
   month: "long",
   year: "numeric",
 });
-const types: { id: CalendarDay["type"]; label: string }[] = [
-  { id: "official", label: "Resmî Tatil" },
-  { id: "religious", label: "Bayram Tatili" },
-  { id: "company", label: "Otokar Çalışma Dışı" },
-];
+const emptyCalendar: WorkCalendar = {};
 
 export default function WorkCalendarDialog({
   open,
@@ -60,7 +63,13 @@ export default function WorkCalendarDialog({
   initialYear: number;
 }) {
   const [year, setYear] = useState(initialYear);
-  const [draft, setDraft] = useState<WorkCalendar>({});
+  const [calendarDraft, setCalendarDraft] = useState<CalendarDraft | null>(
+    null,
+  );
+  const draft =
+    mode === "personal"
+      ? data.workCalendar || emptyCalendar
+      : calendarDraft?.calendar || emptyCalendar;
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [type, setType] = useState<CalendarDay["type"]>("official");
@@ -75,9 +84,10 @@ export default function WorkCalendarDialog({
   );
   const [personalHours, setPersonalHours] = useState(String(HOURS_PER_WORKDAY));
   const [personalLabel, setPersonalLabel] = useState("");
+  // Capture an opening snapshot; background refreshes must not replace an unsaved shared draft.
   useEffect(() => {
     if (open) {
-      setDraft(structuredClone(data.workCalendar || {}));
+      setCalendarDraft(startCalendarDraft(data));
       setYear(initialYear);
       setDirty(false);
       setError("");
@@ -118,51 +128,26 @@ export default function WorkCalendarDialog({
   );
   function addDates() {
     setError("");
-    if (!validDate(from) || !validDate(to || from)) {
-      setError("Geçerli başlangıç ve bitiş tarihleri seçin.");
-      return;
+    if (!calendarDraft || !canEdit || busy) return;
+    try {
+      setCalendarDraft(
+        addCalendarDates(calendarDraft, { from, to, type, label, fraction }),
+      );
+      setDirty(true);
+      setYear(Number(from.slice(0, 4)));
+      setLabel("");
+      setFrom("");
+      setTo("");
+    } catch (cause) {
+      setError((cause as Error).message);
     }
-    const end = to || from;
-    if (end < from) {
-      setError("Bitiş tarihi başlangıçtan önce olamaz.");
-      return;
-    }
-    const first = new Date(from + "T12:00:00Z"),
-      last = new Date(end + "T12:00:00Z");
-    const count = Math.round((last.getTime() - first.getTime()) / 86400000) + 1;
-    if (count > 62) {
-      setError("Bir seferde en fazla 62 günlük aralık ekleyebilirsiniz.");
-      return;
-    }
-    const name = label.trim() || types.find((item) => item.id === type)!.label;
-    if (name.length > 100) {
-      setError("Açıklama en fazla 100 karakter olabilir.");
-      return;
-    }
-    const next = { ...draft };
-    for (let index = 0; index < count; index++) {
-      const date = new Date(first);
-      date.setUTCDate(date.getUTCDate() + index);
-      next[date.toISOString().slice(0, 10)] = { type, label: name, fraction };
-    }
-    setDraft(next);
-    setDirty(true);
-    setYear(Number(from.slice(0, 4)));
-    setLabel("");
-    setFrom("");
-    setTo("");
   }
   async function save() {
-    if (!canEdit || busy || !dirty) return;
+    if (!canEdit || busy || !dirty || !calendarDraft) return;
     setBusy(true);
     setError("");
     try {
-      const next = await writeLocal(
-        "calendar",
-        "shared",
-        draft,
-        data.revisions["calendar:shared"] || 0,
-      );
+      const next = await writeBatch([prepareCalendarChange(calendarDraft)]);
       onSaved(next);
       onOpenChange(false);
     } catch (cause) {
@@ -173,37 +158,17 @@ export default function WorkCalendarDialog({
   }
   async function savePersonal() {
     if (!resource || !canEditPersonal || busy) return;
-    if (!validDate(personalDate)) {
-      setError("İzin veya eğitim için geçerli tarih seçin.");
-      return;
-    }
-    const hours = Number(personalHours.replace(",", "."));
-    const entry = personDaySchema.safeParse({
-      type: personalType,
-      hours,
-      label: personalLabel.trim(),
-    });
-    if (!entry.success) {
-      setError(
-        `Saat ${PERSONAL_HOURS_STEP.toLocaleString("tr-TR")} ile ${HOURS_PER_WORKDAY} arasında, yarım saatlik adımlarla; açıklama en fazla 100 karakter girilmelidir.`,
-      );
-      return;
-    }
-    const id = personDayKey(
-      resource.id,
-      personalDate,
-      personalType,
-      data.personCalendar,
-    );
     setBusy(true);
     setError("");
     try {
-      const next = await writeLocal(
-        "personDay",
-        id,
-        entry.data,
-        data.revisions["personDay:" + id] || 0,
-      );
+      const next = await writeBatch([
+        preparePersonalDayChange(data, resource.id, {
+          date: personalDate,
+          type: personalType,
+          hours: personalHours,
+          label: personalLabel,
+        }),
+      ]);
       onSaved(next);
       setYear(Number(personalDate.slice(0, 4)));
       setPersonalDate("");
@@ -215,18 +180,12 @@ export default function WorkCalendarDialog({
     }
   }
   async function removePersonal(id: string) {
-    if (!canEditPersonal || busy) return;
+    if (!resource || !canEditPersonal || busy) return;
     setBusy(true);
     setError("");
     try {
       const next = await writeBatch([
-        {
-          kind: "personDay",
-          id,
-          value: null,
-          revision: data.revisions["personDay:" + id] || 0,
-          operation: "delete",
-        },
+        preparePersonalDayRemoval(data, resource.id, id),
       ]);
       onSaved(next);
     } catch (cause) {
@@ -487,7 +446,10 @@ export default function WorkCalendarDialog({
                           onClick={() => {
                             const next = { ...draft };
                             delete next[date];
-                            setDraft(next);
+                            setCalendarDraft(
+                              (current) =>
+                                current && { ...current, calendar: next },
+                            );
                             setDirty(true);
                           }}
                         >
