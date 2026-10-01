@@ -1,0 +1,62 @@
+/* Show more project rows before the project timeline needs vertical scrolling. */
+@media (min-width: 1001px) {
+  .app.tab-projects
+    .panel
+    > [data-slot="table-container"]:has(> .projectmatrix) {
+    max-height: min(970px, calc(135dvh - 260px));
+  }
+}
+@media (min-width: 651px) and (max-width: 1000px) {
+  .app.tab-projects
+    .panel
+    > [data-slot="table-container"]:has(> .projectmatrix) {
+    max-height: calc(100dvh - 225px);
+  }
+}
+
+/* Keep both calendar header rows visible while scrolling project rows. */
+.app.tab-projects .projectmatrix thead {
+  position: static;
+}
+.app.tab-projects .projectmatrix .yearrow th {
+  position: sticky;
+  top: 0;
+  height: 24px;
+  z-index: 11;
+}
+.app.tab-projects .projectmatrix thead tr:not(.yearrow) > th {
+  position: sticky;
+  top: 24px;
+  z-index: 10;
+  background: #f2f6fb;
+  box-shadow: 0 2px 3px #1b3d5b1c;
+}
+.app.tab-projects .projectmatrix thead .yearrow th:first-child {
+  z-index: 13;
+}
+.app.tab-projects .projectmatrix thead tr:not(.yearrow) > th:first-child {
+  z-index: 12;
+}
+.app.tab-projects .projectmatrix .weekhead {
+  text-align: center;
+  padding: 3px 2px;
+}
+.app.tab-projects .projectmatrix .weekhead > span {
+  display: block;
+  writing-mode: horizontal-tb;
+  transform: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.app.tab-projects .projectmatrix .weekhead .week-number {
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+.app.tab-projects .projectmatrix .weekhead .week-range {
+  margin-top: 2px;
+  font-size: 9px;
+  font-weight: 550;
+  line-height: 1.2;
+}

@@ -1,0 +1,238 @@
+/* Current eligible headcount beside each planned team. */
+.app.tab-plan .allocation-grid .team-heading,
+.app.tab-plan .allocation-grid .team-row-title {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+.app.tab-plan .allocation-grid .team-heading strong,
+.app.tab-plan .allocation-grid .team-row-title > span:first-child {
+  min-width: 0;
+  flex: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app.tab-plan .allocation-grid .team-member-badge,
+.app.tab-plan .allocation-grid .team-group-label span.team-member-badge {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 23px;
+  height: 21px;
+  margin: 0;
+  padding: 0 5px;
+  border: 1px solid #a7cfbd;
+  border-radius: 5px;
+  background: #e2f2e8;
+  color: #23654b;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+  overflow: visible;
+}
+.app.tab-plan .allocation-grid .team-member-badge:focus-visible {
+  outline: 2px solid #2c8061;
+  outline-offset: 2px;
+}
+.app.tab-plan .allocation-grid .team-member-tooltip,
+.app.tab-plan .allocation-grid .team-group-label span.team-member-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: none;
+  width: max-content;
+  min-width: 180px;
+  max-width: min(280px, 80vw);
+  max-height: 230px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #bed3ca;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 8px 24px #183a2d30;
+  color: #264839;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: left;
+  overflow: auto;
+  cursor: default;
+}
+.app.tab-plan .allocation-grid .team-member-badge:hover .team-member-tooltip,
+.app.tab-plan .allocation-grid .team-member-badge:focus .team-member-tooltip,
+.app.tab-plan
+  .allocation-grid
+  .team-group-label
+  span.team-member-badge:hover
+  .team-member-tooltip,
+.app.tab-plan
+  .allocation-grid
+  .team-group-label
+  span.team-member-badge:focus
+  .team-member-tooltip {
+  display: block;
+}
+.app.tab-plan .allocation-grid .team-member-tooltip > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #1c5940;
+  font-size: 11px;
+}
+.app.tab-plan .allocation-grid .team-member-tooltip .team-member-names {
+  display: grid;
+  gap: 4px;
+}
+.app.tab-plan .allocation-grid .team-member-tooltip .team-member-names > span {
+  display: block;
+  margin: 0;
+  padding: 0;
+  color: #294737;
+  font-size: 11px;
+}
+.app.tab-plan .allocation-grid td.rowname:has(.team-member-badge:hover),
+.app.tab-plan .allocation-grid td.rowname:has(.team-member-badge:focus),
+.app.tab-plan .allocation-grid tr.group:has(.team-member-badge:hover) td,
+.app.tab-plan .allocation-grid tr.group:has(.team-member-badge:focus) td {
+  position: relative;
+  z-index: 9;
+}
+
+.app.tab-overview .remaining-report td:nth-child(2):has(.team-member-badge) {
+  overflow: visible;
+}
+.app.tab-overview .remaining-report .report-unit-title {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+}
+.app.tab-overview .remaining-report .report-unit-title > span:first-child {
+  min-width: 0;
+  flex: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app.tab-overview .remaining-report .team-member-badge {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: 23px;
+  height: 21px;
+  margin: 0;
+  padding: 0 5px;
+  border: 1px solid #a7cfbd;
+  border-radius: 5px;
+  background: #e2f2e8;
+  color: #23654b;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: help;
+}
+.app.tab-overview .remaining-report .team-member-badge:focus-visible {
+  outline: 2px solid #2c8061;
+  outline-offset: 2px;
+}
+.app.tab-overview .remaining-report .team-member-tooltip {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 30;
+  display: none;
+  width: max-content;
+  min-width: 180px;
+  max-width: min(280px, 80vw);
+  max-height: 230px;
+  padding: 10px 12px;
+  border: 1px solid #bed3ca;
+  border-radius: 7px;
+  background: #fff;
+  box-shadow: 0 8px 24px #183a2d30;
+  color: #264839;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  text-align: left;
+  overflow: auto;
+  cursor: default;
+}
+.app.tab-overview
+  .remaining-report
+  .team-member-badge:hover
+  .team-member-tooltip,
+.app.tab-overview
+  .remaining-report
+  .team-member-badge:focus
+  .team-member-tooltip {
+  display: block;
+}
+.app.tab-overview .remaining-report .team-member-tooltip > strong {
+  display: block;
+  margin-bottom: 6px;
+  color: #1c5940;
+  font-size: 11px;
+}
+.app.tab-overview .remaining-report .team-member-tooltip .team-member-names {
+  display: grid;
+  gap: 4px;
+}
+.app.tab-overview
+  .remaining-report
+  .team-member-tooltip
+  .team-member-names
+  > span {
+  display: block;
+  color: #294737;
+  font-size: 11px;
+}
+.app.tab-overview
+  .remaining-report
+  tbody
+  tr:has(.team-member-badge:hover)
+  > td:nth-child(2),
+.app.tab-overview
+  .remaining-report
+  tbody
+  tr:has(.team-member-badge:focus)
+  > td:nth-child(2) {
+  z-index: 9;
+}
+
+/* Manager is a quiet second line in the fixed team column. */
+.app.tab-plan .project-team-view .rowname {
+  vertical-align: middle;
+}
+.app.tab-plan .project-team-view .team-row-block {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  vertical-align: middle;
+  width: calc(100% - 27px);
+  min-width: 0;
+}
+.app.tab-plan .project-team-view .team-row-title {
+  width: 100%;
+}
+.app.tab-plan .project-team-view .team-manager {
+  display: block;
+  max-width: 100%;
+  color: #60788d;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

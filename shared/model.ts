@@ -168,10 +168,14 @@ export const phasePalette = [
   },
   { id: "gray", name: "Gri", bg: "#dfe5ea", ink: "#43596a", border: "#8c9fad" },
 ];
-export function phaseStyle(p: Project, m: string) {
-  const color =
+export function phaseColor(p: Project, m: string) {
+  return (
     phasePalette.find((c) => c.id === p.phaseColors?.[m]) ||
-    phasePalette[!p.phases[m]?.trim() || p.phases[m] === "ÇALIŞMA YOK" ? 5 : 0];
+    phasePalette[!p.phases[m]?.trim() || p.phases[m] === "ÇALIŞMA YOK" ? 5 : 0]
+  );
+}
+export function phaseStyle(p: Project, m: string) {
+  const color = phaseColor(p, m);
   return {
     background: color.bg,
     color: color.ink,

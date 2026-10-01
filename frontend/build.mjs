@@ -1,3 +1,4 @@
+import { readWorkspaceStyles } from "./styles.mjs";
 import { build } from "vite";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -49,11 +50,9 @@ const bundledCss = (await fs.readdir(path.join(root, ".compiled")))
   .filter((file) => file.endsWith(".css"))
   .sort();
 const css = [
-  ...(await Promise.all(
-    ["assets/base.css", "src/upgrade.css", "src/login.css"].map((file) =>
-      fs.readFile(path.join(root, file), "utf8"),
-    ),
-  )),
+  await fs.readFile(path.join(root, "assets/base.css"), "utf8"),
+  await readWorkspaceStyles(),
+  await fs.readFile(path.join(root, "src/login.css"), "utf8"),
   ...(await Promise.all(
     bundledCss.map((file) =>
       fs.readFile(path.join(root, ".compiled", file), "utf8"),

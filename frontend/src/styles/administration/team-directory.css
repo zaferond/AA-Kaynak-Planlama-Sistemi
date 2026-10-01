@@ -1,0 +1,79 @@
+.team-directory .panelhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.team-directory .panelhead input {
+  width: min(280px, 100%);
+  height: 32px;
+  padding: 5px 9px;
+  border: 1px solid #cbd9e8;
+  border-radius: 5px;
+  background: #fff;
+  font-size: 12px;
+}
+.team-directory td,
+.team-directory th {
+  padding: 8px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid #e5edf4;
+}
+.team-directory td:first-child {
+  color: #506a83;
+  width: 27%;
+}
+.team-directory td:nth-child(2) {
+  width: 32%;
+}
+.team-directory td:nth-child(3) {
+  width: 28%;
+}
+.team-directory td input,
+.team-directory td select {
+  width: 100%;
+  height: 31px;
+  padding: 5px 8px;
+  border: 1px solid #cbd9e8;
+  border-radius: 5px;
+  background: #fff;
+  color: #263d53;
+  font-size: 11px;
+}
+.team-directory td .button {
+  min-height: 29px;
+  padding: 4px 10px;
+  font-size: 11px;
+}
+.team-directory .directory-group td {
+  background: #eef3f8;
+  color: #24445e;
+  font-size: 12px;
+  border-top: 1px solid #d5e1eb;
+}
+.team-directory .directory-group td:first-child {
+  padding-left: 10px !important;
+}
+.team-directory .directory-group small {
+  display: inline-block;
+  margin-left: 10px;
+  color: #657d91;
+  font-size: 10px;
+  font-weight: 500;
+}
+.team-directory .directory-group td input {
+  max-width: 320px;
+}
+.team-directory .directory-team td:first-child {
+  padding-left: 22px !important;
+}
+.team-directory .directory-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+.team-directory th:last-child,
+.team-directory td:last-child {
+  min-width: 130px;
+}

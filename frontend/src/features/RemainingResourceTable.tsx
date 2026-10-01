@@ -1,4 +1,8 @@
 import {
+  TimelineMonthHead,
+  TimelineYearRow,
+} from "../components/TimelineHeaders";
+import {
   Table,
   TableBody,
   TableCell,
@@ -9,7 +13,7 @@ import {
 import type { RefObject } from "react";
 import { capacityStatus } from "../capacity-status";
 import MemberBadge from "../components/MemberBadge";
-import { fmt, monthLabel, shortDateFormat } from "../format";
+import { fmt, monthLabel } from "../format";
 import type { Metric } from "../metrics";
 import type { Data, Team } from "../model";
 export type ReportGroup = { name: string; ids: string[]; leader?: string };
@@ -42,37 +46,17 @@ export default function RemainingResourceTable({
   const memberBadge = (label: string, members: string[]) => (
     <MemberBadge label={label} members={members} currentMonth={currentMonth} />
   );
+  const years = [...new Set(months.map((month) => month.slice(0, 4)))];
   function reportYearRow() {
-    const years = [...new Set(months.map((m) => m.slice(0, 4)))];
     return (
-      <TableRow className="yearrow">
-        <TableHead colSpan={2}>Yıl</TableHead>
-        {years.map((year, index) => (
-          <TableHead
-            key={year}
-            colSpan={months.filter((m) => m.startsWith(year)).length}
-            className={"year-band-" + (index % 6)}
-          >
-            {year}
-          </TableHead>
-        ))}
-      </TableRow>
+      <TimelineYearRow
+        years={months.map((month) => month.slice(0, 4))}
+        labelColumns={2}
+      />
     );
   }
   function reportMonthHead(month: string) {
-    const years = [...new Set(months.map((m) => m.slice(0, 4)))];
-    return (
-      <TableHead
-        key={month}
-        data-month={month}
-        className={
-          "monthhead year-band-" + (years.indexOf(month.slice(0, 4)) % 6)
-        }
-        title={monthLabel(month)}
-      >
-        <span>{shortDateFormat.format(new Date(month + "-01T12:00:00"))}</span>
-      </TableHead>
-    );
+    return <TimelineMonthHead key={month} month={month} years={years} />;
   }
   function reportRows(
     groups: { name: string; ids: string[]; leader?: string }[],

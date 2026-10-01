@@ -2,8 +2,9 @@ import test from "node:test";
 import { Store } from "../backend/store.mjs";
 import { MssqlAdapter, sqlConfig } from "../backend/adapters/mssql.mjs";
 import { tables, table } from "../backend/tables.mjs";
+import { concurrencySuite } from "./concurrency-suite.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
-test("MSSQL: native driver, schema, CRUD, FK, concurrent updates and rollback", async () => {
+test("MSSQL: native driver, schema, CRUD, FK, concurrent updates and rollback", async (t) => {
   if (
     !process.env.TEST_DB_DATABASE ||
     !process.env.TEST_DB_DATABASE.endsWith("_test")
@@ -31,6 +32,7 @@ test("MSSQL: native driver, schema, CRUD, FK, concurrent updates and rollback", 
   const store = new Store({ env });
   try {
     await integrationSuite(store);
+    await concurrencySuite(store, t);
   } finally {
     try {
       if (store.db.pool.connected)
