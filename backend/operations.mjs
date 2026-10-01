@@ -548,6 +548,9 @@ export function restore(d, u, backup) {
     backup = { ...backup, allocations: totals };
   }
   const next = validate(migrate(backup));
+  // Backup counters belong to another point in time. Rebuild from current
+  // revisions, including deleted records, so no stale client becomes current.
+  next.revisions = {};
   for (const [kind, c] of Object.entries(kinds)) {
     const ids = new Set([
       ...Object.keys(d.revisions)
@@ -560,18 +563,21 @@ export function restore(d, u, backup) {
     for (const id of ids)
       next.revisions[kind + ":" + id] = (d.revisions[kind + ":" + id] || 0) + 1;
   }
-  for (const id of new Set([
-    ...Object.keys(d.actualWorkedHours || {}),
-    ...Object.keys(next.actualWorkedHours || {}),
-  ]))
-    next.revisions["workedHours:" + id] =
-      (d.revisions["workedHours:" + id] || 0) + 1;
+  for (const [kind, collection] of [
+    ["workedHours", "actualWorkedHours"],
+    ["personDay", "personCalendar"],
+  ]) {
+    const prefix = kind + ":";
+    const ids = new Set([
+      ...Object.keys(d.revisions)
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => key.slice(prefix.length)),
+      ...Object.keys(d[collection] || {}),
+      ...Object.keys(next[collection] || {}),
+    ]);
+    for (const id of ids)
+      next.revisions[prefix + id] = (d.revisions[prefix + id] || 0) + 1;
+  }
   next.revisions["calendar:shared"] = (d.revisions["calendar:shared"] || 0) + 1;
-  for (const id of new Set([
-    ...Object.keys(d.personCalendar || {}),
-    ...Object.keys(next.personCalendar || {}),
-  ]))
-    next.revisions["personDay:" + id] =
-      (d.revisions["personDay:" + id] || 0) + 1;
   Object.assign(d, next);
 }

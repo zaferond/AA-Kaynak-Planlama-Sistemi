@@ -192,3 +192,17 @@ Referans: 30 Eylül 2026 tarihli mimari ve güvenlik incelemesi; başlangıç Gi
 - Test kaynakları ve rapor yerel çalışma kopyasına aktarıldı; yedek alındı. Uygulama son doğrulanan derlemeyle çalışıyor. Gerçek kullanıcı verileri üzerinden test kaydı eklenmedi veya silinmedi.
 - Kalan kontroller: bilgisayar kullanım izniyle tarayıcı akışları, ayrı MSSQL ortamında aynı çakışma senaryoları ve daha büyük veri/yük ölçümleri. Audit saklama/arşivleme politikası ve çok sunuculu giriş sınırı mekanizması ayrıca açık.
 - Gönderilmiş son commit `241c66a`; devam paketleri yerelde, henüz commit/push edilmedi.
+
+
+## Onuncu adım — yedek geri yükleme ve hesap bağlantısı kontrolleri
+
+- Önceki iyileştirmeler `8223c2c` commit'i ile `origin/main` dalına push edildi; uzak dal aynı commit olarak doğrulandı.
+- Eski bir yedek, daha önce silinmiş çalışma saati veya kişisel takvim kayıtlarının revision değerini geriye düşürebiliyordu. Örneğin mevcut sürüm 4 iken yedek sürüm 2'yi geri getiriyordu; eski sekmedeki kayıt güncel kabul edilebilirdi. Hata hem domain hem gerçek HTTP/sql.js testinde yeniden üretildi.
+- Geri yüklemede sürümler artık yedekteki sayaçlardan alınmıyor; mevcut kayıtlardan ve silinmiş kayıtların sürüm geçmişinden yeniden hazırlanıyor. Desteklenen kayıt türleri mevcut sürüm + 1 ile ilerliyor; yedekteki kullanıcı/uydurma sürüm anahtarları taşınmıyor. Eski sekmeler restore sonrasında 409 ile yeniden yüklemeye yönlendiriliyor.
+- Yedekte kaldırılan liderlik mevcut kullanıcı yetkilerinde kullanılıyorsa, önceki genel FK hatası yerine 409 ve Yetki Kontrol Ekranı'nda düzeltilmesi gereken liderlik isimleri gösteriliyor. Kayıtlar, hesaplar, generation ve audit başarısız işlemde korunuyor. Liderlik silme/yeniden adlandırma akışları mevcut testlerle de doğrulandı.
+- Restore, yedekteki kullanıcı verilerinden rol/yetki/şifre değiştirmiyor. Normal kullanıcının restore yetkisi olmadığı, yedekten admin rolü verme denemesinin gerçek hesaba yansımadığı, kaldırılan çalışanın hesabında kaynak bağlantısının temizlendiği ve kişinin eski gerçekleşen verileri göremediği doğrulandı.
+- Beş yeni regresyon testi; silinmiş kayıt sürümleri, sahte sayaçlar, geçersiz yedek/normal kullanıcı, HTTP generation/revision çatışması, yeniden açılış ve hesap/liderlik bağlantısını kapsıyor. İlk sürümde üç revision testi başarısızdı; düzeltmeden sonra tamamı geçti. Açıklayıcı liderlik kontrolü de önce gerçek FK hatasıyla yeniden üretildi.
+- `npm run verify`: **155/155 test başarılı**; biçim, TypeScript ve üretim derlemesi başarılı. `git diff --check` başarılı. Uygulama verileri üzerinden geri yükleme yapılmadı; testler geçici veritabanlarında çalıştı.
+- Yerel backend/test kaynakları aktarıldı; önceki kaynaklar, rapor ve veritabanı yedeklendi. Veritabanı şeması değişmedi. Tarayıcı erişimi ve gerçek MSSQL test ortamı sınırlamaları devam ediyor; global kilit/tam veri okuma ve audit saklama politikası açık.
+
+- Güncelleme sonrası sunulan HTML/JS/CSS dosyaları doğrulandı. Yerel veritabanının tüm kp_ tablolarının satır içerikleri yedekle karşılaştırıldı; uygulama verileri değişmedi.

@@ -1057,6 +1057,21 @@ export class Store {
     });
   }
   async persist(before, next, c) {
+    const removedLeaders = new Set(
+      (before.leaders || []).filter((name) => !next.leaders?.includes(name)),
+    );
+    if (removedLeaders.size) {
+      const linked = (
+        await c.query("SELECT DISTINCT leader_name FROM kp_user_leaders")
+      ).rows.filter((row) => removedLeaders.has(row.leader_name));
+      if (linked.length)
+        fail(
+          409,
+          "Kaldırılacak liderlikler mevcut kullanıcı yetkilerinde kullanılıyor: " +
+            linked.map((row) => row.leader_name).join(", ") +
+            ". Önce Yetki Kontrol Ekranı'ndaki liderlik eşleştirmelerini güncelleyin.",
+        );
+    }
     await c.upsert(
       "leaders",
       (next.leaders || []).map((name) => ({
