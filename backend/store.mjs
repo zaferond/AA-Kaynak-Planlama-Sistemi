@@ -1,4 +1,5 @@
 import { auditEntries } from "./audit.mjs";
+import { dataChanges } from "./change-set.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1039,11 +1040,15 @@ export class Store {
       const beforeUsers = auditUsers ? await this.users(c) : [];
       const result = await fn(data, active, c, generation);
       const valid = validate(data);
-      await this.persist(before, valid, c);
+      const changeSet = await this.persist(before, valid, c);
       const afterUsers = auditUsers ? await this.users(c) : [];
       await c.upsert(
         "audit_events",
-        auditEntries(before, valid, active, { beforeUsers, afterUsers }),
+        auditEntries(before, valid, active, {
+          beforeUsers,
+          afterUsers,
+          changeSet,
+        }),
       );
       const assignments = ["generation=generation+1"],
         values = [];
@@ -1111,34 +1116,16 @@ export class Store {
             ". Önce Yetki Kontrol Ekranı'ndaki liderlik eşleştirmelerini güncelleyin.",
         );
     }
+    const changed = dataChanges(before, next);
     await c.upsert(
       "leaders",
-      (next.leaders || [])
-        .filter(
-          (name) =>
-            !before.leaders?.includes(name) ||
-            (before.leaderManagers?.[name] || "") !==
-              (next.leaderManagers?.[name] || ""),
-        )
-        .map((name) => ({
-          name,
-          manager_name: next.leaderManagers?.[name] || "",
+      changed.leader
+        .filter((item) => item.value !== undefined)
+        .map(({ value }) => ({
+          name: value.name,
+          manager_name: value.managerName,
         })),
     );
-    const changed = {};
-    for (const [kind, t] of Object.entries(kinds)) {
-      const a =
-        kind === "allocation" || kind === "actual"
-          ? before[t] || {}
-          : Object.fromEntries(before[t].map((r) => [r.id, r]));
-      const b =
-        kind === "allocation" || kind === "actual"
-          ? next[t] || {}
-          : Object.fromEntries(next[t].map((r) => [r.id, r]));
-      changed[kind] = [...new Set([...Object.keys(a), ...Object.keys(b)])]
-        .filter((id) => JSON.stringify(a[id]) !== JSON.stringify(b[id]))
-        .map((id) => ({ id, value: b[id] }));
-    }
     const up = (kind) =>
       changed[kind].filter((x) => x.value !== undefined).map((x) => x.value);
     await c.upsert(
@@ -1305,14 +1292,7 @@ export class Store {
         .filter((x) => x.value !== undefined)
         .map((x) => ({ ...actualKey(x.id), amount: x.value })),
     );
-    const changedMap = (name) => {
-      const a = before[name] || {},
-        b = next[name] || {};
-      return [...new Set([...Object.keys(a), ...Object.keys(b)])]
-        .filter((id) => a[id] !== b[id])
-        .map((id) => ({ id, value: b[id] }));
-    };
-    const worked = changedMap("actualWorkedHours");
+    const worked = changed.workedHours;
     const workedKey = (id) => {
       const [resource_id, month] = id.split("|");
       return { resource_id, month };
@@ -1327,7 +1307,7 @@ export class Store {
         .filter((x) => x.value !== undefined)
         .map((x) => ({ ...workedKey(x.id), hours: x.value })),
     );
-    const percentages = changedMap("actualPercentEntries");
+    const percentages = changed.percent;
     await c.remove(
       "actual_percent_entries",
       percentages
@@ -1391,9 +1371,10 @@ export class Store {
     );
     await c.remove(
       "leaders",
-      (before.leaders || [])
-        .filter((name) => !next.leaders?.includes(name))
-        .map((name) => ({ name })),
+      changed.leader
+        .filter((item) => item.value === undefined)
+        .map(({ id: name }) => ({ name })),
     );
+    return changed;
   }
 }

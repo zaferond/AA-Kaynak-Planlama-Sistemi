@@ -130,3 +130,34 @@ Eski komut fonksiyonu staging + tam doğrulama, yenisi yalnız staging yaptığ�
 - Tek son doğrulama proje/sorumlu metnini temizledi, ay biçimindeki işbaşı/ayrılış tarihlerini güne çevirdi ve geçmiş çalışma dönemlerinin ayrılış bitişini eşitledi. Gelen komutlar değişmedi; dönen yanıt fresh SQL view ile aynı.
 - Üç yeni regresyon testi ile `npm run verify`: **189/189** test; biçim, TypeScript ve üretim derlemesi başarılı. Gerçek SQL.js HTTP CRUD/eşzamanlılık suite'leri güncel service yolunu kullandı. Native MSSQL ortamı hâlâ gerekli.
 - Kalan maliyet: tam okuma, bir tam kopya/son doğrulama, persist ve audit'in değişiklikleri ayrı taraması, tam JSON yanıt. Sıradaki inceleme persist/audit için değişiklik tespitini ortaklaştırmak. Yetki, normalizasyonun türettiği değişiklikler, revision ve atomiklik korunmalı.
+
+
+## Devam ölçümü — persist ve audit için tek kayıt farkı
+
+On yedinci adımda `dataChanges` doğrulanmış tam görüntülerin eski/yeni kayıt farkını üretir. Persist bu sonucu SQL işlemlerine dönüştürür ve aynı sonucu audit'e verir. Sayısal hücreler aynıysa JSON serileştirme yapılmaz; audit yalnız aday değişikliklerin temizlenmiş alanlarını inceler. Kişisel açıklamalar/notlar audit'ten çıkarılmaya devam eder. Revision-only değişiklikler bu kayıt farkına dahil değildir; mevcut revision/generation yazımı devam eder.
+
+Ölçüm, önce `998526d` kaynaklarıyla 16:37 UTC (19:37 İstanbul), sonra yeni kaynaklarla 16:56 UTC (19:56 İstanbul) yapıldı. Aynı bilgisayar, Node 24.21.0, geçici SQL.js, 200 çalışan, 48 ay, 1.000 izin kaydı, sıfır başlangıç audit geçmişi, beş örnek ve bir ısınma kaydı. Zaman ve çalışma ortamı değişkenliği sonuçları etkileyebilir. Ölçümler HTTP/ağ/native MSSQL içermez.
+
+```sh
+npm run bench:store -- --response=planning --validation=single --output=/tmp/aa-shared-diff-new.json
+```
+
+| Planlanan hücre | Önce kayıt + yanıt | Ortak fark ile | Tam okuma önce / sonra | Tam kopya önce / sonra | Yanıt boyutu, aynı |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 1.000 | 28,21 ms | 29,90 ms | 8,28 / 8,76 ms | 1,14 / 1,14 ms | 191.203 bayt |
+| 10.000 | 109,57 ms | 100,89 ms | 52,12 / 54,68 ms | 7,65 / 7,80 ms | 764.447 bayt |
+| 50.000 | 462,44 ms | 418,41 ms | 233,57 / 229,08 ms | 44,48 / 41,83 ms | 3.371.253 bayt |
+
+50.000 hücrede bu deneyde yaklaşık **%9,5 azalma**; küçük veri setinde belirgin iyileşme yok. Önce/sonra p95 örnekleri 1.000'de 32,83 / 32,61; 10.000'de 126,25 / 105,24; 50.000'de 468,92 / 426,35 ms. Beş örnek üretim p95/kapasite hesabına yeterli değildir. JSON yanıt serileştirmesi toplam zincirden ayrı ölçülür; büyük durumda yaklaşık 19 ms.
+
+Her boyutta tam okuma ve `structuredClone` sayısı bir; okunan SQL satırları sırasıyla 2.465 / 20.469 / 100.489. Tahsis/revision/audit/settings satırlarının her birinden bir yazılıyor (toplam dört), yazma parametrelerinin JSON boyutu 334 bayt. Yeni betik yalnız fark sayısını raporlar: bu senaryoda `allocation: 1`, diğer kayıt türleri `0`. Ham farktaki kimlikler, açıklamalar veya özel metinler ölçüm çıktısına konmaz.
+
+Persist süresi önce 1,66 / 8,28 / 40,49 ms, sonra 3,05 / 7,19 / 31,94 ms. **Faz kapsamı değişti:** yeni persist takvim/kişisel gün farkını da üretir; önceden bu audit sırasında taranıyordu. Bu değerler saf SQL süresi değildir; iç içe medyanları toplayarak toplam hesaplanmamalı. Yeni betiğin fark sayısı ölçümünün de küçük ek maliyeti var.
+
+### Kaynak izlenebilirliği ve doğrulama
+
+- Eski Store SHA-256: `ad937539159ce091ada2c89b2a0e17a99fef37ce14ad69bebc5d1c1874ad438e`; eski audit: `fbdd4b68963de859db3410780e78e870feadbcbb3eb3e60ec18d20ce5d37cf0e` (baseline commit'ten). Önceki JSON'da audit hash alanı yoktu.
+- Yeni Store: `970ed8f6733ee3009d3d032a31c44302fb7e6b2437344d559cd0ac42ab6ed880`; audit: `65505c4d3047aee1c845672c1eedd9a6c066ba426d3bf3a6ea44687a4df86905`; change-set: `e9fcecc9129c6d7d4f1526f16e43d4be8e820056c788ffcfb0d54628cb0733fe`.
+- Operations/service kodları önceki ölçümle aynı. Ham sentetik sonuçlar yerelde `/tmp/aa-shared-diff-before-20261001.json` ve `/tmp/aa-shared-diff-after-20261001.json` dosyalarında; geçici dosyalar kalıcı raporun parçası değildir.
+- Beş yeni regresyon testi ile **194/194** test, biçim, TypeScript ve üretim derlemesi başarılı. Audit'e hazır fark verildiğinde tüm allocation haritasının yeniden taranmadığı, özel metinlerin kaydedilip audit'e alınmadığı, bağlantılı silmelerin ve `constructor` kimlikli proje CRUD işlemlerinin doğruluğu kontrol edildi. Mevcut rollback/eşzamanlılık/snapshot/restore kontrolleri geçti.
+- Metadata kayıt isimleri ve hesap audit'i için ayrı indeksler, revision/settings karşılaştırması, tam model doğrulaması/kopyası ve tam JSON yanıt devam ediyor. Tam okuma büyük ölçümün yaklaşık 229 ms'sini oluşturuyor; native MSSQL sonuçları ve daha geniş veri/audit profilleri ayrıca gerekli.

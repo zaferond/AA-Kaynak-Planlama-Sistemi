@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { entityCollections } from "../shared/entity-kinds.ts";
 import { publicUser } from "./auth.mjs";
+import { dataChanges, recordChanges } from "./change-set.mjs";
 
 function fields(before, after, path = [], out = []) {
   if (JSON.stringify(before) === JSON.stringify(after)) return out;
@@ -38,7 +39,11 @@ export function auditEntries(
   before,
   after,
   actor,
-  { beforeUsers = [], afterUsers = [] } = {},
+  {
+    beforeUsers = [],
+    afterUsers = [],
+    changeSet = dataChanges(before, after),
+  } = {},
 ) {
   const time = new Date().toISOString(),
     entries = [];
@@ -63,10 +68,10 @@ export function auditEntries(
       return [resources[owner] || owner, projectOrDate].join(" · ");
     return fallback;
   };
-  const collect = (kind, a = {}, b = {}) => {
-    for (const id of new Set([...Object.keys(a), ...Object.keys(b)])) {
-      const old = sanitized(kind, a[id]),
-        next = sanitized(kind, b[id]);
+  const collect = (kind, records) => {
+    for (const { id, before: previous, value } of records) {
+      const old = sanitized(kind, previous),
+        next = sanitized(kind, value);
       const changes = fields(old, next);
       if (!changes.length) continue;
       const name =
@@ -89,32 +94,16 @@ export function auditEntries(
       });
     }
   };
-  for (const [kind, key] of Object.entries(entityCollections)) {
-    const isMap = kind === "allocation" || kind === "actual";
-    collect(
-      kind,
-      isMap ? before[key] : indexed(before[key]),
-      isMap ? after[key] : indexed(after[key]),
-    );
-  }
-  for (const [kind, key] of [
-    ["workedHours", "actualWorkedHours"],
-    ["calendar", "workCalendar"],
-    ["personDay", "personCalendar"],
-  ])
-    collect(kind, before[key], after[key]);
-  const leaders = (d) =>
-    Object.fromEntries(
-      (d.leaders || []).map((name) => [
-        name,
-        { name, managerName: d.leaderManagers?.[name] || "" },
-      ]),
-    );
-  collect("leader", leaders(before), leaders(after));
+  for (const kind of Object.keys(entityCollections))
+    collect(kind, changeSet[kind]);
+  for (const kind of ["workedHours", "calendar", "personDay", "leader"])
+    collect(kind, changeSet[kind]);
   collect(
     "user",
-    indexed(beforeUsers.map(publicUser)),
-    indexed(afterUsers.map(publicUser)),
+    recordChanges(
+      indexed(beforeUsers.map(publicUser)),
+      indexed(afterUsers.map(publicUser)),
+    ),
   );
   return entries;
 }

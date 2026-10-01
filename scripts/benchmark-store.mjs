@@ -148,7 +148,15 @@ function instrument(store) {
         async function (...args) {
           const start = performance.now();
           try {
-            return await original.apply(this, args);
+            const result = await original.apply(this, args);
+            if (current && method === "persist" && result)
+              current.changedRecords = Object.fromEntries(
+                Object.entries(result).map(([kind, records]) => [
+                  kind,
+                  records.length,
+                ]),
+              );
+            return result;
           } finally {
             if (current) {
               current[method + "Ms"] += performance.now() - start;
@@ -226,6 +234,7 @@ function instrument(store) {
         sqlStatements: 0,
         selectedRows: 0,
         writtenRows: {},
+        changedRecords: {},
         writeParameterBytes: 0,
       };
       return current;
@@ -369,6 +378,7 @@ for (const size of sizes) {
         cloneCalls: observations[0].cloneCalls,
         selectedRows: observations[0].selectedRows,
         writtenRows: observations[0].writtenRows,
+        changedRecords: observations[0].changedRecords,
         writeParameterBytes: observations[0].writeParameterBytes,
       }),
     );
@@ -398,6 +408,14 @@ const report = {
       await fs.readFile(
         new URL("../backend/change-service.mjs", import.meta.url),
       ),
+    )
+    .digest("hex"),
+  auditSha256: createHash("sha256")
+    .update(await fs.readFile(new URL("../backend/audit.mjs", import.meta.url)))
+    .digest("hex"),
+  changeSetSha256: createHash("sha256")
+    .update(
+      await fs.readFile(new URL("../backend/change-set.mjs", import.meta.url)),
     )
     .digest("hex"),
   scope:
