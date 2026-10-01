@@ -133,3 +133,107 @@ test("SQL.js frees the statement after a decoding error, rolls back the transact
     rowCount: 0,
   });
 });
+
+test("SQL.js scan preserves ordered values and bound parameters without retaining row objects", async (t) => {
+  const adapter = await setup(t);
+  const arrays = [];
+  const result = await adapter.scan(
+    `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n WHERE i<128)
+    SELECT i, @p0, @p1, @p2, @p3, @p4, x'0001ff' FROM n`,
+    ["Türkçe 🧭", "", undefined, 0, 0.25],
+    (values) => {
+      arrays.push(values);
+    },
+  );
+  assert.deepEqual(result, { rows: [], rowCount: 128 });
+  for (const [i, values] of arrays.entries())
+    assert.deepEqual(values, [
+      i + 1,
+      "Türkçe 🧭",
+      "",
+      null,
+      0,
+      0.25,
+      new Uint8Array([0, 1, 255]),
+    ]);
+  assert.notEqual(arrays[0], arrays[1]);
+  assert.notEqual(arrays[0][6], arrays[1][6]);
+  let consumed = false;
+  assert.deepEqual(
+    await adapter.scan("SELECT 1 WHERE 0", [], () => {
+      consumed = true;
+    }),
+    { rows: [], rowCount: 0 },
+  );
+  assert.equal(consumed, false);
+  await assert.rejects(adapter.scan("SELECT 1", [], "invalid"), TypeError);
+});
+
+test("SQL.js scans skip column decoding and ordinary queries retain their object contract", async (t) => {
+  const adapter = await setup(t);
+  const prepare = adapter.db.prepare.bind(adapter.db);
+  let metadataReads = 0;
+  const spy = t.mock.method(adapter.db, "prepare", (...args) => {
+    const statement = prepare(...args);
+    const names = statement.getColumnNames.bind(statement);
+    statement.getColumnNames = () => {
+      metadataReads++;
+      return names();
+    };
+    return statement;
+  });
+  const values = [];
+  await adapter.transaction(async (c) => {
+    await c.scan('SELECT 1 AS "__proto__", 2 AS id, 3 AS id', [], (row) => {
+      values.push(row);
+    });
+    assert.equal(metadataReads, 0);
+    assert.deepEqual(values, [[1, 2, 3]]);
+    const normal = await c.query('SELECT 1 AS "__proto__", 2 AS id, 3 AS id');
+    assert.equal(normal.rows[0].__proto__, 1);
+    assert.equal(normal.rows[0].id, 3);
+    assert.equal(Object.getPrototypeOf(normal.rows[0]), Object.prototype);
+    assert.equal(metadataReads, 1);
+  }, true);
+  spy.mock.restore();
+});
+
+test("a failed scan frees its statement and rolls back writes before the next transaction", async (t) => {
+  const adapter = await setup(t);
+  await adapter.transaction((c) =>
+    c.query("CREATE TABLE example (id INTEGER)"),
+  );
+  const prepare = adapter.db.prepare.bind(adapter.db);
+  let freed = false;
+  const spy = t.mock.method(adapter.db, "prepare", (sql, ...args) => {
+    const statement = prepare(sql, ...args);
+    if (sql === "SELECT id FROM example") {
+      const free = statement.free.bind(statement);
+      statement.free = () => {
+        freed = true;
+        return free();
+      };
+    }
+    return statement;
+  });
+  await assert.rejects(
+    adapter.transaction(async (c) => {
+      await c.query("INSERT INTO example VALUES (1)");
+      await c.scan("SELECT id FROM example", [], () => {
+        throw Error("failed consumer");
+      });
+    }),
+    /failed consumer/,
+  );
+  assert.equal(freed, true);
+  spy.mock.restore();
+  assert.deepEqual(await adapter.query("SELECT * FROM example"), {
+    rows: [],
+    rowCount: 0,
+  });
+  const next = [];
+  await adapter.scan("SELECT 2", [], (row) => {
+    next.push(row);
+  });
+  assert.deepEqual(next, [[2]]);
+});

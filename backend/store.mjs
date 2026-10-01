@@ -1,6 +1,11 @@
 import { auditEntries } from "./audit.mjs";
 import { dataChanges } from "./change-set.mjs";
 import { cloneMutationSnapshot } from "./mutation-snapshot.mjs";
+import {
+  readRecordMap,
+  readCompositeMap,
+  revisionRecordKey,
+} from "./read-records.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -947,33 +952,37 @@ export class Store {
             : ""),
         amount: r.amount,
       });
-    for (const r of (await c.query("SELECT * FROM kp_allocations")).rows)
-      d.allocations[r.team_id + "|" + r.project_id + "|" + r.month] = r.amount;
-    for (const r of (await c.query("SELECT * FROM kp_actual_allocations")).rows)
-      d.actualAllocations[r.resource_id + "|" + r.project_id + "|" + r.month] =
-        r.amount;
-    for (const r of (await c.query("SELECT * FROM kp_actual_worked_hours"))
-      .rows)
-      d.actualWorkedHours[r.resource_id + "|" + r.month] = r.hours;
-    for (const r of (await c.query("SELECT * FROM kp_actual_percent_entries"))
-      .rows)
-      d.actualPercentEntries[
-        r.resource_id + "|" + r.project_id + "|" + r.month
-      ] = r.percent;
-    for (const r of (await c.query("SELECT * FROM kp_revisions")).rows)
-      d.revisions[
-        r.kind === "allocation" && r.record_id.startsWith("@risk:")
-          ? "risk:" + r.record_id.slice(6)
-          : r.kind === "allocation" && r.record_id.startsWith("@actual:")
-            ? "actual:" + r.record_id.slice(8)
-            : r.kind === "allocation" && r.record_id.startsWith("@worked:")
-              ? "workedHours:" + r.record_id.slice(8)
-              : r.kind === "allocation" && r.record_id.startsWith("@calendar:")
-                ? "calendar:" + r.record_id.slice(10)
-                : r.kind === "allocation" && r.record_id.startsWith("@person:")
-                  ? "personDay:" + r.record_id.slice(8)
-                  : r.kind + ":" + r.record_id
-      ] = Number(r.revision);
+    d.allocations = await readCompositeMap(
+      c,
+      this.provider,
+      "allocations",
+      "amount",
+    );
+    d.actualAllocations = await readCompositeMap(
+      c,
+      this.provider,
+      "actual_allocations",
+      "amount",
+    );
+    d.actualWorkedHours = await readCompositeMap(
+      c,
+      this.provider,
+      "actual_worked_hours",
+      "hours",
+    );
+    d.actualPercentEntries = await readCompositeMap(
+      c,
+      this.provider,
+      "actual_percent_entries",
+      "percent",
+    );
+    d.revisions = await readRecordMap(
+      c,
+      "SELECT kind,record_id,revision FROM kp_revisions",
+      ["kind", "record_id", "revision"],
+      revisionRecordKey,
+      Number,
+    );
     return { data: d, generation: Number(s.generation) };
   }
   async view(u) {

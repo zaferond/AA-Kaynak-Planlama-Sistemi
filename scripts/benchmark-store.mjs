@@ -220,9 +220,9 @@ function instrument(store) {
     store.db,
     "raw",
     (original) =>
-      function (sql, values) {
+      function (sql, values, consume) {
         const start = performance.now();
-        const result = original.call(this, sql, values);
+        const result = original.call(this, sql, values, consume);
         if (current) {
           current.sqlStatements++;
           if (/^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql)) {
@@ -233,9 +233,10 @@ function instrument(store) {
               ms: 0,
             });
             group.calls++;
-            group.rows += result.rows.length;
+            group.rows += result.rowCount;
             group.ms += performance.now() - start;
-            current.selectedRows += result.rows.length;
+            current.selectedRows += result.rowCount;
+            current.materializedRows += result.rows.length;
           } else {
             const name = /\bkp_([a-z_]+)/i.exec(sql)?.[1] || "other";
             current.writtenRows[name] =
@@ -328,6 +329,7 @@ function instrument(store) {
         sqlReads: {},
         sqlStatements: 0,
         selectedRows: 0,
+        materializedRows: 0,
         writtenRows: {},
         changedRecords: {},
         writeParameterBytes: 0,
@@ -507,6 +509,7 @@ for (const size of sizes) {
         readCalls: observations[0].readCalls,
         cloneCalls: observations[0].cloneCalls,
         selectedRows: observations[0].selectedRows,
+        materializedRows: observations[0].materializedRows,
         exportCalls: observations[0].exportCalls,
         exportBytes: observations[0].exportBytes,
         databaseBytes: result.databaseBytes,
@@ -545,6 +548,13 @@ const report = {
   responseMode,
   validationMode,
   snapshotCopy,
+  recordReaderSha256: createHash("sha256")
+    .update(
+      await fs.readFile(
+        new URL("../backend/read-records.mjs", import.meta.url),
+      ),
+    )
+    .digest("hex"),
   mutationSnapshotSha256: createHash("sha256")
     .update(
       await fs.readFile(

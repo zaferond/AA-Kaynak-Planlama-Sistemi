@@ -101,10 +101,10 @@ async function setup(t) {
   });
   const queries = [],
     upserts = [];
-  store.db.raw = function (sql, values) {
+  store.db.raw = function (sql, values, consume) {
     if (/^UPDATE kp_settings SET/i.test(sql))
       queries.push({ sql, values: structuredClone(values || []) });
-    return originalRaw.call(this, sql, values);
+    return originalRaw.call(this, sql, values, consume);
   };
   store.db.upsert = function (name, rows) {
     if (rows.length) upserts.push({ name, rows: structuredClone(rows) });
@@ -281,8 +281,8 @@ test("failure after the settings write rolls back changed rows, leaders, metadat
   const before = await store.read(),
     audit = (await store.auditLog(user)).total;
   const raw = store.db.raw;
-  store.db.raw = function (sql, values) {
-    const result = raw.call(this, sql, values);
+  store.db.raw = function (sql, values, consume) {
+    const result = raw.call(this, sql, values, consume);
     if (/^UPDATE kp_settings SET/i.test(sql))
       throw Error("Injected settings failure");
     return result;

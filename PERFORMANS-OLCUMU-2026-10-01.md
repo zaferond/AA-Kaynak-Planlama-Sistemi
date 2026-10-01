@@ -295,3 +295,46 @@ Ham final çıktıları bu oturumda `/tmp/aa-copy-{medium,dense}-final-{full,num
 - schemaSha256: `40774711b6218062d1ada75511d0c4973c5b338e38b6b951b3519b49b7a9e2d7`
 - benchmarkSha256: `babd577313c54eb16354c6030b07478616150a6fd458b814bc99d5efaa28390f`
 - changeSetSha256: `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8`
+
+
+## Tam SQL okuması — doğrudan kayıt haritası ve bileşik anahtar
+
+1 Ekim 2026, 22:10–22:38 Europe/Istanbul; Node 24.21.0; sentetik/geçici SQL.js. Önceki `d990268` sürümünde medium/dense ölçümleri kod değişmeden tamamlandı; son sürümde aynı profiller ve yedi örnek + bir ısınma ile sırayla yeniden çalıştırıldı. Arada geliştirme/test yapıldı; önce ve sonra aynı anda veya test derlemesiyle paralel ölçülmedi. Zaman farkları kontrollü üretim deneyi veya istatistiksel kapasite garantisi değildir.
+
+- medium: 50.000 planlanan hücre, 200 çalışan, 0 gerçekleşen hücre, 1.000 izin kaydı, 50.000 audit.
+- dense: 100.000 planlanan hücre, 2.000 çalışan, 50.000 gerçekleşen hücre, 10.000 izin kaydı, 50.000 audit.
+- `--response=delta --snapshot-copy=numeric --validation=single` iki sürümde de aynı. Son istemci görüntüsü bütün alanlarıyla yeni SQL görüntüsüne eşit; audit/revision/generation kontrolleri geçti. Betik .env yüklemedi, mevcut veritabanı kullanılmadı.
+
+| Profil / sürüm | Kayıt + görüntü ms | Tam okuma ms | Kopya ms | Persist ms | Dosya commit ms | Seçilen satır | Ara satır nesnesi |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| medium / before | 314.83 | 132.22 | 19.20 | 32.15 | 22.46 | 100,489 | 100,489 |
+| medium / final | 292.68 | 103.53 | 21.04 | 34.18 | 18.33 | 100,489 | 489 |
+| dense / before | 1078.56 | 404.09 | 75.00 | 122.18 | 32.88 | 304,113 | 304,113 |
+| dense / final | 1040.70 | 327.38 | 84.85 | 127.20 | 38.13 | 304,113 | 4,113 |
+
+Süreler medyan. **Tam okuma** SQL sorguları, değer çözümü ve Data haritalarını oluşturmayı her iki sürümde de içerir. Son sürümün tablo bazında `raw` süresi tüketici callback'ini de içerir; eski `raw` süresi harita oluşturmayı dışarıda bırakıyordu. Bu nedenle tablo bazındaki raw süreleri doğrudan driver hız karşılaştırması değildir; toplam readMs kıyaslanır. Seçilen satır sayımı artık scanner'ın `rowCount` alanını kullanır; boş `rows` dizisini yanlışlıkla sıfır okunmuş satır saymaz. `materializedRows` yalnız normal query'nin oluşturduğu ara satır nesnelerini sayar. Önceki decoder her seçilen satır için bir nesne döndürdüğünden önce değeri selectedRows ile aynıdır; yeni alan önceki ham dosyada yoktur.
+
+Dense okuma **%19,0**, medium **%21,7** azalıyor. Toplam kayıt + görüntü dense **%3,5**, medium **%7,0** azalıyor. Kopya/persist/dosya commit maliyetleri de farklılaştığı için alt sürelerin azalması toplam kazanca birebir taşınmaz. Bir tam okuma, bir snapshot kopyası, dört yazılan satır (allocation/revision/audit/settings), 334 bayt yazma parametresi ve 277 bayt tek hücre yanıtı her profilde aynı. JSON/ağ/istemci çizimi bu kayıt + görüntü sütununda değildir. Native MSSQL performansı ölçülmedi; MSSQL normal kolon/recordset yolu ayrı tutuldu.
+
+İlk yalnız değer-array scanner denemesi dense readMs'i 404,09 → 396,59 ms'ye indirdi, fakat pipelineMs 1.078,56 → 1.082,63 ms oldu. Bu ara deneme son karşılaştırmaya karıştırılmadı. Son yordam dört sayısal tabloda iki kolon (bileşik anahtar + değer) çözerek anahtar kolonlarını ayrı ayrı JS'ye taşımayı azaltıyor; revision ön eklerini JS'de aynı codec çözüyor. PK kolonları ortak tableSpec tanımından gelir, tablo/kolon adları beyaz listeden doğrulanır. Kullanıcı değerleri SQL metnine interpolasyonla eklenmez. İki okuma yolu sıfır/tombstone/takvim/metadata dahil aynı Data üretir; eksik scan kabul edilmez.
+
+300.000 daha az ara satır nesnesi oluşturulması, 300.000 daha az kayıt okunması anlamına gelmez. Son Data/revision haritaları ve SQL.js getter değerleri hâlâ oluşur; tam model/referans/iş sınırı kontrolleri devam eder. Bu deney heap/RSS/GC veya eşzamanlı kullanıcı kapasitesini ölçmez. Yedi örnek üretim p95 sonucu sağlamaz.
+
+Tekrar üretme (son sürüm):
+
+`node scripts/benchmark-store.mjs --sizes=50000 --samples=7 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=50000 --response=delta --snapshot-copy=numeric --output=/tmp/benzersiz-scan-medium.json`
+
+Dense için `--sizes=100000 --resources=2000 --actuals=50000 --calendar-days=10000`. Önceki davranış için ayrı checkout'ta `d990268` commit'inin aynı betiği çalıştırılır. Çıktı adı önceden bulunmamalı; betik yalnız geçici SQL.js veritabanları oluşturup sonunda siler. Ham önce/final çıktılar `/tmp/aa-scan-{medium,dense}-{before,final}-20261001.json` dosyalarında; `/tmp` kalıcı arşiv değildir.
+
+Önceki sürüm Store hash'i: `55a336610d3df6315e74458fa65911b7f15a450a364c2312860e903212653347`; adapter: `e7ead29cad3a25a926a52763e5f99a6258c004ac2a85d65703f193f3b7da035d`; betik: `babd577313c54eb16354c6030b07478616150a6fd458b814bc99d5efaa28390f`. Son sürüm kaynak hash'leri:
+
+- recordReaderSha256: `75d6bce56676235a279861707a723380f760c4c3e1e4afab5aa98a9c5d55bfc5`
+- mutationSnapshotSha256: `d42c624a010d89315d6b9759f7149731954df64844cdb9fbee89eb4643638306`
+- storeSha256: `355ddfcac40ae55cfe78a490448d8b64ccb2750537b880eb7976b399c9e23d0c`
+- operationsSha256: `41b0cd408246881e04f4536fdbec90fdc14eef2ebe3b576c357966f0778f60e9`
+- changeServiceSha256: `f618ff658fae7691436ddf012256eef3a3f666c5cadb0d83e11e2e3001daad7a`
+- auditSha256: `ae66df2889c7b5560371b840d01c138cc1abcf2ecab2df4b0fcb7f88f9b6e417`
+- sqlJsAdapterSha256: `26d1e23372ba2224e598153e9e84a02a86d4be277ce04fa399e708a29ddc5f1e`
+- schemaSha256: `40774711b6218062d1ada75511d0c4973c5b338e38b6b951b3519b49b7a9e2d7`
+- benchmarkSha256: `eb7f744cfaf4c5e0700a0e0353a6704722acccd1327d03a64b377f322b239b12`
+- changeSetSha256: `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8`

@@ -76,7 +76,9 @@ export class SqlJsAdapter {
     this.tail = run.catch(() => {});
     return run;
   }
-  raw(sql, values = []) {
+  raw(sql, values = [], consume) {
+    if (consume !== undefined && typeof consume !== "function")
+      throw new TypeError("Satır okuyucu bir işlev olmalıdır.");
     const params = Object.fromEntries(
       values.map((v, i) => [
         "@p" + i,
@@ -87,8 +89,16 @@ export class SqlJsAdapter {
     try {
       st.bind(params);
       const rows = [];
+      let consumedRows = 0;
       let columns;
       while (st.step()) {
+        if (consume) {
+          // Synchronous consumers use the explicit SELECT column order. Avoid
+          // building and retaining objects for rows immediately reduced to maps.
+          consume(st.get());
+          consumedRows++;
+          continue;
+        }
         // A prepared statement has the same result columns for every row.
         columns ??= st.getColumnNames();
         const values = st.get(),
@@ -109,7 +119,9 @@ export class SqlJsAdapter {
       return {
         rows,
         rowCount: /^\s*(SELECT|PRAGMA|WITH)\b/i.test(sql)
-          ? rows.length
+          ? consume
+            ? consumedRows
+            : rows.length
           : this.db.getRowsModified(),
       };
     } finally {
@@ -126,6 +138,7 @@ export class SqlJsAdapter {
       this.db.exec("BEGIN");
       const c = {
         query: async (sql, v) => this.raw(sql, v),
+        scan: async (sql, v, consume) => this.raw(sql, v, consume),
         batch: async (sql) => this.db.exec(sql),
         upsert: (t, r) => this.upsert(t, r),
         remove: (t, r) => this.remove(t, r),
@@ -162,6 +175,9 @@ export class SqlJsAdapter {
   }
   async query(sql, v) {
     return this.transaction((c) => c.query(sql, v), true);
+  }
+  async scan(sql, v, consume) {
+    return this.transaction((c) => c.scan(sql, v, consume), true);
   }
   async upsert(name, rows) {
     if (!rows.length) return;
