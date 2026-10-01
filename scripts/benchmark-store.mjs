@@ -14,12 +14,12 @@ import { hashPassword } from "../backend/auth.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|resources|actuals|calendar-days|audit-events|response|validation|output)=(.+)$/.exec(
+      /^--(sizes|samples|resources|actuals|calendar-days|audit-events|response|validation|snapshot-copy|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=separate|planning|delta --validation=double|single --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=separate|planning|delta --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -46,6 +46,9 @@ const validationMode = options.get("validation") || "single";
 if (!["single", "double"].includes(validationMode))
   throw Error("Expected --validation=single or --validation=double.");
 const apply = validationMode === "single" ? stageChanges : applyChanges;
+const snapshotCopy = options.get("snapshot-copy") || "numeric";
+if (!["numeric", "full"].includes(snapshotCopy))
+  throw Error("Expected --snapshot-copy=numeric or full.");
 const percentile = (values, p) =>
   [...values].sort((a, b) => a - b)[
     Math.max(0, Math.ceil(values.length * p) - 1)
@@ -185,6 +188,19 @@ function instrument(store) {
         },
     );
   wrap(
+    store,
+    "copySnapshot",
+    (original) =>
+      function (...args) {
+        const start = performance.now();
+        try {
+          return original.apply(this, args);
+        } finally {
+          if (current) current.snapshotCopyMs += performance.now() - start;
+        }
+      },
+  );
+  wrap(
     globalThis,
     "structuredClone",
     (original) =>
@@ -304,6 +320,7 @@ function instrument(store) {
         domainMs: 0,
         cloneMs: 0,
         cloneCalls: 0,
+        snapshotCopyMs: 0,
         exportMs: 0,
         exportCalls: 0,
         exportBytes: 0,
@@ -334,6 +351,8 @@ for (const size of sizes) {
   const store = new Store({
     env: { NODE_ENV: "test", DB_PROVIDER: "sqljs", SQLJS_FILE: file },
   });
+  if (snapshotCopy === "full")
+    store.copySnapshot = (data) => structuredClone(data);
   let metrics;
   try {
     await store.connect();
@@ -438,6 +457,7 @@ for (const size of sizes) {
         "persistMs",
         "domainMs",
         "cloneMs",
+        "snapshotCopyMs",
         "exportMs",
         "fileCommitMs",
         "jsonMs",
@@ -457,6 +477,7 @@ for (const size of sizes) {
       allocations: size,
       responseMode,
       validationMode,
+      snapshotCopy,
       resources,
       actualAllocations: actuals,
       calendarDays,
@@ -477,6 +498,7 @@ for (const size of sizes) {
         allocations: size,
         responseMode,
         validationMode,
+        snapshotCopy,
         resources,
         actualAllocations: actuals,
         calendarDays,
@@ -522,6 +544,14 @@ const report = {
   samples,
   responseMode,
   validationMode,
+  snapshotCopy,
+  mutationSnapshotSha256: createHash("sha256")
+    .update(
+      await fs.readFile(
+        new URL("../backend/mutation-snapshot.mjs", import.meta.url),
+      ),
+    )
+    .digest("hex"),
   storeSha256: createHash("sha256")
     .update(await fs.readFile(new URL("../backend/store.mjs", import.meta.url)))
     .digest("hex"),

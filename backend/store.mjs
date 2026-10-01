@@ -1,5 +1,6 @@
 import { auditEntries } from "./audit.mjs";
 import { dataChanges } from "./change-set.mjs";
+import { cloneMutationSnapshot } from "./mutation-snapshot.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1030,6 +1031,9 @@ export class Store {
       };
     }, true);
   }
+  copySnapshot(data) {
+    return cloneMutationSnapshot(data);
+  }
   async mutate(
     u,
     fn,
@@ -1040,7 +1044,7 @@ export class Store {
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
       const { data, generation } = await this.read(c),
-        before = structuredClone(data);
+        before = this.copySnapshot(data);
       const beforeUsers = auditUsers ? await this.users(c) : [];
       const result = await fn(data, active, c, generation);
       const valid = validate(data);

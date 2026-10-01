@@ -255,3 +255,43 @@ Ham çıktılar bu oturumun `/tmp/aa-response-{medium,dense}-{full,delta}-202610
 - benchmarkSha256: `0b8ae1bed0d8048901d9fcd02f48ed72b28863a76c7e1dad4c6aa80a19204dae`
 - changeSetSha256: `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8`
 - planningResponseSha256: `07371dd7395807708c1dd9a97bafaf4bb285b95775885760477afa7b622a4b53`
+
+
+## Kayıt öncesi snapshot kopyası — tek geçişli sayısal haritalar
+
+1 Ekim 2026, 21:54–21:57 Europe/Istanbul; Node 24.21.0; sentetik/geçici SQL.js veritabanları. Son yordamın kaynak hash'i tüm karşılaştırmalarda aynı. `--snapshot-copy=full`, Store'un kopyalama yöntemini benchmark içinde önceki `structuredClone(data)` işlemine geçirir. `numeric`, uygulamanın yeni varsayılanıdır. Her çalışma bir ısınma + yedi ölçüm kullanır; medium numeric → full, dense full → numeric sırayla çalıştırıldı. Sonuçları tek bir değişiklikten kaynaklanan üretim hız farkı veya istatistiksel kapasite garantisi olarak yorumlamayın. Diğer kaynaklar ve ölçüm mantığı iki modda da aynı.
+
+- medium: 50.000 planlanan hücre, 200 çalışan, 0 gerçekleşen hücre, 1.000 izin kaydı, 50.000 audit.
+- dense: 100.000 planlanan hücre, 2.000 çalışan, 50.000 gerçekleşen hücre, 10.000 izin kaydı, 50.000 audit.
+- Küçük yanıt modu (`--response=delta`), tek son model doğrulaması (`--validation=single`) kullanıldı. Son istemci görüntüsü tüm alanlarıyla yeni SQL görüntüsüne eşit; generation, revision ve audit sayısı kontrol edildi. Gerçek veri/.env kullanılmadı, veritabanları sonunda silindi.
+
+| Profil / kopya | Kayıt + görüntü ms | Tam kopyalama ms | structuredClone alt süresi ms | Tam okuma ms | Persist ms | Dosya commit ms |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| medium / full | 357.96 | 46.66 | 46.65 | 133.12 | 33.87 | 34.31 |
+| medium / numeric | 313.32 | 19.43 | 0.87 | 131.18 | 32.30 | 21.91 |
+| dense / full | 1193.46 | 156.44 | 156.44 | 413.52 | 121.61 | 35.04 |
+| dense / numeric | 1112.50 | 77.16 | 13.28 | 410.16 | 120.37 | 30.73 |
+
+Süreler medyan. **Tam kopyalama** yeni yöntemin sayısal harita kontrolü/kopyası ve metadata derin kopyasının tümünü içerir. Yeni yöntemde structuredClone alt süresi yalnız metadata olduğundan eski toplam kopyalama süresiyle tek başına karşılaştırılmamalıdır. Dosya commit ve diğer süreler kayıt + görüntünün içindedir; alt süreler toplam medyana eklenmez. Kayıt + görüntü, HTTP/ağ/istemci çizimini içermez. JSON çözme ve istemci immutable merge, önceki adımda olduğu gibi ayrı kalır.
+
+Yoğun profilde kopya 156,44 → 77,16 ms (**%50,7 azalma**), kayıt + görüntü 1.193,46 → 1.112,50 ms (**bu deneyde %6,8 azalma**). Medium kopyası 46,66 → 19,43 ms (%58,4); kayıt + görüntü 357,96 → 313,32 ms (%12,5). Medium dosya commit süreleri de değiştiği için tüm toplam kazancını yalnız kopyalamaya atfetmek doğru olmaz. Her profilde bir tam SQL okuması, bir structuredClone çağrısı ve aynı sayıda seçilen satır korundu: medium 100.489, dense 304.113. Değişen dört satır allocation/revision/audit/settings; 334 bayt yazma parametresi ve tek hücre için 277 bayt yanıt aynı.
+
+İlk denenen `Object.values` kontrolü + spread kopyası, ayrı bir keşif ölçümünde medium kopyasını 44,91 → 49,39 ms'ye çıkararak yavaşladı; terk edildi. Yukarıdaki sonuçlar tek geçişli son sürüme aittir. Tek geçişte kendi alanı olmayan kalıtılmış özellik okunmaz; özel `__proto__` alanı veri özelliği olarak kurulur. Sayısal olmayan map değerinde tam kopya kullanılır; iş sınırları model doğrulamasında kalır. Önceki/yeni yordamın veri bağımsızlığı ve SQL/audit/rollback sonuçları testlerle kontrol edildi. Bellek/GC etkisini veya tarayıcı/native MSSQL performansını ölçen bir çalışma değildir.
+
+Tekrar üretme:
+
+`node scripts/benchmark-store.mjs --sizes=50000 --samples=7 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=50000 --response=delta --snapshot-copy=full --output=/tmp/benzersiz-copy-full.json`
+
+Yeni yordam için `--snapshot-copy=numeric` ve farklı çıktı adı kullanın. Dense profil için `--sizes=100000 --resources=2000 --actuals=50000 --calendar-days=10000`. Betik .env yüklemez, mevcut DB yolu/provider kabul etmez; yalnız geçici SQL.js veritabanlarını oluşturup siler. Çıktı yolu önceden bulunmamalıdır.
+
+Ham final çıktıları bu oturumda `/tmp/aa-copy-{medium,dense}-final-{full,numeric}-20261001.json` dosyalarında. İlk deneme sonuçları final karşılaştırmaya karıştırılmadı. `/tmp` kalıcı arşiv değildir. Final karşılaştırmanın kaynak hash'leri:
+
+- mutationSnapshotSha256: `d42c624a010d89315d6b9759f7149731954df64844cdb9fbee89eb4643638306`
+- storeSha256: `55a336610d3df6315e74458fa65911b7f15a450a364c2312860e903212653347`
+- operationsSha256: `41b0cd408246881e04f4536fdbec90fdc14eef2ebe3b576c357966f0778f60e9`
+- changeServiceSha256: `f618ff658fae7691436ddf012256eef3a3f666c5cadb0d83e11e2e3001daad7a`
+- auditSha256: `ae66df2889c7b5560371b840d01c138cc1abcf2ecab2df4b0fcb7f88f9b6e417`
+- sqlJsAdapterSha256: `e7ead29cad3a25a926a52763e5f99a6258c004ac2a85d65703f193f3b7da035d`
+- schemaSha256: `40774711b6218062d1ada75511d0c4973c5b338e38b6b951b3519b49b7a9e2d7`
+- benchmarkSha256: `babd577313c54eb16354c6030b07478616150a6fd458b814bc99d5efaa28390f`
+- changeSetSha256: `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8`
