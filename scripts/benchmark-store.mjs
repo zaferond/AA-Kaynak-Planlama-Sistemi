@@ -5,7 +5,7 @@ import { performance } from "node:perf_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import assert from "node:assert/strict";
 import { Store } from "../backend/store.mjs";
-import { applyChanges } from "../backend/operations.mjs";
+import { applyChanges, stageChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
 import { hashPassword } from "../backend/auth.mjs";
 
@@ -13,12 +13,12 @@ import { hashPassword } from "../backend/auth.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|calendar-days|audit-events|response|output)=(.+)$/.exec(
+      /^--(sizes|samples|calendar-days|audit-events|response|validation|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --calendar-days=1000 --audit-events=0 --response=separate|planning --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --calendar-days=1000 --audit-events=0 --response=separate|planning --validation=double|single --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -39,6 +39,10 @@ const auditEvents = integer(options.get("audit-events") || "0", 0, 100000);
 const responseMode = options.get("response") || "separate";
 if (!["separate", "planning"].includes(responseMode))
   throw Error("Expected --response=separate or --response=planning.");
+const validationMode = options.get("validation") || "single";
+if (!["single", "double"].includes(validationMode))
+  throw Error("Expected --validation=single or --validation=double.");
+const apply = validationMode === "single" ? stageChanges : applyChanges;
 const percentile = (values, p) =>
   [...values].sort((a, b) => a - b)[
     Math.max(0, Math.ceil(values.length * p) - 1)
@@ -154,6 +158,22 @@ function instrument(store) {
         },
     );
   wrap(
+    globalThis,
+    "structuredClone",
+    (original) =>
+      function (...args) {
+        const start = performance.now();
+        try {
+          return original.apply(this, args);
+        } finally {
+          if (current) {
+            current.cloneMs += performance.now() - start;
+            current.cloneCalls++;
+          }
+        }
+      },
+  );
+  wrap(
     store.db,
     "raw",
     (original) =>
@@ -198,6 +218,8 @@ function instrument(store) {
         persistMs: 0,
         persistCalls: 0,
         domainMs: 0,
+        cloneMs: 0,
+        cloneCalls: 0,
         exportMs: 0,
         exportCalls: 0,
         exportBytes: 0,
@@ -246,7 +268,7 @@ for (const size of sizes) {
     await store.mutate(
       user,
       (data, active) =>
-        applyChanges(data, active, [
+        apply(data, active, [
           {
             kind: "allocation",
             id: key,
@@ -268,7 +290,7 @@ for (const size of sizes) {
         user,
         (data, active) => {
           const domainStart = performance.now();
-          applyChanges(data, active, [
+          apply(data, active, [
             {
               kind: "allocation",
               id: key,
@@ -304,6 +326,7 @@ for (const size of sizes) {
         "readMs",
         "persistMs",
         "domainMs",
+        "cloneMs",
         "exportMs",
         "jsonMs",
       ].map((key) => [
@@ -319,6 +342,7 @@ for (const size of sizes) {
     const result = {
       allocations: size,
       responseMode,
+      validationMode,
       resources: 200,
       calendarDays,
       initialAuditEvents: auditEvents,
@@ -337,10 +361,12 @@ for (const size of sizes) {
       JSON.stringify({
         allocations: size,
         responseMode,
+        validationMode,
         calendarDays,
         initialAuditEvents: auditEvents,
         medians,
         readCalls: observations[0].readCalls,
+        cloneCalls: observations[0].cloneCalls,
         selectedRows: observations[0].selectedRows,
         writtenRows: observations[0].writtenRows,
         writeParameterBytes: observations[0].writeParameterBytes,
@@ -358,8 +384,21 @@ const report = {
   provider: "sqljs",
   samples,
   responseMode,
+  validationMode,
   storeSha256: createHash("sha256")
     .update(await fs.readFile(new URL("../backend/store.mjs", import.meta.url)))
+    .digest("hex"),
+  operationsSha256: createHash("sha256")
+    .update(
+      await fs.readFile(new URL("../backend/operations.mjs", import.meta.url)),
+    )
+    .digest("hex"),
+  changeServiceSha256: createHash("sha256")
+    .update(
+      await fs.readFile(
+        new URL("../backend/change-service.mjs", import.meta.url),
+      ),
+    )
     .digest("hex"),
   scope:
     "Local synthetic write + full response pipeline (separate Store.view or planning view within mutation); no HTTP/network or native MSSQL performance claim. All databases created and removed in os.tmpdir().",

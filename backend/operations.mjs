@@ -87,6 +87,14 @@ function recalculateActualPercentages(d, resourceId, month) {
   }
 }
 export function applyChanges(d, u, input) {
+  stageChanges(d, u, input);
+  Object.assign(d, validate(d));
+  return d;
+}
+
+// Store.mutate validates the final draft before persistence. Standalone callers
+// use applyChanges above, which retains full validation and normalization.
+export function stageChanges(d, u, input) {
   const changes = changesSchema.parse(input),
     seen = new Set(),
     affectedActualMonths = new Set();
@@ -351,7 +359,6 @@ export function applyChanges(d, u, input) {
     if (!d.resources.some((resource) => resource.id === resourceId)) continue;
     recalculateActualPercentages(d, resourceId, month);
   }
-  Object.assign(d, validate(d));
   return d;
 }
 const leaderChangeSchema = z.object({

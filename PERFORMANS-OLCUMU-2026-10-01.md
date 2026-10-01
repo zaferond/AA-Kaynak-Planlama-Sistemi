@@ -97,3 +97,36 @@ Her veri boyutunda tam veri okuma **2'den 1'e** indi; yazılan satır sayısı *
 - Mevcut istemci testleri eski yanıtların yeni görüntü/yetkileri geri almamasını, oturum değişimini ve kayıt/okuma sırasını doğrulamaya devam ediyor. İstemci sözleşmesi ve ön yüz değişmedi.
 - `npm run verify`: **186/186** test; biçim, TypeScript ve üretim derlemesi başarılı.
 - Tek tam veri okuması, tam veri kopyalama/doğrulama/diff ve tam JSON yanıt hâlâ mevcut. İlk sorguyu da daraltmak daha kapsamlı bir kayıt/yanıt sözleşmesi gerektiriyor. Sıradaki inceleme bu kalan maliyetleri ve özellikle iki katmanlı doğrulamanın sorumluluğunu ayırmak; yetki, FK, toplu işlem ve audit doğrulaması korunmalı.
+
+## Devam ölçümü — API kayıtlarında tek son model doğrulaması
+
+On altıncı adımda `applyChanges` iki sorumluluğa ayrıldı. `stageChanges` komut şemasını, yetkiyi, revision'ı ve aylık limitleri kontrol edip son taslağı ve türetilmiş yüzdeleri hazırlar. `/api/changes` bu işlevi yalnız `Store.mutate` içinde çalıştırır; Store son modelin tamamını **kaydetmeden önce bir kez** doğrular ve normalize eder. Veri bütünlüğü kontrolü kaldırılmadı, istemciden gelen bir doğrulama-atlama seçeneği eklenmedi.
+
+`applyChanges` doğrudan çağrıldığında staging + tam doğrulama/normalizasyon yapmaya devam eder. Böylece transaction dışında bu fonksiyonu kullanan domain çağrıları aynı sözleşmeyi korur. Liderlik, import, restore gibi diğer endpoint'lerin akışları bu adımda değiştirilmedi. Planlanan hücreler aynı commit'ten yanıt almaya, diğer değişiklik paketleri mevcut SQL view yolunu kullanmaya devam ediyor.
+
+Betik artık `--validation=double|single` ile eski ve yeni yolları aynı Store üzerinde ölçer. Varsayılan `single`, güncel API akışıdır. Önceki bölümlerin iki doğrulamalı sonuçlarını yeniden üretirken `--validation=double` seçilmeli. JSON çıktısına operations/service kaynak hash'leri ve global `structuredClone` çağrı sayısı/süresi eklendi; bu süre Zod'un şema parse sırasında yaptığı kopyalamaları kapsamaz.
+
+```sh
+npm run bench:store -- --response=planning --validation=double --output=/tmp/aa-double-new.json
+npm run bench:store -- --response=planning --validation=single --output=/tmp/aa-single-new.json
+```
+
+Aynı sentetik boyutlar, beş örnek ve bir ısınma kaydı; Node 24.21.0 / SQL.js. Ölçümler 16:24–16:25 UTC (19:24–19:25 İstanbul). Store hash'i önceki bölümle aynı; operations hash'i `0343f1106bdc24afc2fa029179073105ba57cd8e78c076ee4e74cd03cb20b669`, service hash'i `5539af3b6309ed379284cbe4867b4bed6c1480adbe28ce5677258cb2fe3f80b1`. Süreler yerel milisaniye medyanlarıdır; HTTP/ağ/MSSQL dahil değildir.
+
+| Planlanan hücre | Çift doğrulamalı kayıt + yanıt | Tek son doğrulama | Tam okuma önce / sonra | `structuredClone` önce / sonra |
+| ---: | ---: | ---: | ---: | ---: |
+| 1.000 | 36,54 | 28,67 | 8,93 / 8,07 | 1,08 / 1,06 |
+| 10.000 | 117,72 | 100,52 | 48,35 / 49,72 | 6,99 / 7,07 |
+| 50.000 | 545,02 | 459,66 | 228,13 / 234,71 | 42,58 / 38,69 |
+
+50.000 hücrede bu deneyde toplam medyan yaklaşık **%15,7 azaldı**. Tam okuma ve `structuredClone` sayısı iki yolda da bir; yazılan satır dört, yazma parametre boyutu 334 bayt ve yanıt boyutu 3.371.253 bayt olarak kaldı. Önceki/yeni p95 örnek değerleri 1.000 hücrede 40,50 / 31,02; 10.000'de 119,97 / 111,72; 50.000'de 565,48 / 466,69 ms. Beş örnek üretim p95 veya MSSQL hız garantisi sağlamaz.
+
+Eski komut fonksiyonu staging + tam doğrulama, yenisi yalnız staging yaptığı için `domainMs` farklı kapsamlar ölçüyor. Yeni 50.000 hücre ölçümündeki 0,08 ms **tam veri doğrulamasının süresi değildir**; Store'un tam son doğrulaması transaction süresinde kalıyor. İç içe ölçülen medyanlar toplanarak toplam hesaplanmamalı.
+
+### Kopyalama ve doğrulama güvenliği
+
+- Önceki görüntünün tam kopyası korundu. Takım liderliği değişince çalışan sürümleri yerinde güncelleniyor; audit ve persist'in eski iç içe değerleri görmesi gerekiyor. Sığ kopya bu değerleri de değiştirebilir. Yeni testte takım değişikliği çalışan revision'ını ilerletti ve audit'te eski/yeni `versions[0].lead` değerleri doğru çıktı. Yaklaşık 39 ms'lik kopyalama maliyeti, genel mutasyon sözleşmesi yeniden tasarlanmadan kaldırılmadı.
+- Negatif/sınır üstü tahsis, proje dönemi dışı kaynak, boş proje adı, olmayan takım bağlantısı ve çakışan kritik tarih içeren altı paket reddedildi. Aynı paketin geçerli ilk hücresi de kaydedilmedi; persist hiç çağrılmadı, veri/generation/revision/audit korundu. Hatalar model/400 doğrulama hataları; SQL constraint'e bırakılmadı.
+- Tek son doğrulama proje/sorumlu metnini temizledi, ay biçimindeki işbaşı/ayrılış tarihlerini güne çevirdi ve geçmiş çalışma dönemlerinin ayrılış bitişini eşitledi. Gelen komutlar değişmedi; dönen yanıt fresh SQL view ile aynı.
+- Üç yeni regresyon testi ile `npm run verify`: **189/189** test; biçim, TypeScript ve üretim derlemesi başarılı. Gerçek SQL.js HTTP CRUD/eşzamanlılık suite'leri güncel service yolunu kullandı. Native MSSQL ortamı hâlâ gerekli.
+- Kalan maliyet: tam okuma, bir tam kopya/son doğrulama, persist ve audit'in değişiklikleri ayrı taraması, tam JSON yanıt. Sıradaki inceleme persist/audit için değişiklik tespitini ortaklaştırmak. Yetki, normalizasyonun türettiği değişiklikler, revision ve atomiklik korunmalı.

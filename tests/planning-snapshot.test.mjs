@@ -307,3 +307,158 @@ test("a prepared planning response is not returned when disk commit fails and da
     await reopened.close();
   }
 });
+
+test("single final validation rejects invalid staged values and references without committing the valid part of a batch", async (t) => {
+  const { store, users, key, hiddenKey } = await setup(t);
+  const persist = store.persist;
+  let persistenceCalls = 0;
+  t.mock.method(store, "persist", async function (...args) {
+    persistenceCalls++;
+    return persist.apply(this, args);
+  });
+  const before = await store.view(users.admin);
+  const audit = (await store.auditLog(users.admin)).total;
+  const project = before.data.projects.find((item) => item.id === "p");
+  const resource = before.data.resources.find((item) => item.id === "r0");
+  const invalid = [
+    { kind: "allocation", id: hiddenKey, value: -0.1, revision: 1 },
+    { kind: "allocation", id: hiddenKey, value: 10000.1, revision: 1 },
+    {
+      kind: "allocation",
+      id: key.replace("2026-09", "2031-01"),
+      value: 1,
+      revision: 0,
+    },
+    {
+      kind: "project",
+      id: "p",
+      value: { ...project, name: "   " },
+      revision: 1,
+    },
+    {
+      kind: "resource",
+      id: "r0",
+      value: {
+        ...resource,
+        versions: [{ ...resource.versions[0], team: "missing" }],
+      },
+      revision: 1,
+    },
+    {
+      kind: "project",
+      id: "p",
+      value: {
+        ...project,
+        milestones: [
+          {
+            ...project.milestones[0],
+            additionalRanges: [
+              {
+                start: "2026-09-10",
+                end: "2026-09-20",
+                description: "Overlap",
+              },
+            ],
+          },
+        ],
+      },
+      revision: 1,
+    },
+  ];
+  for (const change of invalid) {
+    await assert.rejects(
+      changeAndView(store, users.admin, [
+        { kind: "allocation", id: key, value: 0.5, revision: 0 },
+        change,
+      ]),
+      (error) => error.status === 400 || error.name === "ZodError",
+    );
+    assert.deepEqual(await store.view(users.admin), before);
+    assert.equal((await store.auditLog(users.admin)).total, audit);
+  }
+  assert.equal(persistenceCalls, 0);
+});
+
+test("single final validation persists normalized project text and departure history without changing the commands", async (t) => {
+  const { store, users } = await setup(t);
+  const before = await store.view(users.admin);
+  const project = before.data.projects.find((item) => item.id === "p");
+  const resource = before.data.resources.find((item) => item.id === "r0");
+  const commands = [
+    {
+      kind: "project",
+      id: "p",
+      revision: 1,
+      value: {
+        ...project,
+        name: "  Updated project  ",
+        responsibleName: "  Responsible  ",
+      },
+    },
+    {
+      kind: "resource",
+      id: "r0",
+      revision: 1,
+      value: {
+        ...resource,
+        versions: [
+          { ...resource.versions[0], start: "2026-01" },
+          {
+            ...resource.versions[0],
+            effective: "2026-09",
+            status: "İşten Ayrıldı",
+            start: "2026-01",
+            end: "2026-09",
+          },
+        ],
+      },
+    },
+  ];
+  const untouched = structuredClone(commands);
+  const result = await changeAndView(store, users.admin, commands);
+  assert.deepEqual(commands, untouched);
+  assert.deepEqual(result, await store.view(users.admin));
+  const savedProject = result.data.projects.find((item) => item.id === "p");
+  assert.equal(savedProject.name, "Updated project");
+  assert.equal(savedProject.responsibleName, "Responsible");
+  const savedResource = result.data.resources.find((item) => item.id === "r0");
+  for (const version of savedResource.versions) {
+    assert.equal(version.start, "2026-01-01");
+    assert.equal(version.end, "2026-09-30");
+  }
+});
+
+test("the before snapshot preserves old nested resource values for team-change auditing", async (t) => {
+  const { store, users, team, other } = await setup(t);
+  const before = await store.view(users.admin);
+  const audit = (await store.auditLog(users.admin)).total;
+  const result = await changeAndView(store, users.admin, [
+    {
+      kind: "team",
+      id: team.id,
+      revision: 0,
+      value: { ...team, lead: other.lead },
+    },
+  ]);
+  assert.deepEqual(result, await store.view(users.admin));
+  assert.equal(
+    result.data.resources.find((item) => item.id === "r0").versions[0].lead,
+    other.lead,
+  );
+  assert.equal(result.data.revisions["resource:r0"], 2);
+  assert.equal(
+    before.data.resources.find((item) => item.id === "r0").versions[0].lead,
+    team.lead,
+  );
+  const history = await store.auditLog(users.admin);
+  assert.equal(history.total, audit + 2);
+  const resourceEdit = history.entries.find(
+    (entry) =>
+      entry.kind === "resource" &&
+      entry.record_id === "r0" &&
+      entry.action === "update",
+  );
+  assert.deepEqual(resourceEdit.changes, [
+    { path: ["versions", "0", "lead"], before: team.lead, after: other.lead },
+  ]);
+});
