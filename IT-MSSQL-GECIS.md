@@ -149,3 +149,17 @@ Resmî kaynaklar:
 - https://learn.microsoft.com/en-us/sql/t-sql/functions/openjson-transact-sql
 - https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/sp-getapplock-transact-sql
 - https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker
+
+### Giriş sınırı ve güvenilen proxy
+
+HTTPS proxy aynı sunucuda çalışıyorsa `.env` içinde `TRUST_PROXY=loopback` tanımlayın. Ayrı sunucudaysa yalnızca o proxy'nin IP adresini veya dar CIDR aralığını yazın; birden fazla adres virgülle ayrılır. Doğrudan yerel kullanımda boş bırakın. `true`, hop sayısı veya tüm ağı kapsayan `/0` kullanılamaz. Node portuna yalnızca güvenilen proxy'nin erişebilmesini sağlayın. Proxy, dışarıdan gelen `X-Forwarded-For` başlığını güvenli biçimde yeniden oluşturmalı/istemci adresini eklemelidir.
+
+Giriş limiti proxy arkasında doğrulanan istemci IP adresinden hesaplanır. Başarılı girişler deneme kotasını tüketmez; başarısız denemeler için IP ve kullanıcı adı sınırları korunur. Sayaç tek süreç içindedir; birden fazla uygulama örneğine geçmeden önce ortak sayaç deposu gerekir.
+
+### 1 Ekim 2026 mimari iyileştirme paketi — şema 25
+
+- Bu sürüm Node.js 24 veya üzerini gerektirir. Sunucu ve arayüz, `shared/` içindeki aynı TypeScript iş kurallarını kullanır; dağıtıma bu klasör de dahil edilmelidir.
+- Güncellemeden önce veritabanının yedeğini alın. MSSQL ortamında migration hesabıyla `npm run db:migrate` çalıştırın; ardından çalışma zamanı hesabına dönün. Şema 25, `kp_audit_events` tablosunu ve zaman indeksini ekler. Yerel SQL.js modunda migration başlangıçta otomatik uygulanır.
+- Değişiklik geçmişi yönetici yetkisiyle Yetki Kontrol Ekranı → Değişiklik Geçmişi bölümünden görüntülenir. Geçmiş yalnızca bu sürümden sonra yapılan işlemleri kapsar; eski hareketler sonradan üretilemez.
+- Uygulama içindeki JSON veri yedeği denetim geçmişini içermez. Geçmişi korumak için tam veritabanı yedeği alın. Saklama süresi ve arşivleme politikası henüz otomatik değildir.
+- Kilit dosyasına uygun kurulum için `node backend/ensure-dependencies.mjs`; kontrol ve derleme için `npm run verify` kullanın. Windows betiği ve gerçek MSSQL bağlantısı bu pakette yerel olarak çalıştırılarak doğrulanmadı.

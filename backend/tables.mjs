@@ -1,6 +1,23 @@
 // Fixed identifiers only. Never accept table/column names from an API request.
 export const tables = {
-  leaders: { key: ["name"], columns: { name: "nvarchar(200)", manager_name: "nvarchar(200)" } },
+  audit_events: {
+    key: ["id"],
+    columns: {
+      id: "varchar(36)",
+      occurred_at: "varchar(30)",
+      actor_id: "nvarchar(120)",
+      actor_name: "nvarchar(150)",
+      kind: "varchar(20)",
+      record_id: "nvarchar(400)",
+      record_name: "nvarchar(300)",
+      action: "varchar(10)",
+      changes: "nvarchar(max)",
+    },
+  },
+  leaders: {
+    key: ["name"],
+    columns: { name: "nvarchar(200)", manager_name: "nvarchar(200)" },
+  },
   teams: {
     key: ["id"],
     columns: {
@@ -24,7 +41,11 @@ export const tables = {
   },
   project_risks: {
     key: ["id"],
-    columns: { id: "nvarchar(120)", project_id: "nvarchar(120)", payload: "nvarchar(max)" },
+    columns: {
+      id: "nvarchar(120)",
+      project_id: "nvarchar(120)",
+      payload: "nvarchar(max)",
+    },
   },
   project_phases: {
     key: ["project_id", "month"],
@@ -98,11 +119,20 @@ export const tables = {
   },
   actual_worked_hours: {
     key: ["resource_id", "month"],
-    columns: { resource_id: "nvarchar(120)", month: "varchar(7)", hours: "float" },
+    columns: {
+      resource_id: "nvarchar(120)",
+      month: "varchar(7)",
+      hours: "float",
+    },
   },
   actual_percent_entries: {
     key: ["resource_id", "project_id", "month"],
-    columns: { resource_id: "nvarchar(120)", project_id: "nvarchar(120)", month: "varchar(7)", percent: "float" },
+    columns: {
+      resource_id: "nvarchar(120)",
+      project_id: "nvarchar(120)",
+      month: "varchar(7)",
+      percent: "float",
+    },
   },
   person_allocations: {
     key: ["resource_id", "project_id", "month"],

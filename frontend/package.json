@@ -7,7 +7,9 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"../shared/**/*.ts\" \"../backend/**/*.mjs\" \"../scripts/**/*.mjs\" \"../tests/*.mjs\" \"*.mjs\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"../shared/**/*.ts\" \"../backend/**/*.mjs\" \"../scripts/**/*.mjs\" \"../tests/*.mjs\" \"*.mjs\""
   },
   "dependencies": {
     "class-variance-authority": "0.7.1",
@@ -23,8 +25,9 @@
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "prettier": "3.9.9",
     "typescript": "5.9.3",
-    "vite": "8.0.13"
+    "vite": "8.0.16"
   },
   "type": "module"
 }

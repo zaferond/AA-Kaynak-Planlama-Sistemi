@@ -10,18 +10,8 @@ node -e "if(Number(process.versions.node.split('.')[0])<24){console.error('Node.
 if errorlevel 1 goto error
 node backend/setup.mjs
 if errorlevel 1 goto error
-if not exist node_modules\mssql (
- call npm.cmd ci --omit=dev
- if errorlevel 1 goto error
-)
-if not exist node_modules\sql.js (
- call npm.cmd ci --omit=dev
- if errorlevel 1 goto error
-)
-if not exist frontend\node_modules\vite (
- call npm.cmd --prefix frontend ci
- if errorlevel 1 goto error
-)
+node backend/ensure-dependencies.mjs
+if errorlevel 1 goto error
 call npm.cmd run build
 if errorlevel 1 goto error
 call npm.cmd start

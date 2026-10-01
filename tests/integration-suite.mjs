@@ -3,7 +3,10 @@ import http from "node:http";
 
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
-import { currentPlanningMonth, personHoursInMonth } from "../backend/domain/index.mjs";
+import {
+  currentPlanningMonth,
+  personHoursInMonth,
+} from "../backend/domain/index.mjs";
 export async function integrationSuite(store) {
   let server, app;
   try {
@@ -101,24 +104,74 @@ export async function integrationSuite(store) {
       ],
     });
     const milestone = {
-      id: "info_1", name: "Proje Bilgisi",
-      start: "2026-03-10", end: "2026-03-12", barColor: "purple", barStyle: "solid", barText: "İlk açıklama",
-      additionalRanges: [{ start: "2026-04-10", end: "2026-04-12", description: "İkinci açıklama", color: "green" }],
+      id: "info_1",
+      name: "Proje Bilgisi",
+      start: "2026-03-10",
+      end: "2026-03-12",
+      barColor: "purple",
+      barStyle: "solid",
+      barText: "İlk açıklama",
+      additionalRanges: [
+        {
+          start: "2026-04-10",
+          end: "2026-04-12",
+          description: "İkinci açıklama",
+          color: "green",
+        },
+      ],
     };
     const savedMilestone = await request("/changes", {
-      changes: [{ kind: "project", id: "p", value: { ...project, milestones: [milestone] }, revision: 1 }],
+      changes: [
+        {
+          kind: "project",
+          id: "p",
+          value: { ...project, milestones: [milestone] },
+          revision: 1,
+        },
+      ],
     });
-    assert.deepEqual(savedMilestone.json.data.projects.find(p => p.id === "p").milestones, [milestone]);
-    assert.deepEqual((await get()).data.projects.find(p => p.id === "p").milestones, [milestone]);
+    assert.deepEqual(
+      savedMilestone.json.data.projects.find((p) => p.id === "p").milestones,
+      [milestone],
+    );
+    assert.deepEqual(
+      (await get()).data.projects.find((p) => p.id === "p").milestones,
+      [milestone],
+    );
     const revisedMilestone = {
       ...milestone,
-      barNotes: [{ text: "İlk açıklama", includeInReport: true }, { text: "İkinci madde", includeInReport: false }],
-      additionalRanges: [{ ...milestone.additionalRanges[0], notes: [{ text: "İkinci açıklama", includeInReport: true }] }, { start: "2026-05-20", end: "2026-05-22", description: "Üçüncü açıklama", notes: [{ text: "Üçüncü açıklama", includeInReport: false }], color: "amber" }],
+      barNotes: [
+        { text: "İlk açıklama", includeInReport: true },
+        { text: "İkinci madde", includeInReport: false },
+      ],
+      additionalRanges: [
+        {
+          ...milestone.additionalRanges[0],
+          notes: [{ text: "İkinci açıklama", includeInReport: true }],
+        },
+        {
+          start: "2026-05-20",
+          end: "2026-05-22",
+          description: "Üçüncü açıklama",
+          notes: [{ text: "Üçüncü açıklama", includeInReport: false }],
+          color: "amber",
+        },
+      ],
     };
     await request("/changes", {
-      changes: [{ kind: "project", id: "p", value: { ...project, milestones: [revisedMilestone] }, revision: 2 }],
+      changes: [
+        {
+          kind: "project",
+          id: "p",
+          value: { ...project, milestones: [revisedMilestone] },
+          revision: 2,
+        },
+      ],
     });
-    assert.deepEqual((await get()).data.projects.find(p => p.id === "p").milestones, [revisedMilestone]);
+    assert.deepEqual(
+      (await get()).data.projects.find((p) => p.id === "p").milestones,
+      [revisedMilestone],
+    );
     const k = team.id + "|p|2026-09";
     await request("/changes", {
       changes: [{ kind: "allocation", id: k, value: 0.5, revision: 0 }],
@@ -126,48 +179,112 @@ export async function integrationSuite(store) {
     const actualKey = "r|p|2026-09";
     await request("/changes", {
       changes: [
-        { kind: "team", id: team.id, value: { ...team, managerName: "Örnek Yönetici" }, revision: 0 },
+        {
+          kind: "team",
+          id: team.id,
+          value: { ...team, managerName: "Örnek Yönetici" },
+          revision: 0,
+        },
         { kind: "actual", id: actualKey, value: 0.75, revision: 0 },
       ],
     });
-    assert.equal((await get()).data.teams.find(t=>t.id===team.id).managerName,"Örnek Yönetici");
-    assert.equal((await get()).data.actualAllocations[actualKey],0.75);
-    assert.equal((await get()).data.allocations[k],0.5);
-    const overtimeMonth='2026-08',overtimeKey='r|p|'+overtimeMonth,hoursKey='r|'+overtimeMonth;
-    const automaticAmount=personHoursInMonth(overtimeMonth,'r')/360;
-    const automaticHours=automaticAmount*180;
-    await request('/changes',{changes:[{kind:'actual',id:overtimeKey,value:{unit:'percent',value:50},revision:0}]});
-    let overtime=(await store.read()).data;
-    assert.equal(overtime.actualPercentEntries[overtimeKey],50);
-    assert.equal(overtime.actualAllocations[overtimeKey],automaticAmount);
-    const increased=await request('/changes',{changes:[{kind:'workedHours',id:hoursKey,value:220,revision:0}]});
-    assert.equal(increased.json.data.actualAllocations[overtimeKey],automaticAmount);
-    assert(Math.abs(increased.json.data.actualPercentEntries[overtimeKey]-automaticHours/220*100)<1e-10);
-    overtime=(await store.read()).data;
-    assert.equal(overtime.actualWorkedHours[hoursKey],220);
-    assert.equal(overtime.actualAllocations[overtimeKey],automaticAmount);
-    assert(Math.abs(overtime.actualPercentEntries[overtimeKey]-automaticHours/220*100)<1e-10);
-    await request('/changes',{changes:[{kind:'workedHours',id:hoursKey,value:80,revision:1}]},400);
-    overtime=(await store.read()).data;
-    assert.equal(overtime.actualWorkedHours[hoursKey],220);
-    assert.equal(overtime.actualAllocations[overtimeKey],automaticAmount);
-    await request('/changes',{changes:[{kind:'workedHours',id:hoursKey,value:null,revision:1}]});
-    overtime=(await store.read()).data;
-    assert.equal(overtime.actualWorkedHours[hoursKey],undefined);
-    assert.equal(overtime.actualAllocations[overtimeKey],automaticAmount);
-    await request('/changes',{changes:[{kind:'workedHours',id:hoursKey,value:250,revision:2}]});
-    overtime=(await store.read()).data;
-    assert.equal(overtime.actualAllocations[overtimeKey],automaticAmount);
-    assert.equal(overtime.actualPercentEntries[overtimeKey],automaticHours/250*100);
-    assert.equal(overtime.revisions['actual:'+overtimeKey],4);
-    await request('/changes',{changes:[{kind:'actual',id:overtimeKey,value:{unit:'hours',value:90},revision:4}]});
-    overtime=(await store.read()).data;
-    assert.equal(overtime.actualAllocations[overtimeKey],0.5);
-    assert.equal(overtime.actualPercentEntries[overtimeKey],undefined);
-    await request('/changes',{changes:[{kind:'workedHours',id:hoursKey,value:null,revision:3}]});
-    overtime=(await store.read()).data;
-    assert.equal(overtime.actualAllocations[overtimeKey],0.5);
-    assert.equal(overtime.actualWorkedHours[hoursKey],undefined);
+    assert.equal(
+      (await get()).data.teams.find((t) => t.id === team.id).managerName,
+      "Örnek Yönetici",
+    );
+    assert.equal((await get()).data.actualAllocations[actualKey], 0.75);
+    assert.equal((await get()).data.allocations[k], 0.5);
+    const overtimeMonth = "2026-08",
+      overtimeKey = "r|p|" + overtimeMonth,
+      hoursKey = "r|" + overtimeMonth;
+    const automaticAmount = personHoursInMonth(overtimeMonth, "r") / 360;
+    const automaticHours = automaticAmount * 180;
+    await request("/changes", {
+      changes: [
+        {
+          kind: "actual",
+          id: overtimeKey,
+          value: { unit: "percent", value: 50 },
+          revision: 0,
+        },
+      ],
+    });
+    let overtime = (await store.read()).data;
+    assert.equal(overtime.actualPercentEntries[overtimeKey], 50);
+    assert.equal(overtime.actualAllocations[overtimeKey], automaticAmount);
+    const increased = await request("/changes", {
+      changes: [{ kind: "workedHours", id: hoursKey, value: 220, revision: 0 }],
+    });
+    assert.equal(
+      increased.json.data.actualAllocations[overtimeKey],
+      automaticAmount,
+    );
+    assert(
+      Math.abs(
+        increased.json.data.actualPercentEntries[overtimeKey] -
+          (automaticHours / 220) * 100,
+      ) < 1e-10,
+    );
+    overtime = (await store.read()).data;
+    assert.equal(overtime.actualWorkedHours[hoursKey], 220);
+    assert.equal(overtime.actualAllocations[overtimeKey], automaticAmount);
+    assert(
+      Math.abs(
+        overtime.actualPercentEntries[overtimeKey] -
+          (automaticHours / 220) * 100,
+      ) < 1e-10,
+    );
+    await request(
+      "/changes",
+      {
+        changes: [
+          { kind: "workedHours", id: hoursKey, value: 80, revision: 1 },
+        ],
+      },
+      400,
+    );
+    overtime = (await store.read()).data;
+    assert.equal(overtime.actualWorkedHours[hoursKey], 220);
+    assert.equal(overtime.actualAllocations[overtimeKey], automaticAmount);
+    await request("/changes", {
+      changes: [
+        { kind: "workedHours", id: hoursKey, value: null, revision: 1 },
+      ],
+    });
+    overtime = (await store.read()).data;
+    assert.equal(overtime.actualWorkedHours[hoursKey], undefined);
+    assert.equal(overtime.actualAllocations[overtimeKey], automaticAmount);
+    await request("/changes", {
+      changes: [{ kind: "workedHours", id: hoursKey, value: 250, revision: 2 }],
+    });
+    overtime = (await store.read()).data;
+    assert.equal(overtime.actualAllocations[overtimeKey], automaticAmount);
+    assert.equal(
+      overtime.actualPercentEntries[overtimeKey],
+      (automaticHours / 250) * 100,
+    );
+    assert.equal(overtime.revisions["actual:" + overtimeKey], 4);
+    await request("/changes", {
+      changes: [
+        {
+          kind: "actual",
+          id: overtimeKey,
+          value: { unit: "hours", value: 90 },
+          revision: 4,
+        },
+      ],
+    });
+    overtime = (await store.read()).data;
+    assert.equal(overtime.actualAllocations[overtimeKey], 0.5);
+    assert.equal(overtime.actualPercentEntries[overtimeKey], undefined);
+    await request("/changes", {
+      changes: [
+        { kind: "workedHours", id: hoursKey, value: null, revision: 3 },
+      ],
+    });
+    overtime = (await store.read()).data;
+    assert.equal(overtime.actualAllocations[overtimeKey], 0.5);
+    assert.equal(overtime.actualWorkedHours[hoursKey], undefined);
     const stale = await get();
     const competing = await Promise.all(
       [1, 2].map((value) =>
@@ -217,14 +334,31 @@ export async function integrationSuite(store) {
       400,
     );
     await store.bootstrapUser({
-      _id:"test-manager",username:"test.normal",name:"Yönetici",
-      role:"manager",leaders:[team.lead],resourceId:"",active:true,
-      password:await hashPassword(pass),revision:1,version:1,
+      _id: "test-manager",
+      username: "test.normal",
+      name: "Yönetici",
+      role: "manager",
+      leaders: [team.lead],
+      resourceId: "",
+      active: true,
+      password: await hashPassword(pass),
+      revision: 1,
+      version: 1,
     });
     let normal = (await get()).data.users.find(
       (u) => u.username === "test.normal",
     );
-    await request("/users", {username:"cannot-create",name:"No",role:"admin",leaders:[],revision:0},400);
+    await request(
+      "/users",
+      {
+        username: "cannot-create",
+        name: "No",
+        role: "admin",
+        leaders: [],
+        revision: 0,
+      },
+      400,
+    );
     const nLogin = await request("/auth/login", {
       username: "test.normal",
       password: pass,
@@ -237,12 +371,29 @@ export async function integrationSuite(store) {
     assert.equal(state.data.users, undefined);
     assert.ok(state.data.teams.every((t) => t.lead === team.lead));
     assert.equal(state.data.resources[0].name, "Deneme");
-    assert.equal(state.data.actualAllocations[actualKey],0.75);
-    assert.equal(state.data.actualTeamTotals[k],0.75);
-    assert.equal(state.data.teams.find(t=>t.id===team.id).managerName,"Örnek Yönetici");
-    await request("/changes",{changes:[{kind:"actual",id:actualKey,value:1,revision:0}]},409,normalAuth);
-    const managerHoursKey="r|"+currentPlanningMonth();
-    await request("/changes",{changes:[{kind:"workedHours",id:managerHoursKey,value:180,revision:0}]},200,normalAuth);
+    assert.equal(state.data.actualAllocations[actualKey], 0.75);
+    assert.equal(state.data.actualTeamTotals[k], 0.75);
+    assert.equal(
+      state.data.teams.find((t) => t.id === team.id).managerName,
+      "Örnek Yönetici",
+    );
+    await request(
+      "/changes",
+      { changes: [{ kind: "actual", id: actualKey, value: 1, revision: 0 }] },
+      409,
+      normalAuth,
+    );
+    const managerHoursKey = "r|" + currentPlanningMonth();
+    await request(
+      "/changes",
+      {
+        changes: [
+          { kind: "workedHours", id: managerHoursKey, value: 180, revision: 0 },
+        ],
+      },
+      200,
+      normalAuth,
+    );
     await request(
       "/changes",
       {
@@ -259,12 +410,22 @@ export async function integrationSuite(store) {
       normalAuth,
     );
     await request("/backup", undefined, 403, normalAuth);
+    await request("/audit", undefined, 403, normalAuth);
     await store.bootstrapUser({
-      _id:"test-viewer",username:"test.all-leaders",name:"Tüm Liderlikler İzleyicisi",
-      role:"normal",leaders:[],resourceId:"",active:true,
-      password:await hashPassword(pass),revision:1,version:1,
+      _id: "test-viewer",
+      username: "test.all-leaders",
+      name: "Tüm Liderlikler İzleyicisi",
+      role: "normal",
+      leaders: [],
+      resourceId: "",
+      active: true,
+      password: await hashPassword(pass),
+      revision: 1,
+      version: 1,
     });
-    const allViewer = (await get()).data.users.find((u) => u.username === "test.all-leaders");
+    const allViewer = (await get()).data.users.find(
+      (u) => u.username === "test.all-leaders",
+    );
     const allLogin = await request("/auth/login", {
       username: "test.all-leaders",
       password: pass,
@@ -276,18 +437,44 @@ export async function integrationSuite(store) {
     const allView = await get(allAuth);
     assert.deepEqual(
       allView.data.teams.map((item) => item.id),
-      (await get()).data.teams.filter((item) => item.lead).map((item) => item.id),
+      (await get()).data.teams
+        .filter((item) => item.lead)
+        .map((item) => item.id),
     );
     assert.deepEqual(allView.data.leaders, (await get()).data.leaders);
-    await request("/changes", {
-      changes: [{ kind: "allocation", id: other.id + "|p|2026-09", value: 1, revision: 0 }],
-    }, 403, allAuth);
-    await request("/users/delete", {id: allViewer.id, revision: 1}, 404);
-    const allocationBeforeRejectedReset=(await get()).data.allocations[k];
-    await request("/allocations/reset", {
-      revisions: Object.fromEntries(Object.entries(state.data.revisions).filter(([key])=>key.startsWith("allocation:"))),
-    }, 403, normalAuth);
-    assert.equal((await get()).data.allocations[k],allocationBeforeRejectedReset);
+    await request(
+      "/changes",
+      {
+        changes: [
+          {
+            kind: "allocation",
+            id: other.id + "|p|2026-09",
+            value: 1,
+            revision: 0,
+          },
+        ],
+      },
+      403,
+      allAuth,
+    );
+    await request("/users/delete", { id: allViewer.id, revision: 1 }, 404);
+    const allocationBeforeRejectedReset = (await get()).data.allocations[k];
+    await request(
+      "/allocations/reset",
+      {
+        revisions: Object.fromEntries(
+          Object.entries(state.data.revisions).filter(([key]) =>
+            key.startsWith("allocation:"),
+          ),
+        ),
+      },
+      403,
+      normalAuth,
+    );
+    assert.equal(
+      (await get()).data.allocations[k],
+      allocationBeforeRejectedReset,
+    );
     await request(
       "/changes",
       { changes: [{ kind: "allocation", id: k, value: 0.75, revision: 2 }] },
@@ -311,8 +498,8 @@ export async function integrationSuite(store) {
       ],
     });
     assert.equal((await get()).data.resources.length, 0);
-    assert.equal((await get()).data.actualAllocations[actualKey],undefined);
-    assert.equal((await get(normalAuth)).data.actualTeamTotals[k],undefined);
+    assert.equal((await get()).data.actualAllocations[actualKey], undefined);
+    assert.equal((await get(normalAuth)).data.actualTeamTotals[k], undefined);
     const row = {
       row: 2,
       values: {
@@ -329,8 +516,14 @@ export async function integrationSuite(store) {
     };
     const imported = await request("/resources/import", { rows: [row] });
     assert.equal(imported.json.imported, 1);
-    assert.equal(imported.json.data.resources[0].versions[0].effective, "2026-09");
-    assert.equal(imported.json.data.resources[0].versions[0].start, "2026-09-16");
+    assert.equal(
+      imported.json.data.resources[0].versions[0].effective,
+      "2026-09",
+    );
+    assert.equal(
+      imported.json.data.resources[0].versions[0].start,
+      "2026-09-16",
+    );
     assert.equal(
       (await request("/resources/import", { rows: [row] })).json.skipped,
       1,
@@ -345,6 +538,9 @@ export async function integrationSuite(store) {
       400,
     );
     assert.equal((await get()).data.resources.length, 1);
+    const audit = (await request("/audit?limit=2")).json;
+    assert.equal(audit.entries.length, 2);
+    assert(audit.total >= 2);
     const backup = (await request("/backup")).json;
     assert.equal(backup.data.users, undefined);
     state = await get();
@@ -359,7 +555,10 @@ export async function integrationSuite(store) {
     });
     state = await get();
     await request("/users", {
-      id: normal.id,role:"manager",leaders:[team.lead],resourceId:"",
+      id: normal.id,
+      role: "manager",
+      leaders: [team.lead],
+      resourceId: "",
       revision: state.data.revisions["user:" + normal.id],
     });
     await request("/data", undefined, 401, normalAuth);
@@ -409,7 +608,7 @@ export async function integrationSuite(store) {
     );
     assert.equal((await get()).generation, beforeFailure.generation);
     await request("/changes", { changes: [] }, 403, { cookie, csrf: "bad" });
-    await request("/users/delete", {id: normal.id, revision: 2}, 404);
+    await request("/users/delete", { id: normal.id, revision: 2 }, 404);
     assert.ok(await store.findUser({ id: normal.id }));
     await request("/changes", {
       changes: [
@@ -429,20 +628,59 @@ export async function integrationSuite(store) {
       ).rowCount,
       0,
     );
-    state=await get();
-    await request("/leaders/change",{action:"rename",name:team.lead,newName:"Yeniden Adlandırılan Liderlik",generation:state.generation});
-    state=await get();
+    state = await get();
+    await request("/leaders/change", {
+      action: "rename",
+      name: team.lead,
+      newName: "Yeniden Adlandırılan Liderlik",
+      generation: state.generation,
+    });
+    state = await get();
     assert(state.data.leaders.includes("Yeniden Adlandırılan Liderlik"));
-    assert.equal(state.data.teams.find(t=>t.id===team.id).lead,"Yeniden Adlandırılan Liderlik");
-    assert.equal(state.data.resources[0].versions[0].lead,"Yeniden Adlandırılan Liderlik");
-    await request("/leaders/change",{action:"update",name:"Yeniden Adlandırılan Liderlik",managerName:"Lider Yönetici",generation:state.generation});
-    state=await get();
-    assert.equal(state.data.leaderManagers["Yeniden Adlandırılan Liderlik"],"Lider Yönetici");
-    assert.equal((await store.read()).data.leaderManagers["Yeniden Adlandırılan Liderlik"],"Lider Yönetici");
-    await request("/leaders/change",{action:"delete",name:"Yeniden Adlandırılan Liderlik",generation:state.generation},409);
-    const unused=state.data.teams.find(t=>t.lead===other.lead);
-    await request("/changes",{changes:[{kind:"team",id:unused.id,operation:"delete",revision:state.data.revisions["team:"+unused.id]||0}]});
-    assert(!(await get()).data.teams.some(t=>t.id===unused.id));
+    assert.equal(
+      state.data.teams.find((t) => t.id === team.id).lead,
+      "Yeniden Adlandırılan Liderlik",
+    );
+    assert.equal(
+      state.data.resources[0].versions[0].lead,
+      "Yeniden Adlandırılan Liderlik",
+    );
+    await request("/leaders/change", {
+      action: "update",
+      name: "Yeniden Adlandırılan Liderlik",
+      managerName: "Lider Yönetici",
+      generation: state.generation,
+    });
+    state = await get();
+    assert.equal(
+      state.data.leaderManagers["Yeniden Adlandırılan Liderlik"],
+      "Lider Yönetici",
+    );
+    assert.equal(
+      (await store.read()).data.leaderManagers["Yeniden Adlandırılan Liderlik"],
+      "Lider Yönetici",
+    );
+    await request(
+      "/leaders/change",
+      {
+        action: "delete",
+        name: "Yeniden Adlandırılan Liderlik",
+        generation: state.generation,
+      },
+      409,
+    );
+    const unused = state.data.teams.find((t) => t.lead === other.lead);
+    await request("/changes", {
+      changes: [
+        {
+          kind: "team",
+          id: unused.id,
+          operation: "delete",
+          revision: state.data.revisions["team:" + unused.id] || 0,
+        },
+      ],
+    });
+    assert(!(await get()).data.teams.some((t) => t.id === unused.id));
     await request("/auth/logout", {});
     await request("/data", undefined, 401);
   } finally {

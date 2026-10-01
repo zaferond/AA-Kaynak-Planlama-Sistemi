@@ -11,13 +11,24 @@ import {
   admin,
   fail,
 } from "./auth.mjs";
-import { applyChanges, applyLeaderChange, reset, importRows, restore } from "./operations.mjs";
+import {
+  applyChanges,
+  applyLeaderChange,
+  reset,
+  importRows,
+  restore,
+} from "./operations.mjs";
 export function createApp(
   store,
-  { origin = "http://localhost:3000", secure = false } = {},
+  {
+    origin = "http://localhost:3000",
+    secure = false,
+    trustedProxies = [],
+  } = {},
 ) {
   const app = express();
   app.disable("x-powered-by");
+  app.set("trust proxy", trustedProxies);
   app.use((req, res, next) => {
     res.set({
       "X-Content-Type-Options": "nosniff",
@@ -34,7 +45,6 @@ export function createApp(
     res.set("Cache-Control", "no-store");
     next();
   });
-  app.use(express.json({ limit: "20mb" }));
   app.use("/api", (req, res, next) => {
     if (
       !["GET", "HEAD"].includes(req.method) &&
@@ -70,8 +80,14 @@ export function createApp(
       entry = { n: 0, until: now + 15 * 60000 };
       attempts.set(key, entry);
     }
-    if (++entry.n > max)
+    if (entry.n >= max)
       fail(429, "Çok fazla deneme. 15 dakika sonra tekrar deneyin.");
+    entry.n++;
+    // Reserve attempts while password checks run, but do not charge successful
+    // logins against the shared IP budget or erase earlier failed attempts.
+    return () => {
+      entry.n = Math.max(0, entry.n - 1);
+    };
   }
   const cookieOptions = {
     httpOnly: true,
@@ -86,39 +102,45 @@ export function createApp(
     return m?.[1];
   };
   const dummy = hashPassword(token());
-  app.post("/api/auth/login", async (req, res) => {
-    rate("ip:" + req.socket.remoteAddress, 60);
-    const body = z
-      .object({
-        username: z.string().min(3).max(100),
-        password: z.string().max(256),
-        remember: z.boolean().default(false),
-      })
-      .parse(req.body);
-    const username = body.username.trim().toLowerCase();
-    rate("name:" + username, 15);
-    const u = await store.findUser({ username });
-    if (
-      !(await verifyPassword(body.password, u?.password || (await dummy))) ||
-      !u?.active
-    )
-      fail(401, "Kullanıcı adı veya şifre hatalı ya da hesap pasif.");
-    const raw = token(),
-      csrf = token(),
-      age = (body.remember ? 30 * 24 : 12) * 3600000;
-    await store.createSession({
-      _id: digest(raw),
-      userId: u._id,
-      userVersion: u.version,
-      csrf,
-      expiresAt: new Date(Date.now() + age),
-    });
-    res.cookie("kp_session", raw, {
-      ...cookieOptions,
-      ...(body.remember ? { maxAge: age } : {}),
-    });
-    res.json({ user: publicUser(u), csrf });
-  });
+  app.post(
+    "/api/auth/login",
+    express.json({ limit: "4kb" }),
+    async (req, res) => {
+      const releaseIp = rate("ip:" + req.ip, 60);
+      const body = z
+        .object({
+          username: z.string().min(3).max(100),
+          password: z.string().max(256),
+          remember: z.boolean().default(false),
+        })
+        .parse(req.body);
+      const username = body.username.trim().toLowerCase();
+      const releaseName = rate("name:" + username, 15);
+      const u = await store.findUser({ username });
+      if (
+        !(await verifyPassword(body.password, u?.password || (await dummy))) ||
+        !u?.active
+      )
+        fail(401, "Kullanıcı adı veya şifre hatalı ya da hesap pasif.");
+      releaseIp();
+      releaseName();
+      const raw = token(),
+        csrf = token(),
+        age = (body.remember ? 30 * 24 : 12) * 3600000;
+      await store.createSession({
+        _id: digest(raw),
+        userId: u._id,
+        userVersion: u.version,
+        csrf,
+        expiresAt: new Date(Date.now() + age),
+      });
+      res.cookie("kp_session", raw, {
+        ...cookieOptions,
+        ...(body.remember ? { maxAge: age } : {}),
+      });
+      res.json({ user: publicUser(u), csrf });
+    },
+  );
   app.use("/api", async (req, res, next) => {
     const raw = cookie(req);
     if (!raw) fail(401, "Giriş yapın.");
@@ -134,6 +156,17 @@ export function createApp(
     )
       fail(403, "Oturum doğrulaması başarısız.");
     next();
+  });
+  // Large imports/backups keep their existing allowance, after authentication.
+  const normalJson = express.json({ limit: "2mb" });
+  const bulkJson = express.json({ limit: "20mb" });
+  app.use("/api", (req, res, next) => {
+    const parser = ["/changes", "/resources/import", "/restore"].includes(
+      req.path,
+    )
+      ? bulkJson
+      : normalJson;
+    parser(req, res, next);
   });
   app.get("/api/auth/me", (req, res) =>
     res.json({ user: publicUser(req.user), csrf: req.session.csrf }),
@@ -156,8 +189,10 @@ export function createApp(
     res.json(await store.view(req.user));
   });
   app.post("/api/leaders/change", async (req, res) => {
-    await store.mutate(req.user, (d, u, c, generation) =>
-      applyLeaderChange(d, u, req.body, c, generation),
+    await store.mutate(
+      req.user,
+      (d, u, c, generation) => applyLeaderChange(d, u, req.body, c, generation),
+      { auditUsers: true },
     );
     res.json(await store.view(req.user));
   });
@@ -170,6 +205,16 @@ export function createApp(
       importRows(d, u, req.body.rows),
     );
     res.json({ ...(await store.view(req.user)), ...result });
+  });
+  app.get("/api/audit", async (req, res) => {
+    admin(req.user);
+    const page = z
+      .object({
+        offset: z.coerce.number().int().min(0).max(1000000).default(0),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
+      .parse(req.query);
+    res.json(await store.auditLog(req.user, page));
   });
   app.get("/api/backup", async (req, res) => {
     admin(req.user);
@@ -193,44 +238,69 @@ export function createApp(
     });
     res.json(await store.view(req.user));
   });
-  const permissionInput = z.object({
-    id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
-    role: z.enum(["admin", "manager", "normal"]),
-    leaders: z.array(z.string()).max(100),
-    resourceId: z.string().max(120).default(""),
-    revision: z.number().int().nonnegative(),
-  }).strict();
+  const permissionInput = z
+    .object({
+      id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
+      role: z.enum(["admin", "manager", "normal"]),
+      leaders: z.array(z.string()).max(100),
+      resourceId: z.string().max(120).default(""),
+      revision: z.number().int().nonnegative(),
+    })
+    .strict();
   app.post("/api/users", async (req, res) => {
     admin(req.user);
     rate("user-edit:" + req.user._id, 60);
     const input = permissionInput.parse(req.body);
     if (input.id === "root-admin")
       fail(403, "Ana yönetici yetkileri değiştirilemez.");
-    await store.mutate(req.user, async (d, u, session) => {
-      admin(u);
-      const old = await store.findUser({ id: input.id }, session);
-      if (!old) fail(404, "Kullanıcı bulunamadı. Hesaplar kimlik dizininden sağlanır.");
-      if (old.revision !== input.revision)
-        fail(409, "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.");
-      if (input.leaders.some((leader) => !d.leaders.includes(leader)))
-        fail(400, "Geçersiz liderlik seçimi.");
-      const resourceId=input.role === "normal" ? input.resourceId : "";
-      if (resourceId && !d.resources.some((resource) => resource.id === resourceId))
-        fail(400, "Çalışan kaydı bulunamadı.");
-      if (resourceId) {
-        const linked=(await session.query("SELECT id FROM kp_users WHERE resource_id=@p0 AND id<>@p1",[resourceId,input.id])).rows;
-        if (linked.length) fail(409, "Bu çalışan kaydı başka bir kullanıcıya bağlı.");
-      }
-      await store.saveUser({
-        ...old,
-        role: input.role,
-        leaders: input.role === "admin" ? [] : input.leaders,
-        resourceId,
-        revision: old.revision + 1,
-        version: old.version + 1,
-      }, session);
-      await store.revokeUser(input.id, session);
-    });
+    await store.mutate(
+      req.user,
+      async (d, u, session) => {
+        admin(u);
+        const old = await store.findUser({ id: input.id }, session);
+        if (!old)
+          fail(
+            404,
+            "Kullanıcı bulunamadı. Hesaplar kimlik dizininden sağlanır.",
+          );
+        if (old.revision !== input.revision)
+          fail(
+            409,
+            "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.",
+          );
+        if (input.leaders.some((leader) => !d.leaders.includes(leader)))
+          fail(400, "Geçersiz liderlik seçimi.");
+        const resourceId = input.role === "normal" ? input.resourceId : "";
+        if (
+          resourceId &&
+          !d.resources.some((resource) => resource.id === resourceId)
+        )
+          fail(400, "Çalışan kaydı bulunamadı.");
+        if (resourceId) {
+          const linked = (
+            await session.query(
+              "SELECT id FROM kp_users WHERE resource_id=@p0 AND id<>@p1",
+              [resourceId, input.id],
+            )
+          ).rows;
+          if (linked.length)
+            fail(409, "Bu çalışan kaydı başka bir kullanıcıya bağlı.");
+        }
+        await store.saveUser(
+          {
+            ...old,
+            role: input.role,
+            leaders: input.role === "admin" ? [] : input.leaders,
+            resourceId,
+            revision: old.revision + 1,
+            version: old.version + 1,
+          },
+          session,
+        );
+        await store.revokeUser(input.id, session);
+      },
+      { auditUsers: true },
+    );
     res.json(await store.view(req.user));
   });
   app.use("/api", (_req, res) =>

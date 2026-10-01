@@ -10,16 +10,23 @@ export class SqlJsAdapter {
   async open() {
     await fs.mkdir(path.dirname(this.file), { recursive: true });
     this.lockPath = this.file + ".lock";
-    for(let attempt=0;attempt<2;attempt++){
-      try{
-        this.lock=await fs.open(this.lockPath,"wx",0o600);
-        try{await this.lock.writeFile(String(process.pid))}
-        catch(error){await this.lock.close();this.lock=null;await fs.unlink(this.lockPath);throw error}
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        this.lock = await fs.open(this.lockPath, "wx", 0o600);
+        try {
+          await this.lock.writeFile(String(process.pid));
+        } catch (error) {
+          await this.lock.close();
+          this.lock = null;
+          await fs.unlink(this.lockPath);
+          throw error;
+        }
         break;
-      }catch(e){
-        if(e.code!=="EEXIST")throw e;
-        const recovered=attempt===0&&await this.removeStaleLock();
-        if(!recovered)throw Error("Yerel dosya kullanımda. Önce diğer portalı durdurun.");
+      } catch (e) {
+        if (e.code !== "EEXIST") throw e;
+        const recovered = attempt === 0 && (await this.removeStaleLock());
+        if (!recovered)
+          throw Error("Yerel dosya kullanımda. Önce diğer portalı durdurun.");
       }
     }
     try {
@@ -38,17 +45,28 @@ export class SqlJsAdapter {
       throw e;
     }
   }
-  async removeStaleLock(){
+  async removeStaleLock() {
     let contents;
-    try{contents=await fs.readFile(this.lockPath,"utf8")}catch{return false}
-    const pid=Number(contents.trim());
-    if(!Number.isSafeInteger(pid)||pid<=0)return false;
-    try{process.kill(pid,0);return false}catch(error){if(error.code!=="ESRCH")return false}
-    try{
-      if(await fs.readFile(this.lockPath,"utf8")!==contents)return false;
+    try {
+      contents = await fs.readFile(this.lockPath, "utf8");
+    } catch {
+      return false;
+    }
+    const pid = Number(contents.trim());
+    if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+    try {
+      process.kill(pid, 0);
+      return false;
+    } catch (error) {
+      if (error.code !== "ESRCH") return false;
+    }
+    try {
+      if ((await fs.readFile(this.lockPath, "utf8")) !== contents) return false;
       await fs.unlink(this.lockPath);
       return true;
-    }catch{return false}
+    } catch {
+      return false;
+    }
   }
   configure() {
     this.db.exec("PRAGMA foreign_keys=ON");

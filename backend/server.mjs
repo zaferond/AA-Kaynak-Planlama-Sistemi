@@ -1,3 +1,4 @@
+import { trustedProxyAddresses } from "./trusted-proxies.mjs";
 import { Store } from "./store.mjs";
 import { createApp } from "./app.mjs";
 import { hashPassword } from "./auth.mjs";
@@ -26,7 +27,11 @@ try {
       version: 1,
     });
   }
-  const app = createApp(store, { origin, secure });
+  const app = createApp(store, {
+    origin,
+    secure,
+    trustedProxies: trustedProxyAddresses(env.TRUST_PROXY),
+  });
   const server = app.listen(
     Number(env.PORT || 3000),
     env.HOST || "127.0.0.1",

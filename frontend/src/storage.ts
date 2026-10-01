@@ -1,3 +1,5 @@
+import type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
+export type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
 import type { Data } from "./model";
 import type { Principal } from "./access";
 import type { ImportRow } from "./resource-import";
@@ -5,10 +7,30 @@ let principal: Principal | null = null,
   csrf = "",
   generation = -1;
 let writeTail: Promise<unknown> = Promise.resolve();
-let sessionEpoch=0;
+let sessionEpoch = 0;
+let latestView: { data: Data; generation: number; user?: Principal } | null =
+  null;
+export class StaleSessionError extends Error {
+  constructor() {
+    super("Oturum değişti. Verileri yenileyip tekrar deneyin.");
+    this.name = "StaleSessionError";
+  }
+}
+function clearSession() {
+  sessionEpoch++;
+  principal = null;
+  csrf = "";
+  generation = -1;
+  latestView = null;
+}
+function expireSession() {
+  clearSession();
+  window.dispatchEvent(new Event("session-expired"));
+}
 export const currentUser = () =>
   principal ? structuredClone(principal) : null;
 async function api(path: string, body?: unknown) {
+  const epoch = sessionEpoch;
   const response = await fetch("/api" + path, {
     method: body === undefined ? "GET" : "POST",
     credentials: "same-origin",
@@ -23,16 +45,33 @@ async function api(path: string, body?: unknown) {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const result = await response.json();
+  if (epoch !== sessionEpoch) throw new StaleSessionError();
   if (!response.ok) {
     if (response.status === 401) {
-      principal = null;
-      window.dispatchEvent(new Event("session-expired"));
+      expireSession();
     }
     throw Error(result.error || "Sunucu hatası.");
+  }
+  // Reads and writes can complete out of order. All consumers receive the newest
+  // accepted view; an old response must never replace newer data or permissions.
+  if (
+    result.data &&
+    typeof result.generation === "number" &&
+    latestView &&
+    result.generation < latestView.generation
+  ) {
+    return { ...result, ...latestView };
   }
   if (result.user) principal = result.user;
   if (result.csrf) csrf = result.csrf;
   if (result.generation !== undefined) generation = result.generation;
+  if (result.data && typeof result.generation === "number") {
+    latestView = {
+      data: result.data,
+      generation: result.generation,
+      user: result.user,
+    };
+  }
   return result;
 }
 export async function login(
@@ -40,7 +79,7 @@ export async function login(
   password: string,
   remember = false,
 ) {
-  sessionEpoch++;
+  clearSession();
   await api("/auth/login", {
     username: username.trim().toLowerCase(),
     password,
@@ -57,51 +96,55 @@ export async function resumeRemembered() {
 }
 export async function logout() {
   sessionEpoch++;
+  latestView = null;
+  generation = -1;
   await api("/auth/logout", {});
-  principal = null;
-  csrf = "";
+  clearSession();
 }
 export async function readLocal(): Promise<Data> {
   return (await api("/data")).data;
 }
 export async function checkUpdates() {
+  const epoch = sessionEpoch;
   const response = await fetch("/api/version", { credentials: "same-origin" });
+  if (epoch !== sessionEpoch) return false;
   if (response.status === 401) {
-    window.dispatchEvent(new Event("session-expired"));
+    expireSession();
     return false;
   }
   if (!response.ok) return false;
   const r = await response.json();
-  return r.generation !== generation;
+  return epoch === sessionEpoch && r.generation > generation;
 }
-export type Change = {
-  kind: "allocation" | "actual" | "workedHours" | "calendar" | "personDay" | "project" | "risk" | "resource" | "team";
-  id: string;
-  value: any;
-  revision: number;
-  operation?: "delete";
-};
 export async function writeBatch(changes: Change[]): Promise<Data> {
   // Each response contains the complete data snapshot. Preserve request order so
   // quick edits in separate cells cannot replace a newer snapshot with an older one.
-  const epoch=sessionEpoch;
-  const request=writeTail.then(()=>{
-    if(epoch!==sessionEpoch)throw Error("Oturum değişti. Verileri yenileyip tekrar deneyin.");
-    return api("/changes",{changes});
+  const epoch = sessionEpoch;
+  const request = writeTail.then(() => {
+    if (epoch !== sessionEpoch) throw new StaleSessionError();
+    return api("/changes", { changes });
   });
-  writeTail=request.then(()=>undefined,()=>undefined);
+  writeTail = request.then(
+    () => undefined,
+    () => undefined,
+  );
   return (await request).data;
 }
-export async function writeLocal(
-  kind: Change["kind"],
+export async function writeLocal<K extends ChangeKind>(
+  kind: K,
   id: string,
-  value: any,
+  value: ChangeValues[K] | null,
   revision: number,
 ) {
   return writeBatch([{ kind, id, value, revision }]);
 }
-export async function changeLeader(input: {action:"rename"|"update"|"delete";name:string;newName?:string;managerName?:string}):Promise<Data>{
-  return (await api("/leaders/change",{...input,generation})).data;
+export async function changeLeader(input: {
+  action: "rename" | "update" | "delete";
+  name: string;
+  newName?: string;
+  managerName?: string;
+}): Promise<Data> {
+  return (await api("/leaders/change", { ...input, generation })).data;
 }
 export async function resetAllocations(d: Data): Promise<Data> {
   return (
@@ -154,4 +197,11 @@ export async function restoreBackup(file: File, _includeUsers = false) {
   if (input.format !== "aa-planning-data-v1")
     throw Error("Geçerli bir veri yedeği seçin.");
   return api("/restore", { data: input.data, generation });
+}
+
+export async function readAuditLog(
+  offset = 0,
+  limit = 30,
+): Promise<import("../../shared/audit-types").AuditPage> {
+  return api("/audit?offset=" + offset + "&limit=" + limit);
 }
