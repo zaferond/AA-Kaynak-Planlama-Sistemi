@@ -1,7 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Data, Project, Resource, Team } from "./model";
 import { visibleActualVersion, phaseStyle } from "./model";
-import { writeLocal } from "./storage";
+import { writeBatch } from "./storage";
+import {
+  WorkedHours,
+  ActualAmount as Amount,
+} from "./features/ActualAllocationInputs";
+import {
+  prepareActualAllocationChange,
+  prepareWorkedHoursChange,
+} from "./features/actual-allocation-commands";
+import {
+  createActualMonthIndex,
+  ACTUAL_FTE_TOLERANCE,
+} from "../../shared/actual-months";
 import { groupPage } from "./metrics";
 import Pager from "./Pager";
 import ProjectResponsible from "./ProjectResponsible";
@@ -22,14 +34,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import {
-  actualInputToFte,
-  fteToActualInput,
-  personCalendarHoursInMonth,
-  workdaysInMonth,
-  HOURS_PER_WORKDAY,
-  DEFAULT_MONTHLY_HOURS,
-} from "./actual-units";
+import { workdaysInMonth } from "./actual-units";
 import type { ActualUnit } from "./actual-units";
 
 const numberFormat = new Intl.NumberFormat("tr-TR", {
@@ -40,252 +45,6 @@ const limitMessage =
   "Girdiğiniz değer kişinin çalışma süresinin %100'ünü aşılmasına neden olmaktadır. Lütfen çalışma süresini tekrar değerlendirerek düşürünüz.";
 const hoursLimitMessage =
   "Girdiğiniz yeni aylık çalışma saati kaydedilemez. Mevcut proje dağılımları yeni girilen çalışma saatinin %100'ünü aşmaktadır. Yeni girmek istediğiniz çalışma saatine güncellenebilmesi için öncelikle kaynak dağılımını azaltmanız, sonrasında çalışma saatini güncellemeniz gerekmektedir.";
-
-const unitLabels: Record<ActualUnit, string> = {
-  percent: "%",
-  days: "gün",
-  hours: "saat",
-};
-function formatEntry(
-  value: number,
-  unit: ActualUnit,
-  month: string,
-  workedHours?: number,
-  savedPercent?: number,
-): string {
-  const input =
-    unit === "percent" && savedPercent !== undefined
-      ? savedPercent
-      : fteToActualInput(value, unit, month, workedHours);
-  if (!input) return "";
-  return String(Math.round(input * 100) / 100).replace(".", ",");
-}
-
-function WorkedHours({
-  value,
-  calculatedHours,
-  resource,
-  month,
-  disabled,
-  onSave,
-}: {
-  value?: number;
-  calculatedHours: number;
-  resource: Resource;
-  month: string;
-  disabled: boolean;
-  onSave: (
-    hours: number | null,
-    input: HTMLInputElement | null,
-  ) => Promise<boolean>;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState(
-    String(value ?? calculatedHours).replace(".", ","),
-  );
-  const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    setText(String(value ?? calculatedHours).replace(".", ","));
-    setDirty(false);
-    setError("");
-  }, [value, calculatedHours, resource.id, month]);
-  async function commit() {
-    if (disabled || busy || !dirty) return;
-    const hours =
-      text.trim() === "" ? null : Number(text.trim().replace(",", "."));
-    if (
-      hours !== null &&
-      (!Number.isFinite(hours) || hours < 0 || hours > 1000)
-    ) {
-      setError("0–1000 saat arasında bir değer girin.");
-      return;
-    }
-    setBusy(true);
-    try {
-      const saved = await onSave(hours, inputRef.current);
-      if (!saved) setText(String(value ?? calculatedHours).replace(".", ","));
-      setDirty(false);
-      setError("");
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <span className="worked-hours-input">
-      <input
-        ref={inputRef}
-        aria-label={resource.name + " / " + month + " çalışılan saat"}
-        inputMode="decimal"
-        value={text}
-        disabled={disabled || busy}
-        placeholder={String(calculatedHours)}
-        title={
-          "Otomatik hesap: " +
-          calculatedHours +
-          " saat. Alanı boşaltırsanız otomatik hesap kullanılır."
-        }
-        onFocus={(event) => event.currentTarget.select()}
-        onChange={(event) => {
-          setText(event.target.value);
-          setDirty(true);
-          setError("");
-        }}
-        onBlur={() => void commit()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-          }
-        }}
-        onKeyUp={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-            event.currentTarget.blur();
-          }
-        }}
-      />
-      {error && <small role="alert">{error}</small>}
-    </span>
-  );
-}
-
-function Amount({
-  value,
-  disabled,
-  onSave,
-  label,
-  month,
-  unit,
-  workedHours,
-  savedPercent,
-  otherAllocated,
-  fullyAllocated,
-  onLimitExceeded,
-  onDeselect,
-}: {
-  value: number;
-  disabled: boolean;
-  onSave: (entry: { unit: ActualUnit; value: number }) => Promise<void>;
-  label: string;
-  month: string;
-  unit: ActualUnit;
-  workedHours?: number;
-  savedPercent?: number;
-  otherAllocated: number;
-  fullyAllocated: boolean;
-  onLimitExceeded: (input: HTMLInputElement | null) => void;
-  onDeselect: () => void;
-}) {
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [text, setText] = useState(() =>
-    formatEntry(value, unit, month, workedHours, savedPercent),
-  );
-  const [dirty, setDirty] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    setText(formatEntry(value, unit, month, workedHours, savedPercent));
-    setDirty(false);
-    setError("");
-  }, [value, unit, month, workedHours, savedPercent]);
-  function showLimitWarning() {
-    setText(formatEntry(value, unit, month, workedHours, savedPercent));
-    setDirty(false);
-    setError("");
-    onLimitExceeded(inputRef.current);
-  }
-  async function commit() {
-    if (disabled || busy || !dirty) return;
-    const raw = text.trim() === "" ? 0 : Number(text.trim().replace(",", "."));
-    if (!Number.isFinite(raw) || raw < 0) {
-      setError("Sıfır veya pozitif bir sayı girin.");
-      return;
-    }
-    if (unit === "percent" && raw > 100) {
-      showLimitWarning();
-      return;
-    }
-    const amount = actualInputToFte(raw, unit, month, workedHours);
-    if (!Number.isFinite(amount) || amount > 100) {
-      showLimitWarning();
-      return;
-    }
-    const monthlyLimit = actualInputToFte(100, "percent", month, workedHours);
-    if (otherAllocated + amount > monthlyLimit + 1e-9) {
-      showLimitWarning();
-      return;
-    }
-    setBusy(true);
-    try {
-      await onSave({ unit, value: raw });
-      setDirty(false);
-      setError("");
-    } catch (cause) {
-      const message = (cause as Error).message;
-      if (message.includes("%100")) showLimitWarning();
-      else setError(message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  if (fullyAllocated && !disabled && value === 0)
-    return (
-      <div
-        className="actual-fully-allocated"
-        role="status"
-        title={
-          label + " · kişinin aylık kaynağının tamamı diğer projelere dağıtıldı"
-        }
-        aria-label="Tüm kaynak dağıtıldı"
-      >
-        ✓ Dolu
-      </div>
-    );
-  return (
-    <div className="person-amount">
-      <input
-        ref={inputRef}
-        aria-label={label + " / " + unitLabels[unit]}
-        title={error || label + " / " + unitLabels[unit]}
-        inputMode="decimal"
-        value={unit === "percent" && text ? "%" + text : text}
-        disabled={disabled || busy}
-        placeholder={unit === "percent" ? "%" : "0"}
-        onFocus={(event) => event.currentTarget.select()}
-        onChange={(event) => {
-          setText(
-            unit === "percent"
-              ? event.target.value.replaceAll("%", "")
-              : event.target.value,
-          );
-          setDirty(true);
-          setError("");
-        }}
-        onBlur={() => void commit()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-          }
-        }}
-        onKeyUp={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            event.stopPropagation();
-            event.currentTarget.blur();
-            onDeselect();
-          }
-        }}
-      />
-      {error && <small role="alert">{error}</small>}
-    </div>
-  );
-}
 
 export default function PersonAllocationPanel({
   data,
@@ -418,56 +177,20 @@ export default function PersonAllocationPanel({
     pageSize,
   );
   useEffect(() => setSelectedCell(null), [visiblePage]);
+  const actualMonths = useMemo(() => createActualMonthIndex(data), [data]);
+  const calendarTotals = (resourceId: string, month: string) =>
+    actualMonths.get(resourceId, month);
+  const autoHours = (resourceId: string, month: string) =>
+    actualMonths.get(resourceId, month).autoHours;
+  const effectiveHours = (resourceId: string, month: string) =>
+    actualMonths.get(resourceId, month).effectiveHours;
   const personMonthTotals: Record<string, number> = {};
-  const calendarTotalsCache = new Map<
-    string,
-    ReturnType<typeof personCalendarHoursInMonth>
-  >();
-  const calendarTotals = (resourceId: string, month: string) => {
-    const key = resourceId + "|" + month;
-    let totals = calendarTotalsCache.get(key);
-    if (!totals) {
-      totals = personCalendarHoursInMonth(
-        month,
-        resourceId,
-        data.workCalendar,
-        data.personCalendar,
-      );
-      calendarTotalsCache.set(key, totals);
-    }
-    return totals;
-  };
-  const autoHours = (resourceId: string, month: string) => {
-    const totals = calendarTotals(resourceId, month);
-    return totals.baseHours - totals.leaveHours;
-  };
-  const nonWorkingHours = (resourceId: string, month: string) => {
-    const totals = calendarTotals(resourceId, month);
-    return (
-      workdaysInMonth(month) * HOURS_PER_WORKDAY -
-      totals.baseHours +
-      totals.leaveHours
-    );
-  };
-  const effectiveHours = (resourceId: string, month: string) => {
-    const manual = data.actualWorkedHours?.[resourceId + "|" + month];
-    return manual === undefined
-      ? autoHours(resourceId, month)
-      : Math.max(0, manual - nonWorkingHours(resourceId, month));
-  };
-  for (const [key, amount] of Object.entries(data.actualAllocations || {})) {
-    const [personId, , month] = key.split("|");
-    personMonthTotals[personId + "|" + month] =
-      (personMonthTotals[personId + "|" + month] || 0) + amount;
-  }
   for (const resource of people)
-    for (const month of months) {
-      const key = resource.id + "|" + month;
-      personMonthTotals[key] =
-        (personMonthTotals[key] || 0) +
-        calendarTotals(resource.id, month).trainingHours /
-          DEFAULT_MONTHLY_HOURS;
-    }
+    for (const month of months)
+      personMonthTotals[resource.id + "|" + month] = actualMonths.get(
+        resource.id,
+        month,
+      ).totalFte;
   const years = [...new Set(months.map((month) => month.slice(0, 4)))];
   const selectedHoursMonth =
     selectedCell &&
@@ -495,40 +218,30 @@ export default function PersonAllocationPanel({
     month: string,
     entry: { unit: ActualUnit; value: number },
   ) {
-    const key = resource.id + "|" + project.id + "|" + month;
     onSaved(
-      await writeLocal(
-        "actual",
-        key,
-        entry,
-        data.revisions["actual:" + key] || 0,
-      ),
+      await writeBatch([
+        prepareActualAllocationChange(
+          data,
+          resource.id,
+          project.id,
+          month,
+          entry,
+        ),
+      ]),
     );
   }
+
   async function saveHours(
     resource: Resource,
     month: string,
     hours: number | null,
     input: HTMLInputElement | null,
   ): Promise<boolean> {
-    const nextHours = hours ?? autoHours(resource.id, month);
-    const limit = actualInputToFte(100, "percent", month, nextHours);
-    const allocated = personMonthTotals[resource.id + "|" + month] || 0;
-    if (allocated > limit + 1e-9) {
-      openLimit("hours", input);
-      return false;
-    }
-    const key = resource.id + "|" + month;
     try {
-      const storedHours =
-        hours === null ? null : hours + nonWorkingHours(resource.id, month);
       onSaved(
-        await writeLocal(
-          "workedHours",
-          key,
-          storedHours,
-          data.revisions["workedHours:" + key] || 0,
-        ),
+        await writeBatch([
+          prepareWorkedHoursChange(data, resource.id, month, hours),
+        ]),
       );
       return true;
     } catch (cause) {
@@ -628,6 +341,10 @@ export default function PersonAllocationPanel({
                     selectedHoursPerson.id,
                     selectedHoursMonth,
                   )}
+                  maxHours={
+                    actualMonths.get(selectedHoursPerson.id, selectedHoursMonth)
+                      .maxEffectiveHours
+                  }
                   disabled={false}
                   onSave={(hours, input) =>
                     saveHours(
@@ -846,13 +563,9 @@ export default function PersonAllocationPanel({
                                     (personMonthTotals[
                                       resource.id + "|" + month
                                     ] || 0) >=
-                                    actualInputToFte(
-                                      100,
-                                      "percent",
-                                      month,
-                                      effectiveHours(resource.id, month),
-                                    ) -
-                                      1e-9
+                                    actualMonths.get(resource.id, month)
+                                      .capacityFte -
+                                      ACTUAL_FTE_TOLERANCE
                                   }
                                   disabled={!selectable}
                                   onLimitExceeded={(input) =>
@@ -887,12 +600,10 @@ export default function PersonAllocationPanel({
                           {months.map((month) => {
                             const allocated =
                               personMonthTotals[resource.id + "|" + month] || 0;
-                            const monthlyCapacity = actualInputToFte(
-                              100,
-                              "percent",
+                            const monthlyCapacity = actualMonths.get(
+                              resource.id,
                               month,
-                              effectiveHours(resource.id, month),
-                            );
+                            ).capacityFte;
                             const percent =
                               monthlyCapacity > 0
                                 ? (allocated / monthlyCapacity) * 100

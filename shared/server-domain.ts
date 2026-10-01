@@ -13,6 +13,7 @@ import {
   actualInputToFte,
   effectivePersonHoursInMonth,
   HOURS_PER_WORKDAY,
+  MAX_RECORDED_MONTHLY_HOURS,
 } from "./actual-units.ts";
 import { CRITICAL_DATE_OVERLAP_MESSAGE } from "./milestone-ranges.ts";
 export {
@@ -163,7 +164,9 @@ const schema = z.object({
   risks: z.array(risk).max(100000).default([]),
   allocations: z.record(z.number().min(0).max(10000)),
   actualAllocations: z.record(z.number().min(0).max(100)).optional(),
-  actualWorkedHours: z.record(z.number().min(0).max(1000)).optional(),
+  actualWorkedHours: z
+    .record(z.number().min(0).max(MAX_RECORDED_MONTHLY_HOURS))
+    .optional(),
   actualPercentEntries: z.record(z.number().min(0).max(10000)).optional(),
   workCalendar: z
     .record(

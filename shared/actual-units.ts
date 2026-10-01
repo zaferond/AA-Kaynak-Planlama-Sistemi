@@ -1,6 +1,7 @@
 export type ActualUnit = "percent" | "days" | "hours";
 export const HOURS_PER_WORKDAY = 9;
 export const DEFAULT_MONTHLY_HOURS = 180;
+export const MAX_RECORDED_MONTHLY_HOURS = 1000;
 export const DEFAULT_MONTHLY_DAYS = DEFAULT_MONTHLY_HOURS / HOURS_PER_WORKDAY;
 export type CalendarDay = {
   type: "official" | "religious" | "company";
@@ -151,15 +152,40 @@ export function effectivePersonHoursInMonth(
   calendar: WorkCalendar = {},
   personal: PersonCalendar = {},
 ): number {
-  const { baseHours, leaveHours } = personCalendarHoursInMonth(
+  return personMonthHours(month, resourceId, manual, calendar, personal)
+    .effectiveHours;
+}
+
+/** One calendar calculation supplies display hours, stored-hour conversion and training. */
+export function personMonthHours(
+  month: string,
+  resourceId: string,
+  manual: number | undefined,
+  calendar: WorkCalendar = {},
+  personal: PersonCalendar = {},
+) {
+  const totals = personCalendarHoursInMonth(
     month,
     resourceId,
     calendar,
     personal,
   );
-  if (manual === undefined) return baseHours - leaveHours;
-  const holidayHours = workdaysInMonth(month) * HOURS_PER_WORKDAY - baseHours;
-  return Math.max(0, manual - holidayHours - leaveHours);
+  const autoHours = totals.baseHours - totals.leaveHours;
+  const nonWorkingHours =
+    workdaysInMonth(month) * HOURS_PER_WORKDAY -
+    totals.baseHours +
+    totals.leaveHours;
+  return {
+    ...totals,
+    autoHours,
+    nonWorkingHours,
+    effectiveHours:
+      manual === undefined ? autoHours : Math.max(0, manual - nonWorkingHours),
+    maxEffectiveHours: Math.max(
+      0,
+      MAX_RECORDED_MONTHLY_HOURS - nonWorkingHours,
+    ),
+  };
 }
 
 /** One person-month is 180 hours; a person's recorded hours may include overtime. */

@@ -1,4 +1,5 @@
 import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
+import { MAX_RECORDED_MONTHLY_HOURS } from "../shared/actual-units.ts";
 import { z } from "zod";
 import { fail, admin, publicUser } from "./auth.mjs";
 import {
@@ -44,7 +45,11 @@ const actualEntrySchema = z
     value: z.number().finite().min(0).max(100000),
   })
   .strict();
-const workedHoursSchema = z.number().finite().min(0).max(1000);
+const workedHoursSchema = z
+  .number()
+  .finite()
+  .min(0)
+  .max(MAX_RECORDED_MONTHLY_HOURS);
 const calendarSchema = z.record(
   z
     .object({

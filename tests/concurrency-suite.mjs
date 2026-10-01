@@ -8,6 +8,12 @@ import {
   addCalendarDates,
   prepareCalendarChange,
 } from "../frontend/src/features/calendar-commands.ts";
+import {
+  prepareActualAllocationChange,
+  prepareWorkedHoursChange,
+} from "../frontend/src/features/actual-allocation-commands.ts";
+import { preparePersonalDayChange } from "../frontend/src/features/calendar-commands.ts";
+import { createActualMonthIndex } from "../shared/actual-months.ts";
 
 // Both adapters run this suite against a disposable, explicitly selected test DB.
 export async function concurrencySuite(store, t) {
@@ -357,6 +363,92 @@ export async function concurrencySuite(store, t) {
         assert.equal(after.data.workCalendar["2026-12-02"].label, "Test");
         assert.equal(after.generation, refreshed.generation + 1);
         assert.equal((await history()).total, audit.total + 1);
+      },
+    );
+    await t.test(
+      "net-hour and allocation commands preserve server totals and automatic-hour reset",
+      async () => {
+        const before = await state(),
+          audit = await history();
+        const resourceId = "concurrent-r0",
+          month = "2026-09";
+        const calendar = addCalendarDates(startCalendarDraft(before.data), {
+          from: "2026-09-01",
+          to: "",
+          type: "company",
+          label: "Yarım gün",
+          fraction: 0.5,
+        });
+        const setup = await write([
+          prepareCalendarChange(calendar),
+          preparePersonalDayChange(before.data, resourceId, {
+            date: "2026-09-03",
+            type: "leave",
+            hours: "2,5",
+            label: "",
+          }),
+          preparePersonalDayChange(before.data, resourceId, {
+            date: "2026-09-04",
+            type: "training",
+            hours: "3",
+            label: "",
+          }),
+        ]);
+        assert.equal(setup.status, 200, JSON.stringify(setup.json));
+        let current = await state();
+        const hours = await write([
+          prepareWorkedHoursChange(current.data, resourceId, month, 129),
+        ]);
+        assert.equal(hours.status, 200, JSON.stringify(hours.json));
+        current = await state();
+        assert.equal(
+          current.data.actualWorkedHours[resourceId + "|" + month],
+          136,
+        );
+        assert.equal(
+          createActualMonthIndex(current.data).get(resourceId, month)
+            .effectiveHours,
+          129,
+        );
+        const entry = prepareActualAllocationChange(
+          current.data,
+          resourceId,
+          "concurrent-p0",
+          month,
+          { unit: "percent", value: 50 },
+        );
+        const allocated = await write([entry]);
+        assert.equal(allocated.status, 200, JSON.stringify(allocated.json));
+        current = await state();
+        assert.equal(current.data.actualAllocations[entry.id] * 180, 64.5);
+        assert.equal(current.data.actualPercentEntries[entry.id], 50);
+        assert.equal(
+          createActualMonthIndex(current.data).get(resourceId, month)
+            .trainingHours,
+          3,
+        );
+        const reset = await write([
+          prepareWorkedHoursChange(current.data, resourceId, month, null),
+        ]);
+        assert.equal(reset.status, 200, JSON.stringify(reset.json));
+        const after = await state();
+        assert.equal(
+          after.data.actualWorkedHours[resourceId + "|" + month],
+          undefined,
+        );
+        assert.equal(
+          createActualMonthIndex(after.data).get(resourceId, month)
+            .effectiveHours,
+          191,
+        );
+        assert.equal(after.data.actualAllocations[entry.id] * 180, 64.5);
+        assert(
+          Math.abs(
+            after.data.actualPercentEntries[entry.id] - (64.5 / 191) * 100,
+          ) < 1e-9,
+        );
+        assert.equal(after.generation, before.generation + 4);
+        assert.equal((await history()).total, audit.total + 6);
       },
     );
     await t.test(

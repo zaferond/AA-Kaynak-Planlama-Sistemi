@@ -1,9 +1,8 @@
 import type { Data } from "./model.ts";
 import {
-  DEFAULT_MONTHLY_HOURS,
-  effectivePersonHoursInMonth,
-  trainingHoursInMonth,
-} from "./actual-units.ts";
+  createActualMonthIndex,
+  exceedsActualCapacity,
+} from "./actual-months.ts";
 
 type LimitData = Pick<
   Data,
@@ -19,16 +18,11 @@ export function assertActualMonthlyLimits(
   data: LimitData,
   selectedMonths?: Iterable<string>,
 ): void {
+  const index = createActualMonthIndex(data);
   const months =
-    selectedMonths === undefined ? new Set<string>() : new Set(selectedMonths);
-  const totals = new Map<string, number>();
-  for (const [key, amount] of Object.entries(data.actualAllocations || {})) {
-    const [resourceId, , month] = key.split("|");
-    const personMonth = resourceId + "|" + month;
-    if (selectedMonths === undefined) months.add(personMonth);
-    if (months.has(personMonth))
-      totals.set(personMonth, (totals.get(personMonth) || 0) + amount);
-  }
+    selectedMonths === undefined
+      ? new Set(index.projectMonths())
+      : new Set(selectedMonths);
   if (selectedMonths === undefined)
     for (const key of Object.keys(data.personCalendar || {})) {
       const [resourceId, date] = key.split("|");
@@ -41,24 +35,8 @@ export function assertActualMonthlyLimits(
     const [resourceId, month] = key.split("|");
     const resource = resources.get(resourceId);
     if (!resource) continue;
-    const limit =
-      effectivePersonHoursInMonth(
-        month,
-        resourceId,
-        data.actualWorkedHours?.[key],
-        data.workCalendar,
-        data.personCalendar,
-      ) / DEFAULT_MONTHLY_HOURS;
-    const total =
-      (totals.get(key) || 0) +
-      trainingHoursInMonth(
-        month,
-        resourceId,
-        data.workCalendar,
-        data.personCalendar,
-      ) /
-        DEFAULT_MONTHLY_HOURS;
-    if (total > limit + 1e-9)
+    const { totalFte, capacityFte } = index.get(resourceId, month);
+    if (exceedsActualCapacity(totalFte, capacityFte))
       throw Object.assign(
         Error(
           resource.name +
