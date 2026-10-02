@@ -58,12 +58,12 @@ function milestoneChanges(
     assertMilestoneDateRanges(project, ranges);
     milestone = withMilestoneRanges(draft, cleanMilestoneRanges(ranges));
   }
-  const milestones = [
-    ...(project.milestones || []).filter((m) => m.id !== milestone.id),
-    milestone,
-  ].sort(
-    (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
-  );
+  const existing = project.milestones || [];
+  if (!editor.isNew && !existing.some((m) => m.id === milestone.id))
+    throw Error("Kritik konu bulunamadı. Verileri yenileyip tekrar deneyin.");
+  const milestones = existing.some((m) => m.id === milestone.id)
+    ? existing.map((m) => (m.id === milestone.id ? milestone : m))
+    : [...existing, milestone];
   changes.push(
     command(data, "project", project.id, { ...project, milestones }),
   );

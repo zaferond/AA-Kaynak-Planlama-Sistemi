@@ -28,6 +28,12 @@ export type ProjectTimelineActions = {
   onAddMilestone: (project: Project) => void;
   onEditMilestone: (project: Project, milestone: Milestone) => void;
   onDeleteMilestone: (project: Project, milestone: Milestone) => Promise<void>;
+  onReorderMilestone: (
+    project: Project,
+    sourceId: string,
+    targetId: string,
+    after: boolean,
+  ) => Promise<void>;
   onMilestoneContextMenu: (
     event: MouseEvent<HTMLButtonElement>,
     project: Project,
@@ -168,6 +174,9 @@ export default function ProjectTimelinePanel({
               }
               onDeleteMilestone={(milestone) =>
                 void actions.onDeleteMilestone(p, milestone)
+              }
+              onReorderMilestone={(sourceId, targetId, after) =>
+                void actions.onReorderMilestone(p, sourceId, targetId, after)
               }
               onMilestoneContextMenu={(event, milestone, rangeIndex) =>
                 actions.onMilestoneContextMenu(event, p, milestone, rangeIndex)

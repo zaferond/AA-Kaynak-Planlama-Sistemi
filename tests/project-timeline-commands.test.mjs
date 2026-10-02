@@ -1,10 +1,108 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { prepareTimelineChange } from "../frontend/src/features/project-timeline-commands.ts";
+import {
+  prepareTimelineChange,
+  prepareMilestoneReorder,
+} from "../frontend/src/features/project-timeline-commands.ts";
 import { milestoneRanges } from "../shared/milestone-ranges.ts";
 import { applyChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
 const admin = { _id: "root-admin", role: "admin", leaders: [] };
+
+test("topic ordering preserves dates, nested notes and project metadata with revision and access checks", () => {
+  const data = fixture(),
+    original = structuredClone(data);
+  const ids = data.projects[0].milestones.map((m) => m.id);
+  const command = prepareMilestoneReorder(
+    data,
+    "p",
+    ids[1],
+    ids[0],
+    false,
+    ids,
+  );
+  assert.deepEqual(
+    command.value.milestones.map((m) => m.id),
+    [...ids].reverse(),
+  );
+  assert.deepEqual(data, original);
+  assert.deepEqual(
+    command.value.milestones[1],
+    original.projects[0].milestones[0],
+  );
+  assert.equal(command.revision, 3);
+  assert.throws(
+    () =>
+      applyChanges(
+        structuredClone(data),
+        { role: "normal", _id: "n", leaders: [] },
+        [command],
+      ),
+    (e) => e.status === 403,
+  );
+  applyChanges(data, admin, [command]);
+  assert.deepEqual(
+    validate(data).projects[0].milestones,
+    command.value.milestones,
+  );
+  assert.throws(
+    () => applyChanges(data, admin, [command]),
+    (e) => e.status === 409,
+  );
+  assert.throws(
+    () => prepareMilestoneReorder(data, "p", ids[0], ids[1], false, ids),
+    /sıralaması değişmiş/,
+  );
+  assert.throws(
+    () =>
+      prepareMilestoneReorder(
+        data,
+        "p",
+        "missing",
+        ids[0],
+        false,
+        [...ids].reverse(),
+      ),
+    /bulunamadı/,
+  );
+});
+
+test("topic moves support both insertion sides and skip no-op saves", () => {
+  const data = fixture();
+  const first = data.projects[0].milestones[0];
+  data.projects[0].milestones.push({ ...structuredClone(first), id: "third" });
+  const ids = data.projects[0].milestones.map((m) => m.id);
+  assert.equal(
+    prepareMilestoneReorder(data, "p", ids[0], ids[0], true, ids),
+    null,
+  );
+  assert.equal(
+    prepareMilestoneReorder(data, "p", ids[0], ids[1], false, ids),
+    null,
+  );
+  assert.deepEqual(
+    prepareMilestoneReorder(
+      data,
+      "p",
+      ids[0],
+      ids[2],
+      true,
+      ids,
+    ).value.milestones.map((m) => m.id),
+    [ids[1], ids[2], ids[0]],
+  );
+  assert.deepEqual(
+    prepareMilestoneReorder(
+      data,
+      "p",
+      ids[2],
+      ids[0],
+      false,
+      ids,
+    ).value.milestones.map((m) => m.id),
+    [ids[2], ids[0], ids[1]],
+  );
+});
 const fixture = () => ({
   teams: [{ id: "t", name: "Takım", lead: "L", excelCapacity: 0 }],
   resources: [],

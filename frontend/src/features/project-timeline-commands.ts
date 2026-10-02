@@ -8,6 +8,42 @@ import {
   withMilestoneRanges,
 } from "../../../shared/milestone-ranges.ts";
 
+/** Reorder only topics within one project; dates and nested notes stay intact. */
+export function prepareMilestoneReorder(
+  data: Data,
+  projectId: string,
+  sourceId: string,
+  targetId: string,
+  after: boolean,
+  expectedOrder: readonly string[],
+): Change<"project"> | null {
+  const project = data.projects.find((item) => item.id === projectId);
+  const milestones = project?.milestones || [];
+  if (
+    !project ||
+    !milestones.some((m) => m.id === sourceId) ||
+    !milestones.some((m) => m.id === targetId)
+  )
+    throw Error("Kritik konu bulunamadı. Verileri yenileyip tekrar deneyin.");
+  if (
+    milestones.length !== expectedOrder.length ||
+    milestones.some((m, i) => m.id !== expectedOrder[i])
+  )
+    throw Error("Kritik konu sıralaması değişmiş. Tekrar deneyin.");
+  if (sourceId === targetId) return null;
+  const source = milestones.find((m) => m.id === sourceId)!;
+  const reordered = milestones.filter((m) => m.id !== sourceId);
+  const target = reordered.findIndex((m) => m.id === targetId);
+  reordered.splice(target + (after ? 1 : 0), 0, source);
+  if (reordered.every((m, i) => m.id === milestones[i].id)) return null;
+  return {
+    kind: "project",
+    id: project.id,
+    revision: data.revisions["project:" + project.id] || 0,
+    value: { ...project, milestones: reordered },
+  };
+}
+
 type DateAdjustment = {
   rangeIndex: number;
   mode: "move" | "start" | "end";

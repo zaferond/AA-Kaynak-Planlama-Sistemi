@@ -144,6 +144,39 @@
   gap: 6px;
   min-width: 0;
 }
+.app .projectmatrix .topic-reorder-handle {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 28px;
+  border: 0;
+  border-radius: 4px;
+  color: #71869b;
+  background: transparent;
+  cursor: grab;
+}
+.app .projectmatrix .topic-reorder-handle:hover,
+.app .projectmatrix .topic-reorder-handle:focus-visible {
+  background: #dce8f5;
+  color: #315b83;
+}
+.app .projectmatrix .topic-reorder-handle:active {
+  cursor: grabbing;
+}
+.app .projectmatrix .topic-reorder-handle:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.app .projectmatrix .topic-dragging td {
+  opacity: 0.55;
+}
+.app .projectmatrix .topic-drop-before td {
+  box-shadow: inset 0 2px #4d7fa9;
+}
+.app .projectmatrix .topic-drop-after td {
+  box-shadow: inset 0 -2px #4d7fa9;
+}
 .app .projectmatrix .milestone-symbol {
   flex: none;
   width: 8px;

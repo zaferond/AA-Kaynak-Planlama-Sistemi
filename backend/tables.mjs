@@ -74,6 +74,7 @@ export const tables = {
       bar_text: "nvarchar(max)",
       bar_notes: "nvarchar(max)",
       extra_ranges: "nvarchar(max)",
+      sort_order: "int",
     },
   },
   resources: {

@@ -5,7 +5,10 @@ import WorkspaceFilters from "./features/WorkspaceFilters";
 import PlannedAllocationPanel from "./features/PlannedAllocationPanel";
 import { useProjectMenus } from "./features/useProjectMenus";
 import ProjectContextMenus from "./features/ProjectContextMenus";
-import { prepareTimelineChange } from "./features/project-timeline-commands";
+import {
+  prepareTimelineChange,
+  prepareMilestoneReorder,
+} from "./features/project-timeline-commands";
 import { prepareEditorChanges } from "./features/editor-commands";
 import {
   PLANNING_PERIODS,
@@ -753,6 +756,29 @@ export default function Portal() {
     }
     void deleteMilestone(project, milestone);
   }
+  async function reorderMilestone(
+    project: Project,
+    sourceId: string,
+    targetId: string,
+    after: boolean,
+  ) {
+    if (!data || !isAdmin || saving) return;
+    try {
+      const command = prepareMilestoneReorder(
+        data,
+        project.id,
+        sourceId,
+        targetId,
+        after,
+        (project.milestones || []).map((m) => m.id),
+      );
+      if (!command) return;
+      await batch([command]);
+      setNotice("Kritik konu sıralaması kaydedildi.");
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
   async function changeMilestoneRange(
     project: Project,
     milestone: Milestone,
@@ -1210,6 +1236,7 @@ export default function Portal() {
                       onAddMilestone: openMilestone,
                       onEditMilestone: openMilestone,
                       onDeleteMilestone: deleteMilestone,
+                      onReorderMilestone: reorderMilestone,
                       onMilestoneContextMenu: openMilestoneMenu,
                       onChangeMilestoneRange: changeMilestoneRange,
                       onChangeMilestoneNote: changeMilestoneNote,

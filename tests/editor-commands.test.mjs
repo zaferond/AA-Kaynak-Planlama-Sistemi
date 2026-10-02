@@ -60,6 +60,50 @@ const milestone = () => ({
   ],
 });
 
+test("new topics append even with earlier dates; edits keep their existing row", () => {
+  const data = fixture();
+  const current = milestone();
+  data.projects[0].milestones = [
+    current,
+    { ...structuredClone(current), id: "second", name: "Second" },
+  ];
+  const editor = {
+    kind: "milestone",
+    projectId: "p",
+    isNew: true,
+    draftEmpty: true,
+    value: {
+      ...milestone(),
+      id: "new",
+      start: "2026-01-01",
+      end: "2026-01-01",
+    },
+  };
+  const saved = prepareEditorChanges(data, editor, context)[0].value;
+  assert.deepEqual(
+    saved.milestones.map((m) => m.id),
+    ["m", "second", "new"],
+  );
+  const edited = prepareEditorChanges(
+    { ...data, projects: [saved] },
+    {
+      ...editor,
+      isNew: false,
+      value: { ...current, name: "Changed" },
+    },
+    context,
+  )[0].value;
+  assert.deepEqual(
+    edited.milestones.map((m) => m.id),
+    ["m", "second", "new"],
+  );
+  assert.equal(edited.milestones[0].name, "Changed");
+  assert.throws(
+    () => prepareEditorChanges(data, { ...editor, isNew: false }, context),
+    /bulunamadı/,
+  );
+});
+
 test("editor prepares revision-aware project updates without changing the draft or source", () => {
   const data = freeze(fixture());
   const editor = freeze({

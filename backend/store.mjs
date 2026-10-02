@@ -672,6 +672,64 @@ export class Store {
             ),
           );
         }
+        if (!versions.includes(26)) {
+          if (!auto)
+            throw Error(
+              "Kritik konu sıralaması için IT npm run db:migrate çalıştırmalı.",
+            );
+          await c.batch(
+            await fs.readFile(
+              new URL(
+                "./migrations/026_" + this.provider + ".sql",
+                import.meta.url,
+              ),
+              "utf8",
+            ),
+          );
+          // Keep the order previously displayed by the project screen. All
+          // further reads/writes use the persisted array positions instead.
+          const rows = (
+            await c.query(
+              "SELECT project_id,id,name,start_date,end_date,start_month,end_month FROM kp_project_milestones ORDER BY project_id,id",
+            )
+          ).rows
+            .map((row) => ({
+              ...row,
+              start_date: row.start_date || row.start_month + "-01",
+              end_date:
+                row.end_date ||
+                new Date(
+                  Date.UTC(
+                    Number(row.end_month.slice(0, 4)),
+                    Number(row.end_month.slice(5, 7)),
+                    0,
+                  ),
+                )
+                  .toISOString()
+                  .slice(0, 10),
+            }))
+            .sort(
+              (a, b) =>
+                a.project_id.localeCompare(b.project_id) ||
+                a.start_date.localeCompare(b.start_date) ||
+                a.end_date.localeCompare(b.end_date) ||
+                a.name.localeCompare(b.name, "tr"),
+            );
+          let previousProject,
+            position = 0;
+          for (const row of rows) {
+            if (row.project_id !== previousProject) position = 0;
+            previousProject = row.project_id;
+            await c.query(
+              "UPDATE kp_project_milestones SET sort_order=@p0 WHERE project_id=@p1 AND id=@p2",
+              [position++, row.project_id, row.id],
+            );
+          }
+          if (rows.length)
+            await c.query(
+              "UPDATE kp_settings SET generation=generation+1 WHERE id=1",
+            );
+        }
         if (
           !(await c.query("SELECT id FROM kp_settings WHERE id=1")).rows.length
         ) {
@@ -883,7 +941,7 @@ export class Store {
     }
     for (const r of (
       await c.query(
-        "SELECT * FROM kp_project_milestones ORDER BY project_id,start_month,end_month,id",
+        "SELECT * FROM kp_project_milestones ORDER BY project_id,sort_order,id",
       )
     ).rows) {
       pm.get(r.project_id)?.milestones.push({
@@ -1265,7 +1323,7 @@ export class Store {
       await c.upsert(
         "project_milestones",
         ps.flatMap((p) =>
-          (p.milestones || []).map((milestone) => ({
+          (p.milestones || []).map((milestone, sort_order) => ({
             project_id: p.id,
             id: milestone.id,
             name: milestone.name,
@@ -1279,6 +1337,7 @@ export class Store {
             bar_text: milestone.barText || "",
             bar_notes: JSON.stringify(milestone.barNotes || []),
             extra_ranges: JSON.stringify(milestone.additionalRanges || []),
+            sort_order,
           })),
         ),
       );

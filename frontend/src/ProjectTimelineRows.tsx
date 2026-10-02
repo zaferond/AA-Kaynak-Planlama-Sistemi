@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent, PointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import type { Milestone, Project } from "./model";
 import {
@@ -90,6 +90,11 @@ type Props = {
   onAddMilestone: () => void;
   onEditMilestone: (milestone: Milestone) => void;
   onDeleteMilestone: (milestone: Milestone) => void;
+  onReorderMilestone: (
+    sourceId: string,
+    targetId: string,
+    after: boolean,
+  ) => void;
   onMilestoneContextMenu: (
     event: MouseEvent<HTMLButtonElement>,
     milestone: Milestone,
@@ -952,12 +957,23 @@ export default function ProjectTimelineRows({
   onAddMilestone,
   onEditMilestone,
   onDeleteMilestone,
+  onReorderMilestone,
   onMilestoneContextMenu,
   onChangeMilestoneRange,
   onChangeMilestoneNote,
 }: Props) {
   const [expanded, setExpanded] = useState(expandAllDetails);
   const [hoveredPhase, setHoveredPhase] = useState("");
+  const [draggedTopic, setDraggedTopic] = useState("");
+  const [dropTarget, setDropTarget] = useState<{
+    id: string;
+    after: boolean;
+  } | null>(null);
+  function clearTopicDrag() {
+    setDraggedTopic("");
+    setDropTarget(null);
+  }
+  useEffect(clearTopicDrag, [project.milestones, expanded, saving]);
   const phaseTooltipRef = useRef<HTMLDivElement>(null);
   const phasePointerRef = useRef({ x: 0, y: 0 });
   useLayoutEffect(() => setExpanded(expandAllDetails), [expandAllDetails]);
@@ -991,12 +1007,7 @@ export default function ProjectTimelineRows({
     tooltip.style.left = left / zoom + "px";
     tooltip.style.top = top / zoom + "px";
   }
-  const milestones = [...(project.milestones || [])].sort(
-    (a, b) =>
-      a.start.localeCompare(b.start) ||
-      a.end.localeCompare(b.end) ||
-      a.name.localeCompare(b.name, "tr"),
-  );
+  const milestones = project.milestones || [];
   return (
     <>
       <TableRow className="project-main-row">
@@ -1137,7 +1148,7 @@ export default function ProjectTimelineRows({
               </TableCell>
             </TableRow>
           )}
-          {milestones.map((milestone) => {
+          {milestones.map((milestone, milestoneIndex) => {
             const ranges = milestoneRanges(milestone);
             const bars = milestoneBarsForPeriods(ranges, periods);
             const color =
@@ -1149,9 +1160,84 @@ export default function ProjectTimelineRows({
                 ? weeklyNoteLayout(ranges, periods)
                 : null;
             return (
-              <TableRow className="milestone-row" key={milestone.id}>
+              <TableRow
+                className={
+                  "milestone-row" +
+                  (draggedTopic === milestone.id ? " topic-dragging" : "") +
+                  (dropTarget?.id === milestone.id
+                    ? dropTarget.after
+                      ? " topic-drop-after"
+                      : " topic-drop-before"
+                    : "")
+                }
+                key={milestone.id}
+                onDragOver={(event) => {
+                  if (!isAdmin || saving || !draggedTopic) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  if (draggedTopic === milestone.id) {
+                    setDropTarget(null);
+                    return;
+                  }
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setDropTarget({
+                    id: milestone.id,
+                    after: event.clientY > rect.top + rect.height / 2,
+                  });
+                }}
+                onDrop={(event) => {
+                  if (!isAdmin || saving || !draggedTopic) return;
+                  event.preventDefault();
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  onReorderMilestone(
+                    draggedTopic,
+                    milestone.id,
+                    event.clientY > rect.top + rect.height / 2,
+                  );
+                  clearTopicDrag();
+                }}
+              >
                 <TableCell>
                   <div className="milestone-name-cell">
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        className="topic-reorder-handle"
+                        disabled={saving || milestones.length < 2}
+                        draggable={!saving && milestones.length > 1}
+                        title="Sürükleyerek sırala · Alt + ↑ / ↓"
+                        aria-label={milestone.name + " sırasını değiştir"}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "move";
+                          event.dataTransfer.setData(
+                            "text/plain",
+                            milestone.name,
+                          );
+                          setDraggedTopic(milestone.id);
+                        }}
+                        onDragEnd={clearTopicDrag}
+                        onKeyDown={(event) => {
+                          if (!event.altKey || saving) return;
+                          const offset =
+                            event.key === "ArrowUp"
+                              ? -1
+                              : event.key === "ArrowDown"
+                                ? 1
+                                : 0;
+                          if (!offset) return;
+                          event.preventDefault();
+                          const target = milestones[milestoneIndex + offset];
+                          if (target)
+                            onReorderMilestone(
+                              milestone.id,
+                              target.id,
+                              offset > 0,
+                            );
+                        }}
+                      >
+                        <GripVertical size={16} />
+                      </button>
+                    )}
                     <span
                       className="milestone-symbol"
                       aria-hidden="true"

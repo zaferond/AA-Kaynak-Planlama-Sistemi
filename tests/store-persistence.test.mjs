@@ -5,6 +5,8 @@ import os from "node:os";
 import path from "node:path";
 import { Store } from "../backend/store.mjs";
 import { hashPassword } from "../backend/auth.mjs";
+import { prepareMilestoneReorder } from "../frontend/src/features/project-timeline-commands.ts";
+import { SqlJsAdapter } from "../backend/adapters/sqljs.mjs";
 import {
   applyChanges,
   applyLeaderChange,
@@ -12,6 +14,119 @@ import {
 } from "../backend/operations.mjs";
 
 const password = hashPassword("Persistence-test-only-284!");
+
+test("custom topic order survives editing, append, deletion, restore and database restart", async (t) => {
+  const { store, user, env } = await setup(t);
+  await store.mutate(user, (data) => {
+    data.projects[0].milestones = ["late", "early", "middle"].map((id, i) => ({
+      id,
+      name: id,
+      start: ["2026-12-01", "2026-01-01", "2026-06-01"][i],
+      end: ["2026-12-02", "2026-01-02", "2026-06-02"][i],
+      barNotes: [
+        { text: "Detail " + id, includeInReport: true, completed: true },
+      ],
+    }));
+  });
+  const state = await store.read();
+  assert.deepEqual(
+    state.data.projects[0].milestones.map((m) => m.id),
+    ["late", "early", "middle"],
+  );
+  await store.mutate(user, (data, active) =>
+    applyChanges(data, active, [
+      prepareMilestoneReorder(data, "p", "middle", "late", false, [
+        "late",
+        "early",
+        "middle",
+      ]),
+    ]),
+  );
+  const ordered = await store.read();
+  assert.deepEqual(
+    ordered.data.projects[0].milestones.map((m) => m.id),
+    ["middle", "late", "early"],
+  );
+  await store.mutate(user, (data) => {
+    data.projects[0].name = "Edited project";
+  });
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    assert.deepEqual(
+      (await reopened.read()).data.projects[0].milestones,
+      ordered.data.projects[0].milestones,
+    );
+    await reopened.mutate(user, (data) => {
+      data.projects[0].milestones.push({
+        id: "new",
+        name: "New",
+        start: "2026-01-01",
+        end: "2026-01-01",
+        hasCriticalTopics: false,
+      });
+    });
+    assert.deepEqual(
+      (await reopened.read()).data.projects[0].milestones.map((m) => m.id),
+      ["middle", "late", "early", "new"],
+    );
+    await reopened.mutate(user, (data) => {
+      data.projects[0].milestones = data.projects[0].milestones.filter(
+        (m) => m.id !== "late",
+      );
+    });
+    assert.deepEqual(
+      (await reopened.read()).data.projects[0].milestones.map((m) => m.id),
+      ["middle", "early", "new"],
+    );
+    await reopened.mutate(user, (data, active) =>
+      restore(data, active, ordered.data),
+    );
+    assert.deepEqual(
+      (await reopened.read()).data.projects[0].milestones,
+      ordered.data.projects[0].milestones,
+    );
+  } finally {
+    await reopened.close();
+  }
+});
+
+test("version 26 migrates existing topics in their previous displayed order without altering their content", async (t) => {
+  const { store, user, env } = await setup(t);
+  await store.mutate(user, (data) => {
+    data.projects[0].milestones = [
+      { id: "late", name: "Late", start: "2026-12-01", end: "2026-12-02" },
+      { id: "early", name: "Early", start: "2026-01-01", end: "2026-01-02" },
+    ];
+  });
+  const before = await store.read();
+  await store.close();
+  const adapter = new SqlJsAdapter(env.SQLJS_FILE);
+  try {
+    await adapter.open();
+    await adapter.transaction(async (c) => {
+      await c.query("ALTER TABLE kp_project_milestones DROP COLUMN sort_order");
+      await c.query("DELETE FROM kp_schema_migrations WHERE version=26");
+    });
+  } finally {
+    await adapter.close();
+  }
+  const migrated = new Store({ env });
+  try {
+    await migrated.connect();
+    const after = await migrated.read();
+    const expected = structuredClone(before.data);
+    expected.projects[0].milestones.reverse();
+    assert.deepEqual(after.data, expected);
+    assert.equal(after.generation, before.generation + 1);
+    await migrated.close();
+    await migrated.connect();
+    assert.deepEqual(await migrated.read(), after);
+  } finally {
+    await migrated.close();
+  }
+});
 async function setup(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-persistence-"));
   const env = {
