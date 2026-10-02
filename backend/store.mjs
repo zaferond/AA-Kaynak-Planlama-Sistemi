@@ -16,6 +16,7 @@ import catalog from "../shared/catalog.json" with { type: "json" };
 import {
   validate,
   scopeData,
+  visibleTeamScope,
   workdaysInMonth,
   calendarHoursInMonth,
   effectivePersonHoursInMonth,
@@ -886,7 +887,7 @@ export class Store {
         .rows[0].generation,
     );
   }
-  async read(c = this.db) {
+  async read(c = this.db, viewUser) {
     const s = (await c.query("SELECT * FROM kp_settings WHERE id=1")).rows[0];
     const leaderRows = (await c.query("SELECT * FROM kp_leaders ORDER BY name"))
       .rows;
@@ -1018,6 +1019,13 @@ export class Store {
       this.provider,
       "allocations",
       "amount",
+      // Legacy IDs containing a composite separator must keep the previous
+      // complete-read semantics, which scopeData resolves by key prefix.
+      viewUser &&
+        viewUser.role !== "admin" &&
+        !d.teams.some((t) => t.id.includes("|"))
+        ? [...visibleTeamScope(d, viewUser).ids]
+        : undefined,
     );
     d.actualAllocations = await readCompositeMap(
       c,
@@ -1051,7 +1059,10 @@ export class Store {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
-      const { data, generation } = await this.read(c);
+      // Only this authenticated read-only path may narrow planned SQL rows.
+      // Mutations still validate and persist a complete snapshot; actual rows
+      // remain complete here to compute historical anonymous team totals.
+      const { data, generation } = await this.read(c, publicUser(active));
       return this.projectView(data, generation, active, c);
     }, true);
   }

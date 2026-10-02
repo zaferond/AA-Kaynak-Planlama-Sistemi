@@ -37,7 +37,7 @@ export { isActualStatus } from "./model.ts";
 export { visibleActualVersion } from "./model.ts";
 export { activeTeamMembers } from "./model.ts";
 export { buildCapacityIndex } from "./metrics.ts";
-export { scopeData, allowedTeam } from "./access.ts";
+export { scopeData, allowedTeam, visibleTeamScope } from "./access.ts";
 export { prepareImport, sourceRows, importColumns } from "./resource-import.ts";
 const mo = z.string().refine(validPlanningMonth, "Geçersiz ay.");
 const day = z.string().refine(validPlanningDate, "Geçersiz gün.");

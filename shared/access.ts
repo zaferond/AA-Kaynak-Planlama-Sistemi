@@ -33,11 +33,20 @@ export function allowedTeam(d: Data, u: Principal, id: string) {
       ))
   );
 }
-export function scopeData(d: Data, u: Principal): Data {
-  if (u.role === "admin") return d;
+// View visibility also drives the optional SQL planning read. Write permission
+// remains allowedTeam; an unassigned manager can view teams but cannot edit them.
+export function visibleTeamScope(
+  d: Pick<Data, "teams" | "leaders">,
+  u: Principal,
+) {
   const leaderNames = new Set(u.leaders.length ? u.leaders : d.leaders || []);
   const teams = d.teams.filter((t) => !!t.lead && leaderNames.has(t.lead)),
     ids = new Set(teams.map((t) => t.id));
+  return { leaderNames, teams, ids };
+}
+export function scopeData(d: Data, u: Principal): Data {
+  if (u.role === "admin") return d;
+  const { leaderNames, teams, ids } = visibleTeamScope(d, u);
   const ownId = u.role === "normal" ? u.resourceId || "" : "";
   const managerCanSeePeople = u.role === "manager" && u.leaders.length > 0;
   const assignments = createActualTeamIndex(d.resources);

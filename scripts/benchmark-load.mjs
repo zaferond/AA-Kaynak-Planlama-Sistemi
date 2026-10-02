@@ -64,6 +64,16 @@ let app, current;
 const originalView = store.view,
   originalRead = store.read,
   originalProjection = store.projectView;
+const originalRaw = store.db.raw;
+store.db.raw = function (sql, values, consume) {
+  const result = originalRaw.call(this, sql, values, consume);
+  if (current && /^SELECT\b/i.test(sql)) {
+    const name = /\bFROM\s+\[?(kp_[a-z_]+)\]?/i.exec(sql)?.[1];
+    if (name)
+      current.sqlRows[name] = (current.sqlRows[name] || 0) + result.rowCount;
+  }
+  return result;
+};
 store.view = async function (...args) {
   const start = performance.now();
   try {
@@ -125,6 +135,12 @@ try {
   for (const role of roles) {
     const user = await store.findUser({ id: "bench-" + role });
     const expected = JSON.parse(JSON.stringify(await store.view(user)));
+    // Reference the full read, independently of any view-only SQL narrowing.
+    const reference = await store.transaction(async (c) => {
+      const { data, generation } = await originalRead.call(store, c);
+      return originalProjection.call(store, data, generation, user, c);
+    }, true);
+    assert.deepEqual(expected, JSON.parse(JSON.stringify(reference)));
     const expectedBytes = Buffer.from(JSON.stringify(expected));
     const login = await fetch(origin + "/api/auth/login", {
       method: "POST",
@@ -178,6 +194,7 @@ try {
           viewMs: 0,
           projectMs: 0,
           readCalls: 0,
+          sqlRows: {},
         });
         const response = await load(encoding);
         current = undefined;
@@ -215,6 +232,7 @@ try {
         decodedBytes: rows[0].decodedBytes,
         snapshotSha256: rows[0].snapshotSha256,
         readCalls: rows[0].readCalls,
+        sqlRows: rows[0].sqlRows,
         medians: Object.fromEntries(
           [
             "httpMs",
@@ -263,6 +281,7 @@ const report = {
         "backend/app.mjs",
         "backend/data-response.mjs",
         "backend/store.mjs",
+        "backend/read-records.mjs",
         "shared/access.ts",
         "shared/model.ts",
         "shared/records.ts",

@@ -10,6 +10,7 @@ export async function readRecordMap(
   columns,
   recordKey,
   convert = identity,
+  parameters = [],
 ) {
   const records = {},
     valueIndex = columns.length - 1;
@@ -28,11 +29,11 @@ export async function readRecordMap(
     consumedRows++;
   };
   if (typeof c.scan === "function") {
-    const result = await c.scan(sql, [], consume);
+    const result = await c.scan(sql, parameters, consume);
     if (result?.rowCount !== consumedRows)
       throw Error("SQL satır okuması tamamlanamadı.");
   } else {
-    const { rows } = await c.query(sql);
+    const { rows } = await c.query(sql, parameters);
     for (const row of rows) consume(columns.map((column) => row[column]));
   }
   return records;
@@ -40,7 +41,13 @@ export async function readRecordMap(
 
 // SQLite can return the complete composite key as one text value, reducing
 // WASM-to-JS column decoding. Other adapters keep their original column types.
-export async function readCompositeMap(c, provider, name, valueColumn) {
+export async function readCompositeMap(
+  c,
+  provider,
+  name,
+  valueColumn,
+  planningTeams,
+) {
   const spec = tableSpec(name),
     keys = spec.key;
   if (
@@ -51,24 +58,50 @@ export async function readCompositeMap(c, provider, name, valueColumn) {
     )
   )
     throw Error("Invalid composite map specification");
+  let where = "",
+    parameters = [];
+  if (planningTeams !== undefined) {
+    if (
+      name !== "allocations" ||
+      !Array.isArray(planningTeams) ||
+      !planningTeams.every((id) => typeof id === "string")
+    )
+      throw Error("Invalid planning read scope");
+    const ids = [...new Set(planningTeams)];
+    // Stay below SQLite's conservative 999 / MSSQL's 2100 bind limits. Larger
+    // scopes fall back to the complete read, then scopeData; never truncate.
+    if (ids.length <= 900) {
+      parameters = ids;
+      where = ids.length
+        ? ` WHERE [team_id] IN (${ids.map((_, i) => "@p" + i).join(",")})`
+        : " WHERE 1=0";
+    }
+  }
   if (provider === "sqljs") {
     const key = keys.map(ident).join("||'|'||");
+    // Filtered index seeks group by team. Preserve the existing table-scan
+    // insertion order for JSON, compression and downstream accumulation.
+    const order = where ? " ORDER BY rowid" : "";
     return readRecordMap(
       c,
-      `SELECT ${key} AS [record_key],${ident(valueColumn)} FROM ${table(name)}`,
+      `SELECT ${key} AS [record_key],${ident(valueColumn)} FROM ${table(name)}${where}${order}`,
       ["record_key", valueColumn],
       firstValue,
+      identity,
+      parameters,
     );
   }
   const columns = [...keys, valueColumn];
   return readRecordMap(
     c,
-    `SELECT ${columns.map(ident).join(",")} FROM ${table(name)}`,
+    `SELECT ${columns.map(ident).join(",")} FROM ${table(name)}${where}`,
     columns,
     (values) =>
       keys.length === 2
         ? values[0] + "|" + values[1]
         : values[0] + "|" + values[1] + "|" + values[2],
+    identity,
+    parameters,
   );
 }
 

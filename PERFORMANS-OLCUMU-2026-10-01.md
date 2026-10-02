@@ -527,3 +527,35 @@ node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actu
 Önceki davranış için `9b0579c` checkout'una son benchmark-load betiğini alın. Son betikte rol bazlı ölçüm ve access/model/records kaynak hash'leri eklendi; eski tek admin komutunun varsayılan profili korunur. .env veya mevcut DB/provider yolu kabul edilmez; yalnız sentetik os.tmpdir SQL.js dosyaları oluşturulur ve silinir. Ham raporlar `/tmp/aa-scope-{before,after}-20261002.json`; /tmp kalıcı arşiv değildir. Kaynak SHA-256 değerleri bu dosyalarda bulunur.
 
 Gerçek tarayıcı, WAN, native MSSQL, peak memory/RSS/GC, eşzamanlı kapasite ve istatistiksel üretim p95 ölçülmedi. Yedi örnek hız garantisi sağlamaz. Shared fonksiyonlar kayıt yanıtlarında/ön yüz fallback toplamlarında da kullanılır; onlar için bu ilk yükleme oranları varsayılmaz. Sonraki maliyet SQL'deki tam okunan satırlar; kullanıcı kapsamına göre SQL daraltma bu pakette yapılmadı.
+
+
+## İlk yüklemede planlanan SQL satırlarını daraltma — 2 Ekim 2026
+
+Başlangıç `fbfbd69`; Node v24.21.0. Aynı sentetik profil: 100.000 planlanan, 48.000 gerçekleşen ve 48.000 yüzde kaydı / 400 çalışan / 2.000 izin / 49 proje. Yönetici ilk atanmış liderlikte; normal aynı liderlikteki bench-r0'a bağlı. Admin, manager, normal sırayla; her rol/encoding için bir ısınma + yedi ölçüm, identity/gzip sırası dönüşümlü. Önce/sonra ayrı süreçlerde sırayla, test/build eşzamanlı olmadan çalıştı. Zamanlar UTC: 2026-10-02T07:41:41.384Z / 2026-10-02T07:49:47.816Z.
+
+Salt okunur Store.view, güncel hesabı aynı transaction'da tekrar doğrular; yüklenen takım/liderlik metadata'sından mevcut görünürlük kuralıyla planlanan SQL filtresini üretir. Admin ve kayıt/validasyon işlemleri tam model okumaya devam eder. Gerçekleşen/saat/yüzde/revision/takvim metadata kapsamları bu pakette daraltılmadı; anonim tarihsel takım toplamları diğer çalışanların gerçekleşenlerini de gerektirir. İlk yüklemenin readMs sütunu artık rolün SQL okuması ve küçük kapsam hazırlığıdır; her zaman tam model okuması anlamına gelmez.
+
+| Rol / encoding | Planlanan SQL satırları önce/sonra | SQL okuma önce/sonra (ms) | Projection önce/sonra (ms) | Store.view önce/sonra (ms) | HTTP önce/sonra (ms) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| admin / identity | 100000 / 100000 | 348.73 / 340.38 | 0.14 / 0.14 | 348.94 / 340.58 | 459.76 / 451.16 |
+| admin / gzip | 100000 / 100000 | 349.36 / 339.02 | 0.15 / 0.14 | 349.59 / 339.23 | 460.54 / 451.55 |
+| manager / identity | 100000 / 18602 | 351.76 / 276.82 | 179.08 / 145.69 | 531.21 / 421.42 | 551.99 / 442.92 |
+| manager / gzip | 100000 / 18602 | 401.77 / 277.10 | 184.51 / 149.33 | 587.33 / 426.13 | 614.58 / 456.82 |
+| normal / identity | 100000 / 18602 | 351.05 / 276.85 | 131.58 / 96.36 | 482.71 / 372.56 | 489.88 / 379.58 |
+| normal / gzip | 100000 / 18602 | 351.35 / 274.21 | 132.90 / 97.91 | 483.85 / 372.20 | 499.36 / 380.50 |
+
+Yönetici/normal profillerinde **planlanan** SQL satırları %81,4 azalıyor; bu oran bütün SQL tablolarına ait değildir. Gzip isteyen yönetici SQL medyanı 401,77 → 277,10 ms, normal 351,35 → 274,21 ms. Yönetici önceki identity/gzip SQL değerleri birbirinden farklıydı; süreç/GC/sistem değişkenliği bu deneyde ayrıştırılmadı. Admin'e daraltma uygulanmadığı için küçük süre farkı iyileştirme iddiası sayılmaz. Scope projection da daha küçük planlanan haritasıyla çalışır; oradaki fark yalnız SQL işlem süresi değildir. Ayrı medyan sütunları birebir toplanmaz. Yedi örnek tarayıcı/WAN/üretim kapasitesi veya p95 garantisi sağlamaz.
+
+Betik SQL.js raw SELECT sonuçlarında tablo başına dönen satır sayılarını ayrıca kaydeder. Bu metrik SQL motorunun taradığı tüm satır sayısı, fiziksel I/O, index planı ya da RSS ölçümü değildir. Planlanan 18.602 satır, bu sentetik kullanıcıların seçili liderliğine aittir; gerçek kullanıcı/team kapsamına göre değişir. Gerçekleşen 48.000, yüzde 48.000 ve revision 148.000 satır hâlâ okunuyor. Sorgu sayısı ve Store.read çağrı sayısı değişmedi; ilk yükleme başına bir model okuma var. Sonraki SQL önceliği özellikle revision okumalarının kapsamı.
+
+İlk denemede SQLite IN sorgusu takım index sırasını kullanınca JSON kayıt sırası ve gzip boyutu değişti. Son sorgu filtrelenmiş SQLite sonuçlarını mevcut tablo satır sırasına döndürüyor (ORDER BY rowid); eski JSON ve downstream toplama sırası korunuyor. İlk denemenin süre/byte değerleri son tabloya kullanılmadı. Son koşuda **altı rol/encoding profilinin tamamının snapshot SHA-256 ve wire byte sayıları önceki sürümle aynı**: admin 12.580.866 / 983.727; manager 2.339.452 / 184.034; normal 586.380 / 48.421 (identity/gzip). SQL motorunun sıralama maliyeti son ölçüme dahildir.
+
+Her rolün beklenen modeli ayrıca kapsam daraltması almayan bağımsız Store.read + projectView referansıyla derin karşılaştırılır. Her HTTP örneği beklenen JSON'un byte/hash'iyle denetlenir. Model/generation/revision/mahremiyet/anonim toplam korunur. Bu veri setinde yeni risk kayıtları yoktur; risk ve diğer özel revision davranışları mevcut regresyon testlerinde korunur. MSSQL sorgusu sabit whitelist kolonlar ve bağlı @p parametreleri kullanır; native sunucuda hız/sorgu planı/JSON sırası doğrulanmadı. 900'den fazla görünür takımda tüm okuma + nihai scope fallback'i uygulanır; hiçbir takım listesi kesilmez. Legacy takım kimliğinde birleşik anahtar ayıracı varsa da tam okuma korunur.
+
+Tekrar üretme:
+
+```sh
+node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --roles=admin,manager,normal --output=/tmp/benzersiz-planning-read.json
+```
+
+Önceki davranış için `fbfbd69` checkout'una bu paketin benchmark-load betiğini alın. Profil/döngü aynı; betik SQL satır sayacı ve bağımsız tam okuma referansını ekler. Betik .env yüklemez, mevcut DB/provider yolu kabul etmez; yalnız os.tmpdir içinde sentetik SQL.js dosyası üretip siler. Ham raporlar `/tmp/aa-sql-scope-before-20261002.json` ve `/tmp/aa-sql-scope-after-v2-20261002.json`; /tmp kalıcı arşiv değildir. Kaynak hash'leri raporlarda bulunur. Native MSSQL, gerçek tarayıcı, WAN, peak memory/GC ve eşzamanlı kapasite test edilmedi.
