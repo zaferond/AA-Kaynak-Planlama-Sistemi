@@ -134,8 +134,9 @@
   background: #edf4fb;
 }
 .app .projectmatrix .milestone-row td:first-child {
-  padding: 5px 6px 5px 17px;
-  border-bottom: 1px solid #e7eef6;
+  padding: 8px 6px 8px 17px;
+  vertical-align: middle;
+  border-bottom: 3px solid #b4c8d9;
   background: #edf4fb;
 }
 .app .projectmatrix .milestone-name-cell {
@@ -233,9 +234,9 @@
 .app .projectmatrix .milestone-row td.milestone-month {
   position: relative;
   height: 36px;
-  padding: 0 !important;
+  padding: 8px 0 !important;
   vertical-align: middle;
-  border-bottom: 1px solid #e7eef6;
+  border-bottom: 3px solid #b4c8d9;
   background: #edf4fb;
   overflow: hidden;
 }
@@ -264,7 +265,8 @@
 }
 .app .projectmatrix .milestone-track .gantt-bar {
   position: absolute;
-  top: 6px;
+  top: 50%;
+  transform: translateY(-50%);
   min-width: 6px;
   min-height: 24px;
   padding: 3px 5px;
@@ -505,6 +507,7 @@
 }
 .app .projectmatrix .weekly-note-box {
   position: absolute;
+  transform: translateY(-50%);
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -745,10 +748,10 @@
 
 .milestone-point {
   position: absolute;
-  top: 3px;
+  top: 50%;
   width: 30px;
   height: 30px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;

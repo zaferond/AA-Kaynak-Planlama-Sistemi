@@ -27,11 +27,8 @@ import {
   dateAtPeriodPosition,
   milestoneBarsForPeriods,
 } from "./milestone-bars";
-import {
-  daysForWeekDrag,
-  weeklyLaneGeometry,
-  weeklyNoteLayout,
-} from "./weekly-note-bars";
+import { daysForWeekDrag, weeklyNoteLayout } from "./weekly-note-bars";
+import { timelineItemLayout, type TimelineItem } from "./timeline-item-layout";
 import type { WeeklyNoteBar } from "./weekly-note-bars";
 
 const monthFormat = new Intl.DateTimeFormat("tr-TR", {
@@ -189,7 +186,7 @@ function MilestoneTrack({
   const trackRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
-  const [trackHeight, setTrackHeight] = useState(36);
+  const [itemHeights, setItemHeights] = useState<Record<string, number>>({});
   const [trackWidth, setTrackWidth] = useState(1000);
   useLayoutEffect(() => {
     const track = trackRef.current;
@@ -200,7 +197,6 @@ function MilestoneTrack({
     measure();
     return () => observer.disconnect();
   }, [periods]);
-  const [weeklyLaneHeights, setWeeklyLaneHeights] = useState<number[]>([]);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const noteDragRef = useRef<NoteDragState | null>(null);
@@ -552,26 +548,6 @@ function MilestoneTrack({
     setNotePreview(null);
   }
 
-  useLayoutEffect(() => {
-    if (weeklyLayout) return;
-    const barElements = Array.from(
-      trackRef.current?.querySelectorAll<HTMLButtonElement>(".gantt-bar") || [],
-    );
-    const updateHeight = () => {
-      const nextHeight = Math.max(
-        36,
-        ...barElements.map((bar) => bar.offsetHeight + 12),
-      );
-      setTrackHeight((current) =>
-        current === nextHeight ? current : nextHeight,
-      );
-    };
-    const observer = new ResizeObserver(updateHeight);
-    barElements.forEach((bar) => observer.observe(bar));
-    updateHeight();
-    return () => observer.disconnect();
-  }, [bars, weeklyLayout]);
-
   const defaultColor =
     phasePalette.find((item) => item.id === (milestone.barColor || "red")) ||
     phasePalette[3];
@@ -594,60 +570,57 @@ function MilestoneTrack({
       /* Keep the last valid layout while an invalid drag is shown in the status tooltip. */
     }
   }
-  const weeklyGeometry = weeklyLaneGeometry(
-    displayedWeeklyLayout?.laneCount || 0,
-    weeklyLaneHeights,
-  );
   useLayoutEffect(() => {
-    if (!weeklyLayout) return;
-    const boxes = Array.from(
+    const elements = Array.from(
       trackRef.current?.querySelectorAll<HTMLButtonElement>(
-        ".weekly-note-box",
+        "[data-timeline-item]",
       ) || [],
     );
-    const update = () => {
-      const heights: number[] = [];
-      for (const box of boxes) {
-        const lane = Number(box.dataset.lane);
-        if (Number.isInteger(lane) && lane >= 0)
-          heights[lane] = Math.max(heights[lane] || 0, box.offsetHeight);
-      }
-      setWeeklyLaneHeights((previous) =>
-        previous.length === heights.length &&
-        previous.every((height, index) => height === heights[index])
+    const measure = () => {
+      const next = Object.fromEntries(
+        elements.map((element) => [
+          element.dataset.timelineItem!,
+          element.offsetHeight,
+        ]),
+      );
+      setItemHeights((previous) =>
+        Object.keys(previous).length === Object.keys(next).length &&
+        Object.entries(next).every(([key, height]) => previous[key] === height)
           ? previous
-          : heights,
+          : next,
       );
     };
-    const observer = new ResizeObserver(update);
-    boxes.forEach((box) => observer.observe(box));
-    update();
+    const observer = new ResizeObserver(measure);
+    elements.forEach((element) => observer.observe(element));
+    measure();
     return () => observer.disconnect();
-  }, [weeklyLayout, notePreview?.days]);
-  const pointLanes = new Map<number, number>();
-  const laneEnds: number[] = [];
-  bars
-    .map((bar, index) => ({ bar, index }))
-    .filter(({ bar }) => bar.range.displayKind === "milestone")
-    .sort((a, b) => a.bar.left - b.bar.left)
-    .forEach(({ bar, index }) => {
+  }, [bars, weeklyLayout, notePreview?.days]);
+  const items: TimelineItem[] = bars.flatMap((bar, index) => {
+    const id = "range:" + index;
+    const left = (bar.left * trackWidth) / 100;
+    if (bar.range.displayKind === "milestone") {
       const center = ((bar.left + bar.width / 2) * trackWidth) / 100;
-      let lane = laneEnds.findIndex((end) => end < center - 15);
-      if (lane < 0) lane = laneEnds.length;
-      laneEnds[lane] = center + 15;
-      pointLanes.set(index, lane);
+      return [{ id, left: center - 15, right: center + 15, minimumHeight: 30 }];
+    }
+    return weeklyLayout
+      ? []
+      : [
+          {
+            id,
+            left,
+            right: left + Math.max(6, (bar.width * trackWidth) / 100),
+            minimumHeight: 24,
+          },
+        ];
+  });
+  for (const note of displayedWeeklyLayout?.bars || [])
+    items.push({
+      id: `note:${note.rangeIndex}.${note.noteIndex}`,
+      left: (note.left * trackWidth) / 100 + 2,
+      right: ((note.left + note.width) * trackWidth) / 100 - 2,
+      minimumHeight: 39,
     });
-  const pointBase = weeklyLayout
-    ? weeklyLayout.bars.length
-      ? weeklyGeometry.height
-      : 0
-    : bars.some((bar) => bar.range.displayKind !== "milestone")
-      ? trackHeight
-      : 0;
-  const weeklyTrackHeight = Math.max(
-    weeklyLayout ? weeklyGeometry.height : trackHeight,
-    pointLanes.size ? pointBase + laneEnds.length * 32 + 4 : 0,
-  );
+  const layout = timelineItemLayout(items, itemHeights);
   const dragStatus = notePreview || preview;
   return (
     <div
@@ -656,7 +629,7 @@ function MilestoneTrack({
       style={
         {
           "--milestone-period-width": 100 / periods.length + "%",
-          height: weeklyTrackHeight,
+          height: layout.height,
         } as CSSProperties
       }
     >
@@ -720,6 +693,7 @@ function MilestoneTrack({
           "--gantt-soft": barColor.bg,
           "--gantt-ink": barColor.ink,
           left: displayed.left + "%",
+          top: layout.centers["range:" + index],
           width: displayed.width + "%",
         } as CSSProperties;
         if (bar.range.displayKind === "milestone")
@@ -727,10 +701,11 @@ function MilestoneTrack({
             <button
               type="button"
               key={index}
+              data-timeline-item={"range:" + index}
               className={"milestone-point" + (dragging ? " dragging" : "")}
               style={{
                 left: displayed.left + displayed.width / 2 + "%",
-                top: pointBase + (pointLanes.get(index) || 0) * 32 + 3,
+                top: layout.centers["range:" + index],
               }}
               aria-label={
                 "Milestone: " +
@@ -802,6 +777,7 @@ function MilestoneTrack({
           <button
             type="button"
             key={index}
+            data-timeline-item={"range:" + index}
             className={
               "gantt-bar start end " +
               visibleMilestoneBarStyle(milestone.barStyle) +
@@ -888,7 +864,7 @@ function MilestoneTrack({
           <button
             type="button"
             key={`${note.rangeIndex}-${note.noteIndex}`}
-            data-lane={note.lane}
+            data-timeline-item={`note:${note.rangeIndex}.${note.noteIndex}`}
             className={
               "weekly-note-box " +
               visibleMilestoneBarStyle(milestone.barStyle) +
@@ -900,7 +876,9 @@ function MilestoneTrack({
               {
                 left: note.left + "%",
                 width: note.width + "%",
-                top: weeklyGeometry.tops[note.lane] ?? 5,
+                top: layout.centers[
+                  `note:${note.rangeIndex}.${note.noteIndex}`
+                ],
                 "--gantt-color": color.ink,
                 "--gantt-soft": color.bg,
                 "--gantt-ink": color.ink,
