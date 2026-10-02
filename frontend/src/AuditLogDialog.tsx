@@ -1,4 +1,5 @@
 import { ownValue } from "../../shared/records";
+import retentionPolicy from "../../shared/data-retention-policy.json";
 import { useEffect, useState } from "react";
 import { History, ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -24,6 +25,7 @@ const kinds: Record<string, string> = {
   personDay: "İzin / eğitim",
   leader: "Liderlik",
   user: "Kullanıcı yetkisi",
+  maintenance: "Geçmiş bakımı",
 };
 const fields: Record<string, string> = {
   name: "Ad",
@@ -86,6 +88,10 @@ const fields: Record<string, string> = {
   catalog: "Katalog kaydı",
   id: "Kayıt",
   createdBy: "Oluşturan kullanıcı",
+  auditRetentionYears: "Saklama süresi (yıl)",
+  auditCutoff: "Saklama sınırı (UTC)",
+  auditRemoved: "Kaldırılan geçmiş kaydı",
+  backupChecksum: "Tam yedek doğrulama özeti",
 };
 const values: Record<string, string> = {
   true: "Evet",
@@ -169,7 +175,10 @@ export default function AuditLogDialog({
           <DialogDescription>
             Bu özellik devreye alındıktan sonra kaydedilen değişiklikler.
             Yalnızca yöneticilerden admin rolü olan kullanıcılar
-            görüntüleyebilir.
+            görüntüleyebilir. Saklama süresi{" "}
+            {retentionPolicy.auditRetentionYears} yıldır. Süresi dolan kayıtlar
+            yönetici bakımıyla kaldırılır. Bu geçmiş JSON veri yedeğine dahil
+            değildir.
           </DialogDescription>
         </DialogHeader>
         {error && (

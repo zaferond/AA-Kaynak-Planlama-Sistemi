@@ -24,7 +24,12 @@
     "format:check": "npm --prefix frontend run format:check",
     "verify": "npm run format:check && npm test && npm run build",
     "test:ui": "node scripts/run-browser-checks.mjs",
-    "pretest:ui": "npm run build"
+    "pretest:ui": "npm run build",
+    "db:backup": "node scripts/data-maintenance.mjs backup",
+    "db:verify-backup": "node scripts/data-maintenance.mjs verify",
+    "db:prepare-recovery": "node scripts/data-maintenance.mjs prepare-recovery",
+    "audit:archive": "node scripts/data-maintenance.mjs archive",
+    "audit:retention": "node scripts/data-maintenance.mjs retention"
   },
   "dependencies": {
     "express": "^5.1.0",

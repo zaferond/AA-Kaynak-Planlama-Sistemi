@@ -9,3 +9,6 @@ site/
 tests/local-test-*/
 *.sqlite
 *.sqlite.lock
+aa-backup-*/
+aa-audit-*/
+.aa-pending-*/

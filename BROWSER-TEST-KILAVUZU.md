@@ -40,4 +40,4 @@ Linux ortamında eksik sistem kütüphaneleri varsa `npx playwright install --wi
 
 Testler uygulama davranışını ve veritabanındaki sonucu birlikte denetler; yakalanmamış tarayıcı hataları koşuyu başarısız yapar. Excel dosyalarının ZIP/OOXML yapısı, XML ayrıştırılması ve beklenen hücre değerleri kontrol edilir. Microsoft Excel uygulamasında dosya açma, Windows kurulumu, native MSSQL ve tüm ekran boyutlarının görsel doğrulaması bu komutun kapsamı değildir.
 
-`npm run verify` içindeki 337 mevcut test ile bu 28 tarayıcı grubu ayrı sayılır. Mevcut kalite CI'ına tarayıcı koşusu eklenmedi; bu komut yerelde çalıştırıldı.
+`npm run verify` içindeki birim/entegrasyon testleri ile bu 28 tarayıcı grubu ayrı sayılır. Mevcut kalite CI'ına tarayıcı koşusu eklenmedi; bu komut yerelde çalıştırıldı.
