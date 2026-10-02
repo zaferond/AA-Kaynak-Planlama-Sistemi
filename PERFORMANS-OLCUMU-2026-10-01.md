@@ -371,3 +371,58 @@ Tekrar üretme:
 | changeSetSha256 | `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8` | `be6d66568b205ad5893bca479285131440d2f100d31dd21d4fda7875a2152439` |
 | storeSha256 | `355ddfcac40ae55cfe78a490448d8b64ccb2750537b880eb7976b399c9e23d0c` | `390ed4a3180bdb3ba1c10a5228d6a7172d6dea1afd6702c303791ff0058cff36` |
 | benchmarkSha256 | `eb7f744cfaf4c5e0700a0e0353a6704722acccd1327d03a64b377f322b239b12` | `eb7f744cfaf4c5e0700a0e0353a6704722acccd1327d03a64b377f322b239b12` |
+
+
+## Aylık izin/eğitim/yüzde hesabının tekrar kullanımı — 2 Ekim 2026
+
+Önceki uygulama kodu `d495863`; Node 24.21.0. İki ayrı ölçüm sırayla, bir ısınma ve yedi örnekle çalıştı. Önce benchmark'lar genişletildi ve mevcut davranış ölçüldü; daha sonra hesap/persistence testleri ve son davranış ölçüldü. Test/build aynı anda çalıştırılmadı.
+
+### Saf takvim değişikliği + tam model doğrulaması
+
+400 çalışan, 20 proje, 6 ay: 48.000 yüzde kaydı / 2.400 çalışan-ay; bir tatil tam günden yarım güne değişiyor ve 400 çalışan-ay etkileniyor. Aynı güne girilmiş legacy izin + typed eğitim, kişisel izin, hafta sonu ve tam/yarım ortak tatil, otomatik/230/0 saat birlikte kullanılıyor. Veri kopyası, SQL, dosya, HTTP, JSON yanıt ve ekran çizimi zaman aralığının dışında.
+
+| Medyan (ms) | Önce | Sonra |
+| --- | ---: | ---: |
+| Komut hazırlama / sınır / yüzde güncellemesi | 8819.95 | 84.24 |
+| Tam doğrulama | 769.10 | 152.00 |
+| Toplam saf işlem | 9593.39 | 241.19 |
+
+Ölçüm zamanları UTC: `2026-10-02T05:38:44.899Z` / `2026-10-02T05:44:25.641Z`. Toplam saf işlemde yaklaşık %97,5 azalma, bütün uygulamanın hızlanma oranı değildir. Final doğrulanmış model hash'i iki koşuda da `5ad4e9803579db51b6f439a752e256a2f8b0e9d73d36ea69277e6f743614b490`. Depolanmış proje FTE/saat değerleri aynı; etkilenen yüzdeler mevcut formülle eşit, revision/generation beklentileri kontrol edildi. Önceki yöntem etkilenen çalışan/ay başına 48.000 yüzde anahtarını tarıyordu; yeni yöntem bütün final batch için haritayı tek kez dolaşıyor.
+
+Tekrar üretme:
+
+`node scripts/benchmark-actual-months.mjs --resources=400 --projects=20 --months=6 --samples=7 --output=/tmp/benzersiz-actual-months.json`
+
+Saf betik veritabanı veya .env kullanmaz. Önceki davranış için `d495863` checkout'una aynı betik eklenerek çalıştırılır. Ham dosyalar `/tmp/aa-actual-months-{before,after}-20261002.json`.
+
+### Yoğun yüzde modeliyle SQL.js kayıt zinciri
+
+100.000 planlanan, 48.000 gerçekleşen ve 48.000 yüzde hücresi; 400 çalışan, 2.000 izin kaydı ve 50.000 audit. Takvim yazımı değil, tek planlanan hücre güncellemesi + küçük görüntü yanıtı ölçülüyor; tüm yüzde modeli yine final doğrulamadan geçiyor. Bu SQL profili eğitim veya elle girilen saat kaydı içermiyor; bunlar saf profil ve regresyon testlerinde kontrol edildi.
+
+| Medyan (ms) | Önce | Sonra |
+| --- | ---: | ---: |
+| Kayıt + görüntü | 1994.66 | 1021.64 |
+| Tam okuma | 354.38 | 340.56 |
+| Snapshot kopyası | 73.11 | 73.16 |
+| Fark + persistence | 89.35 | 88.70 |
+| Dosya commit | 43.36 | 48.35 |
+| İstemci veri birleştirme | 85.96 | 86.14 |
+
+Zamanlar UTC: `2026-10-02T05:39:44.383Z` / `2026-10-02T05:45:02.063Z`. Bu yerel deneyde kayıt + görüntü yaklaşık %48,8 azalıyor. Diğer alt maliyetler de değişti; gözlenen toplam kazanç tek fonksiyona atfedilmez. Tek okuma/kopya, 344.913 seçilen satır, 913 ara query nesnesi, 4 yazılan SQL satırı, 334 bayt parametre ve 277 bayt yanıt aynı. Son istemci modeli SQL görüntüsüne eşit; audit/revision/generation kontrolleri geçti. Rastgele audit kimlikleri yüzünden fiziksel DB bayt sayıları birebir aynı değil.
+
+Tekrar üretme:
+
+`node scripts/benchmark-store.mjs --sizes=100000 --samples=7 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --audit-events=50000 --response=delta --snapshot-copy=numeric --output=/tmp/benzersiz-actual-store.json`
+
+Yeni --percentages seçeneği varsayılan 0; önceki profilleri değiştirmez. Sayı actuals değerini aşamaz. Sentetik yüzdeler mevcut FTE ve takvim saatlerinden türetilir. Betik .env yüklemez ve mevcut DB/provider yolu kabul etmez; yalnız geçici SQL.js dosyalarını oluşturup siler. Önceki davranışı ölçmek için `d495863` checkout'una bu aynı benchmark betiği alınır. Ham dosyalar `/tmp/aa-actual-store-{before,after}-20261002.json`; `/tmp` kalıcı arşiv değildir.
+
+Gerçek kullanıcı verisi, native MSSQL, ağ/tarayıcı/çok kullanıcı kapasitesi ve bellek/GC ölçülmedi. Yedi örnek üretim p95 veya hız garantisi sağlamaz. Hesap ve normalleşme sonuçları korunur; doğrulanan kayıt kapsamı daraltılmadı. Kaynak hash'leri:
+
+| Kaynak | Önce SHA-256 | Sonra SHA-256 |
+| --- | --- | --- |
+| shared/actual-units.ts | `78137f2afdba6d9f144a6954fba44c5d181192d5ccfc88bdd01010034eff3d14` | `a6dcb85976dd682a8ca8a1dc8240d91d9c24f73cfb542ff8a1e07c8b6df3d146` |
+| shared/actual-months.ts | `17187ca26ce1e4e9099250d6f392e1583b867cc5d8726c3f3fa722ea5d1f0917` | `17187ca26ce1e4e9099250d6f392e1583b867cc5d8726c3f3fa722ea5d1f0917` |
+| shared/server-domain.ts | `399be2e54b2a89ccdd5147fde62de2aab50fe600838bdbca7adedb18931bf3dd` | `94e46eca9efb125d7096cd0f13329408bdf876fedf8f8d2e1c9ea6a6de67a065` |
+| backend/operations.mjs | `41b0cd408246881e04f4536fdbec90fdc14eef2ebe3b576c357966f0778f60e9` | `777c070923bcf4832f75a54fbbcf42b850197c50f144c43f8793834279f00508` |
+| scripts/benchmark-actual-months.mjs | `1001332a7f6d1da228f5791c54720e33cdcaaa7bfd9d481388bb39ca940fe4f6` | `1001332a7f6d1da228f5791c54720e33cdcaaa7bfd9d481388bb39ca940fe4f6` |
+| scripts/benchmark-store.mjs | `9c01f0b4ddc5cf7cb644a244f26cdac715d52f9d15a3882b5641dd943be7fd4d` | `9c01f0b4ddc5cf7cb644a244f26cdac715d52f9d15a3882b5641dd943be7fd4d` |

@@ -188,6 +188,37 @@ export function personMonthHours(
   };
 }
 
+type PersonMonthData = {
+  actualWorkedHours?: Record<string, number>;
+  workCalendar?: WorkCalendar;
+  personCalendar?: PersonCalendar;
+};
+
+/** Reuse only within one stable snapshot/final batch. Create again after edits. */
+export function createPersonMonthHoursIndex(data: PersonMonthData) {
+  const cache = new Map<
+    string,
+    Readonly<ReturnType<typeof personMonthHours>>
+  >();
+  return {
+    get(resourceId: string, month: string) {
+      const key = resourceId + "|" + month;
+      let result = cache.get(key);
+      if (result === undefined) {
+        result = personMonthHours(
+          month,
+          resourceId,
+          data.actualWorkedHours?.[key],
+          data.workCalendar,
+          data.personCalendar,
+        );
+        cache.set(key, result);
+      }
+      return result;
+    },
+  };
+}
+
 /** One person-month is 180 hours; a person's recorded hours may include overtime. */
 export function actualInputToFte(
   value: number,

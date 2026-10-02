@@ -7,19 +7,23 @@ import assert from "node:assert/strict";
 import { mergePlanningDelta } from "../shared/planning-response.ts";
 import { Store } from "../backend/store.mjs";
 import { applyChanges, stageChanges } from "../backend/operations.mjs";
-import { validate } from "../shared/server-domain.ts";
+import {
+  validate,
+  effectivePersonHoursInMonth,
+  DEFAULT_MONTHLY_HOURS,
+} from "../shared/server-domain.ts";
 import { hashPassword } from "../backend/auth.mjs";
 
 // Never load .env or accept a database path/provider. Only generated temporary SQL.js data.
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|resources|actuals|calendar-days|audit-events|response|validation|snapshot-copy|output)=(.+)$/.exec(
+      /^--(sizes|samples|resources|actuals|percentages|calendar-days|audit-events|response|validation|snapshot-copy|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --calendar-days=1000 --audit-events=0 --response=separate|planning|delta --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --percentages=0 --calendar-days=1000 --audit-events=0 --response=separate|planning|delta --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -37,6 +41,7 @@ if (sizes.length > 5) throw Error("At most five data sizes per run.");
 const samples = integer(options.get("samples") || "5", 1, 20);
 const resources = integer(options.get("resources") || "200", 1, 10000);
 const actuals = integer(options.get("actuals") || "0", 0, 100000);
+const percentages = integer(options.get("percentages") || "0", 0, actuals);
 const calendarDays = integer(options.get("calendar-days") || "1000", 0, 100000);
 const auditEvents = integer(options.get("audit-events") || "0", 0, 100000);
 const responseMode = options.get("response") || "separate";
@@ -126,6 +131,26 @@ async function seed(store, size) {
     data.personCalendar[
       data.resources[i % data.resources.length].id + "|" + date + "|leave"
     ] = { type: "leave", hours: 0.5, label: "" };
+  }
+  const hours = new Map();
+  for (const key of Object.keys(data.actualAllocations).slice(0, percentages)) {
+    const [resourceId, , month] = key.split("|");
+    const personMonth = resourceId + "|" + month;
+    if (!hours.has(personMonth))
+      hours.set(
+        personMonth,
+        effectivePersonHoursInMonth(
+          month,
+          resourceId,
+          undefined,
+          data.workCalendar,
+          data.personCalendar,
+        ),
+      );
+    const worked = hours.get(personMonth);
+    data.actualPercentEntries[key] = worked
+      ? ((data.actualAllocations[key] * DEFAULT_MONTHLY_HOURS) / worked) * 100
+      : 0;
   }
   const valid = validate(data);
   await store.transaction(async (c) => {
@@ -482,6 +507,7 @@ for (const size of sizes) {
       snapshotCopy,
       resources,
       actualAllocations: actuals,
+      actualPercentEntries: percentages,
       calendarDays,
       initialAuditEvents: auditEvents,
       databaseBytes: (await fs.stat(file)).size,
@@ -503,6 +529,7 @@ for (const size of sizes) {
         snapshotCopy,
         resources,
         actualAllocations: actuals,
+        actualPercentEntries: percentages,
         calendarDays,
         initialAuditEvents: auditEvents,
         medians,

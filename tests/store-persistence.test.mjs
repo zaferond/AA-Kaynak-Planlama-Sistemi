@@ -9,11 +9,87 @@ import { prepareMilestoneReorder } from "../frontend/src/features/project-timeli
 import { SqlJsAdapter } from "../backend/adapters/sqljs.mjs";
 import {
   applyChanges,
+  stageChanges,
   applyLeaderChange,
   restore,
 } from "../backend/operations.mjs";
 
 const password = hashPassword("Persistence-test-only-284!");
+
+test("calendar and manual hour batches preserve project hours and persist all recalculated percentages/revisions", async (t) => {
+  const { store, user, env } = await setup(t);
+  await store.mutate(user, (data, active) => {
+    data.projects.push({
+      ...structuredClone(data.projects[0]),
+      id: "q",
+      name: "Second",
+    });
+    data.revisions["project:q"] = 1;
+    stageChanges(
+      data,
+      active,
+      ["p", "q"].map((project) => ({
+        kind: "actual",
+        id: "r|" + project + "|2026-09",
+        revision: 0,
+        value: { unit: "percent", value: 20 },
+      })),
+    );
+  });
+  const before = await store.read();
+  await store.mutate(user, (data, active) =>
+    stageChanges(data, active, [
+      {
+        kind: "calendar",
+        id: "shared",
+        revision: 1,
+        value: {
+          "2026-09-02": { type: "company", label: "Full day", fraction: 1 },
+        },
+      },
+      { kind: "workedHours", id: "r|2026-09", revision: 0, value: 260 },
+      {
+        kind: "personDay",
+        id: "r|2026-09-03|training",
+        revision: 0,
+        value: { type: "training", hours: 3, label: "" },
+      },
+    ]),
+  );
+  const after = await store.read();
+  assert.deepEqual(after.data.actualAllocations, before.data.actualAllocations);
+  for (const project of ["p", "q"]) {
+    const key = "r|" + project + "|2026-09";
+    assert.equal(
+      after.data.actualPercentEntries[key],
+      ((before.data.actualAllocations[key] * 180) / 249) * 100,
+    );
+    assert.equal(
+      after.data.revisions["actual:" + key],
+      before.data.revisions["actual:" + key] + 1,
+    );
+  }
+  const audit = (await store.auditLog(user)).total;
+  await assert.rejects(
+    () =>
+      store.mutate(user, (data, active) =>
+        stageChanges(data, active, [
+          { kind: "workedHours", id: "r|2026-09", revision: 1, value: 12 },
+        ]),
+      ),
+    /%100/,
+  );
+  assert.deepEqual(await store.read(), after);
+  assert.equal((await store.auditLog(user)).total, audit);
+  await store.close();
+  const restarted = new Store({ env });
+  try {
+    await restarted.connect();
+    assert.deepEqual(await restarted.read(), after);
+  } finally {
+    await restarted.close();
+  }
+});
 
 test("custom topic order survives editing, append, deletion, restore and database restart", async (t) => {
   const { store, user, env } = await setup(t);

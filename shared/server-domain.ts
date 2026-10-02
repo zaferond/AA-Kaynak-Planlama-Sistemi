@@ -11,7 +11,7 @@ import {
 } from "./resource-dates.ts";
 import {
   actualInputToFte,
-  effectivePersonHoursInMonth,
+  createPersonMonthHoursIndex,
   HOURS_PER_WORKDAY,
   MAX_RECORDED_MONTHLY_HOURS,
 } from "./actual-units.ts";
@@ -384,6 +384,7 @@ export function validate(input: unknown): Data {
       throw bad("Geçersiz çalışılan saat kaydı.");
   }
   d.actualPercentEntries ??= {};
+  const personHours = createPersonMonthHoursIndex(d);
   for (const key of Object.keys(d.actualPercentEntries)) {
     const percent = d.actualPercentEntries[key];
     const [resourceId, projectId, month, ...extra] = key.split("|");
@@ -395,14 +396,7 @@ export function validate(input: unknown): Data {
       d.actualAllocations[key] === undefined
     )
       throw bad("Geçersiz yüzde dağılımı kaydı.");
-    const manual = d.actualWorkedHours[resourceId + "|" + month];
-    const hours = effectivePersonHoursInMonth(
-      month,
-      resourceId,
-      manual,
-      d.workCalendar,
-      d.personCalendar,
-    );
+    const hours = personHours.get(resourceId, month).effectiveHours;
     const expected = actualInputToFte(percent, "percent", month, hours);
     if (Math.abs(expected - d.actualAllocations[key]) > 1e-8)
       throw bad("Yüzde dağılımı çalışılan saatlerle eşleşmiyor.");

@@ -1,6 +1,9 @@
 import { ownValue } from "../shared/records.ts";
 import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
-import { MAX_RECORDED_MONTHLY_HOURS } from "../shared/actual-units.ts";
+import {
+  MAX_RECORDED_MONTHLY_HOURS,
+  createPersonMonthHoursIndex,
+} from "../shared/actual-units.ts";
 import { z } from "zod";
 import { fail, admin, publicUser } from "./auth.mjs";
 import {
@@ -68,13 +71,21 @@ const effectiveHours = (d, resourceId, month) =>
     d.workCalendar,
     d.personCalendar,
   );
-function recalculateActualPercentages(d, resourceId, month) {
-  const hours = effectiveHours(d, resourceId, month);
-  for (const [actualKey, percent] of Object.entries(
-    d.actualPercentEntries || {},
-  )) {
+function recalculateActualPercentages(d, affectedMonths) {
+  if (affectedMonths.size === 0) return;
+  const resources = new Set(d.resources.map((resource) => resource.id));
+  const personHours = createPersonMonthHoursIndex(d);
+  // Scan once for the entire final batch; a calendar edit may affect every
+  // person. Do not cache during the command loop, where calendars/hours change.
+  for (const actualKey of Object.keys(d.actualPercentEntries || {})) {
     const [entryResource, , entryMonth] = actualKey.split("|");
-    if (entryResource !== resourceId || entryMonth !== month) continue;
+    if (
+      !resources.has(entryResource) ||
+      !affectedMonths.has(entryResource + "|" + entryMonth)
+    )
+      continue;
+    const percent = d.actualPercentEntries[actualKey];
+    const hours = personHours.get(entryResource, entryMonth).effectiveHours;
     const nextPercent = hours
       ? (((d.actualAllocations[actualKey] || 0) * DEFAULT_MONTHLY_HOURS) /
           hours) *
@@ -359,11 +370,7 @@ export function stageChanges(d, u, input) {
   // a calendar together with allocations must not fail on an intermediate total.
   // Recalculate only after explicit revisions have been checked for every change.
   assertActualMonthlyLimits(d, affectedActualMonths);
-  for (const key of affectedActualMonths) {
-    const [resourceId, month] = key.split("|");
-    if (!d.resources.some((resource) => resource.id === resourceId)) continue;
-    recalculateActualPercentages(d, resourceId, month);
-  }
+  recalculateActualPercentages(d, affectedActualMonths);
   return d;
 }
 const leaderChangeSchema = z.object({
