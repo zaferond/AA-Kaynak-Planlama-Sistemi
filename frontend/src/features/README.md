@@ -33,3 +33,5 @@ Tarih doğrulaması ve alt notların etkisi `shared/milestone-ranges.ts` içinde
 Stil yükleme sırası `../styles/manifest.json` ile belirlenir. Aynı seçicinin birden fazla dosyada olması tek başına tekrar sayılmaz: sonraki kurallar önceki görünümü tamamlayabilir. Ayrıntılar [stil kılavuzunda](../styles/README.md).
 
 `npm run verify` biçim, mevcut testler, TypeScript ve üretim derlemesini denetler. Bileşen/CSS ayrıştırmasında ayrıca geçici veritabanıyla tarayıcıda form, seçim, sürükleme ve ekran görüntüsü karşılaştırması yapılmalıdır. Bir dosyanın kısalması performans artışı veya tüm uygulamanın mimari temizliğinin tamamlanması anlamına gelmez.
+
+Risk, takvim, yetki/geçmiş ve içe aktarma/yedek akışları için depo kökünde `npm run test:ui` çalıştırılabilir. İzolasyon, tarayıcı kurulumu ve kapsam [tarayıcı test kılavuzunda](../../../BROWSER-TEST-KILAVUZU.md) açıklanır. Bu koşu `.env` veya gerçek veritabanını kullanmaz.

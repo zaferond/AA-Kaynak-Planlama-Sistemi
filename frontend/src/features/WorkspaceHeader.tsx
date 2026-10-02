@@ -59,10 +59,14 @@ export default function WorkspaceHeader({
           <div className="mastglobalactions">
             {isAdmin && (
               <>
-                <button className="button" onClick={onExportBackup}>
+                <button
+                  className="button"
+                  data-risk-leave
+                  onClick={onExportBackup}
+                >
                   Veri Yedeği İndir
                 </button>
-                <label className="button">
+                <label className="button" data-risk-leave>
                   Yedek Yükle
                   <input
                     hidden
@@ -73,7 +77,7 @@ export default function WorkspaceHeader({
                 </label>
               </>
             )}
-            <button className="button" onClick={onLogout}>
+            <button className="button" data-risk-leave onClick={onLogout}>
               Çıkış
             </button>
           </div>

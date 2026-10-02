@@ -72,6 +72,7 @@ import {
 } from "./resource-report-export";
 import ResourcesPanel from "./features/ResourcesPanel";
 import RiskManagement from "./RiskManagement";
+import type { RiskLeaveGuard } from "./RiskTable";
 import { DEFAULT_FILTERS, TAB_LABELS } from "./settings";
 import {
   Change,
@@ -106,6 +107,8 @@ const initialDensity =
     ? queryDensity
     : "detail";
 export default function Portal() {
+  const riskLeaveGuard = useRef<RiskLeaveGuard | null>(null);
+  const tabRequest = useRef(0);
   const pendingExternal = useRef(false),
     mainTabsRef = useRef<HTMLDivElement>(null),
     capacityTableRef = useRef<HTMLTableElement>(null),
@@ -839,27 +842,51 @@ export default function Portal() {
       setError((e as Error).message);
     }
   }
-  async function restoreBackupFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    if (
-      !confirm(
-        "Sunucudaki mevcut planlama verileri yedekteki verilerle değiştirilecek. Devam edilsin mi?",
-      )
-    )
-      return;
+  async function flushRiskDraft() {
+    return (
+      tab !== "risk" ||
+      !riskLeaveGuard.current ||
+      (await riskLeaveGuard.current())
+    );
+  }
+  async function changeTab(nextTab: string) {
+    const request = ++tabRequest.current;
+    if (!(await flushRiskDraft()) || request !== tabRequest.current) return;
+    setTab(nextTab);
+  }
+  async function downloadBackup() {
+    if (!(await flushRiskDraft())) return;
     try {
-      await restoreBackup(f);
+      await exportBackup();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+  async function restoreBackupFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      if (!(await flushRiskDraft())) return;
+      if (
+        !confirm(
+          "Sunucudaki mevcut planlama verileri yedekteki verilerle değiştirilecek. Devam edilsin mi?",
+        )
+      )
+        return;
+      await restoreBackup(file);
       await load();
       setNotice("Yedek yüklendi");
       setCells([]);
       setResourceIds([]);
     } catch (err) {
       setError((err as Error).message);
+    } finally {
+      input.value = "";
     }
-    e.target.value = "";
   }
   async function signOut() {
+    if (!(await flushRiskDraft())) return;
     try {
       await logout();
       location.reload();
@@ -898,7 +925,7 @@ export default function Portal() {
         user={user}
         defaultTab={defaultTab}
         setOpeningTab={setOpeningTab}
-        onExportBackup={() => exportBackup().catch((e) => setError(e.message))}
+        onExportBackup={downloadBackup}
         onRestoreBackup={restoreBackupFile}
         onLogout={signOut}
       />
@@ -915,7 +942,7 @@ export default function Portal() {
             <button onClick={() => setError("")}>Kapat</button>
           </div>
         )}
-        <Tabs value={tab} onValueChange={setTab}>
+        <Tabs value={tab} onValueChange={changeTab}>
           <WorkspaceNavigation
             user={user}
             tab={tab}
@@ -1053,6 +1080,7 @@ export default function Portal() {
               {tab === "risk" && (
                 <TabsContent value="risk">
                   <RiskManagement
+                    leaveGuardRef={riskLeaveGuard}
                     data={data}
                     user={user!}
                     onSave={(risk) => save("risk", risk.id, risk)}

@@ -22,12 +22,17 @@
     "check:domain": "node scripts/check-domain.mjs",
     "format": "npm --prefix frontend run format",
     "format:check": "npm --prefix frontend run format:check",
-    "verify": "npm run format:check && npm test && npm run build"
+    "verify": "npm run format:check && npm test && npm run build",
+    "test:ui": "node scripts/run-browser-checks.mjs",
+    "pretest:ui": "npm run build"
   },
   "dependencies": {
     "express": "^5.1.0",
-    "zod": "^3.25.76",
     "mssql": "^12.0.0",
-    "sql.js": "^1.13.0"
+    "sql.js": "^1.13.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
   }
 }

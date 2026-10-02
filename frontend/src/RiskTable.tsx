@@ -4,11 +4,14 @@ import {
   useState,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 import { Trash2, X } from "lucide-react";
 import type { Risk } from "./model";
 import { riskAssessment } from "./risk-score";
 import { riskValidationError } from "./risk-validation";
+
+export type RiskLeaveGuard = () => Promise<boolean>;
 
 type Column = {
   key: string;
@@ -291,6 +294,7 @@ function cellContent(risk: Risk, column: Column, index: number): ReactNode {
   }
 }
 export default function RiskTable({
+  leaveGuardRef,
   risks,
   selectedProjectIds,
   projectNames,
@@ -301,6 +305,7 @@ export default function RiskTable({
   onSave,
   onDelete,
 }: {
+  leaveGuardRef: RefObject<RiskLeaveGuard | null>;
   risks: Risk[];
   selectedProjectIds: string[];
   projectNames: Record<string, string>;
@@ -317,6 +322,7 @@ export default function RiskTable({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const saveInFlight = useRef<Promise<boolean> | null>(null);
   const showProject = selectedProjectIds.length > 1;
   const visibleColumns = showProject
     ? [
@@ -384,8 +390,10 @@ export default function RiskTable({
       active = false;
     };
   }, [createSignal]);
-  const update = <K extends keyof Risk>(key: K, value: Risk[K]) =>
+  const update = <K extends keyof Risk>(key: K, value: Risk[K]) => {
+    if (saving || saveInFlight.current) return;
     setDraft((old) => (old ? { ...old, [key]: value } : old));
+  };
   async function activate(risk: Risk, key: string) {
     if (saving || draft?.id === risk.id) return;
     if (draft && !(await save())) return;
@@ -396,12 +404,13 @@ export default function RiskTable({
     );
     setDraft(structuredClone(risk));
   }
-  async function save(): Promise<boolean> {
-    if (!draft || saving) return false;
+  function save(): Promise<boolean> {
+    if (saveInFlight.current) return saveInFlight.current;
+    if (!draft || saving) return Promise.resolve(false);
     const validationError = riskValidationError(draft);
     if (validationError) {
       setError(validationError);
-      return false;
+      return Promise.resolve(false);
     }
     const original = risks.find((risk) => risk.id === draft.id);
     if (
@@ -411,22 +420,34 @@ export default function RiskTable({
     ) {
       setDraft(null);
       setError("");
-      return true;
+      return Promise.resolve(true);
     }
     setSaving(true);
     setError("");
-    try {
-      await onSave(draft);
-      setDraft(null);
-      setIsNew(false);
-      return true;
-    } catch (caught) {
-      setError((caught as Error).message);
-      return false;
-    } finally {
-      setSaving(false);
-    }
+    const pending = (async () => {
+      try {
+        await onSave(draft);
+        setDraft(null);
+        setIsNew(false);
+        return true;
+      } catch (caught) {
+        setError((caught as Error).message);
+        return false;
+      } finally {
+        saveInFlight.current = null;
+        setSaving(false);
+      }
+    })();
+    saveInFlight.current = pending;
+    return pending;
   }
+  useEffect(() => {
+    leaveGuardRef.current = () =>
+      saveInFlight.current || (draft ? save() : Promise.resolve(true));
+    return () => {
+      leaveGuardRef.current = null;
+    };
+  }, [draft, saving, risks, onSave, isNew, leaveGuardRef]);
   function cancel() {
     if (saving) return;
     setDraft(null);
@@ -459,6 +480,13 @@ export default function RiskTable({
     const outside = (event: PointerEvent) => {
       const row = document.querySelector(".risk-editing-row");
       if (row?.contains(event.target as Node)) return;
+      // These actions await this row's save before changing or leaving its view.
+      if (
+        (event.target as Element).closest(
+          '[role="tab"],[data-risk-project-control],[data-risk-leave]',
+        )
+      )
+        return;
       if (saving) {
         event.preventDefault();
         event.stopPropagation();
@@ -511,6 +539,7 @@ export default function RiskTable({
             (risk.strategy === strategyKeys[key] ? " selected" : "")
           }
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label + " stratejisi"}
           aria-pressed={risk.strategy === strategyKeys[key]}
           onClick={() =>
@@ -529,6 +558,7 @@ export default function RiskTable({
         <select
           className="risk-inline-input"
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label}
           value={risk.category}
           onChange={(event) =>
@@ -545,6 +575,7 @@ export default function RiskTable({
         <select
           className="risk-inline-input"
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label}
           value={risk.status}
           onChange={(event) =>
@@ -561,6 +592,7 @@ export default function RiskTable({
         <select
           className="risk-inline-input"
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label}
           value={risk[key]}
           onChange={(event) => update(key, Number(event.target.value))}
@@ -578,6 +610,7 @@ export default function RiskTable({
         <select
           className="risk-inline-input"
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label}
           value={risk[key] ?? ""}
           onChange={(event) =>
@@ -598,6 +631,7 @@ export default function RiskTable({
           type="date"
           className="risk-inline-input"
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label}
           value={risk[key]}
           onChange={(event) => update(key, event.target.value)}
@@ -622,6 +656,7 @@ export default function RiskTable({
           <textarea
             className="risk-inline-input risk-inline-textarea"
             data-risk-input={key}
+            disabled={saving}
             aria-label={column.label}
             rows={3}
             maxLength={5000}
@@ -632,6 +667,7 @@ export default function RiskTable({
             <button
               type="button"
               className="risk-inline-delete"
+              disabled={saving}
               onClick={() => void remove()}
             >
               <Trash2 size={14} aria-hidden="true" />
@@ -646,6 +682,7 @@ export default function RiskTable({
           type="text"
           className="risk-inline-input"
           data-risk-input={key}
+          disabled={saving}
           aria-label={column.label}
           maxLength={200}
           value={risk[key]}

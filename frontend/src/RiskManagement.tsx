@@ -1,12 +1,20 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+  type SetStateAction,
+} from "react";
 import { Plus, ShieldAlert, Download, ChevronDown } from "lucide-react";
 import type { Data, Risk } from "./model";
 import type { Principal } from "./access";
 import { riskAssessment } from "./risk-score";
 import { riskCreationOrder } from "./risk-order";
-import RiskTable from "./RiskTable";
+import RiskTable, { type RiskLeaveGuard } from "./RiskTable";
 import { downloadRiskPlans } from "./risk-export";
 import "./risk.css";
+import { readLocal } from "./storage";
 
 const likelihoodNames = [
   "Çok Küçük",
@@ -72,10 +80,12 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 export default function RiskManagement({
   data,
+  leaveGuardRef,
   user,
   onSave,
   onDelete,
 }: {
+  leaveGuardRef: RefObject<RiskLeaveGuard | null>;
   data: Data;
   user: Principal;
   onSave: (risk: Risk) => Promise<void>;
@@ -85,7 +95,8 @@ export default function RiskManagement({
     [projectMenuOpen, setProjectMenuOpen] = useState(false),
     [newRiskProjectId, setNewRiskProjectId] = useState(""),
     [createSignal, setCreateSignal] = useState(0),
-    [exportError, setExportError] = useState("");
+    [exportError, setExportError] = useState(""),
+    [exporting, setExporting] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
   const selectedProjectIds =
     selection === "all"
@@ -129,12 +140,45 @@ export default function RiskManagement({
       document.removeEventListener("keydown", escape);
     };
   }, [projectMenuOpen]);
-  function toggleProject(id: string) {
-    const next = selectedProjectIds.includes(id)
-      ? selectedProjectIds.filter((value) => value !== id)
-      : [...selectedProjectIds, id];
-    setSelection(next.length === data.projects.length ? "all" : next);
+  async function changeProjects(next: SetStateAction<string[] | "all">) {
+    if (leaveGuardRef.current && !(await leaveGuardRef.current())) return;
+    setSelection(next);
     setExportError("");
+  }
+  function toggleProject(id: string) {
+    void changeProjects((selection) => {
+      const current =
+        selection === "all"
+          ? data.projects.map((project) => project.id)
+          : selection;
+      const next = current.includes(id)
+        ? current.filter((value) => value !== id)
+        : [...current, id];
+      return next.length === data.projects.length ? "all" : next;
+    });
+  }
+  async function exportRisks() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      if (leaveGuardRef.current && !(await leaveGuardRef.current())) return;
+      // A save updates React asynchronously; export its committed snapshot, not this click's old props.
+      const latest = await readLocal();
+      const projects = latest.projects.filter((project) =>
+        selectedProjectIds.includes(project.id),
+      );
+      const risks = riskCreationOrder(
+        (latest.risks || []).filter((risk) =>
+          selectedProjectIds.includes(risk.projectId),
+        ),
+      );
+      downloadRiskPlans(projects, risks);
+      setExportError("");
+    } catch (e) {
+      setExportError((e as Error).message);
+    } finally {
+      setExporting(false);
+    }
   }
   const canEdit = (risk: Risk) =>
     user.role === "admin" ||
@@ -155,7 +199,11 @@ export default function RiskManagement({
         <div className="risk-toolbar">
           <div className="risk-field risk-project-field">
             <span>Proje seçimi</span>
-            <div className="risk-project-picker" ref={pickerRef}>
+            <div
+              className="risk-project-picker"
+              ref={pickerRef}
+              data-risk-project-control
+            >
               <button
                 type="button"
                 className="risk-project-toggle"
@@ -182,8 +230,7 @@ export default function RiskManagement({
                       type="checkbox"
                       checked={allSelected}
                       onChange={(event) => {
-                        setSelection(event.target.checked ? "all" : []);
-                        setExportError("");
+                        void changeProjects(event.target.checked ? "all" : []);
                       }}
                     />
                     Tüm Projeler
@@ -223,15 +270,9 @@ export default function RiskManagement({
           <button
             type="button"
             className="button risk-export-button"
-            disabled={selectedProjects.length === 0}
-            onClick={() => {
-              try {
-                downloadRiskPlans(selectedProjects, risks);
-                setExportError("");
-              } catch (e) {
-                setExportError((e as Error).message);
-              }
-            }}
+            data-risk-leave
+            disabled={exporting || selectedProjects.length === 0}
+            onClick={() => void exportRisks()}
           >
             <Download size={16} />
             Excel'e Aktar
@@ -280,6 +321,7 @@ export default function RiskManagement({
             </div>
           )}
           <RiskTable
+            leaveGuardRef={leaveGuardRef}
             risks={risks}
             selectedProjectIds={selectedProjectIds}
             projectNames={projectNames}

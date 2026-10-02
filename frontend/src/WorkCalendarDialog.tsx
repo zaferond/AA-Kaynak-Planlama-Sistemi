@@ -219,7 +219,7 @@ export default function WorkCalendarDialog({
           <div className="work-calendar-year">
             <button
               type="button"
-              disabled={year <= MIN_PLANNING_YEAR}
+              disabled={busy || year <= MIN_PLANNING_YEAR}
               onClick={() => setYear(year - 1)}
             >
               ‹
@@ -227,7 +227,7 @@ export default function WorkCalendarDialog({
             <strong>{year}</strong>
             <button
               type="button"
-              disabled={year >= MAX_PLANNING_YEAR}
+              disabled={busy || year >= MAX_PLANNING_YEAR}
               onClick={() => setYear(year + 1)}
             >
               ›
@@ -245,6 +245,7 @@ export default function WorkCalendarDialog({
                   <label>
                     Tarih
                     <input
+                      disabled={busy}
                       type="date"
                       min={MIN_PLANNING_DATE}
                       max={MAX_PLANNING_DATE}
@@ -255,6 +256,7 @@ export default function WorkCalendarDialog({
                   <label>
                     Tür
                     <select
+                      disabled={busy}
                       value={personalType}
                       onChange={(event) =>
                         setPersonalType(
@@ -269,6 +271,7 @@ export default function WorkCalendarDialog({
                   <label>
                     Saat
                     <input
+                      disabled={busy}
                       type="number"
                       min={PERSONAL_HOURS_STEP}
                       max={HOURS_PER_WORKDAY}
@@ -280,6 +283,7 @@ export default function WorkCalendarDialog({
                   <label className="work-calendar-label">
                     Açıklama
                     <input
+                      disabled={busy}
                       maxLength={100}
                       value={personalLabel}
                       onChange={(event) => setPersonalLabel(event.target.value)}
@@ -353,6 +357,7 @@ export default function WorkCalendarDialog({
                 <label>
                   Başlangıç
                   <input
+                    disabled={busy}
                     type="date"
                     min={MIN_PLANNING_DATE}
                     max={MAX_PLANNING_DATE}
@@ -366,6 +371,7 @@ export default function WorkCalendarDialog({
                 <label>
                   Bitiş
                   <input
+                    disabled={busy}
                     type="date"
                     min={from || MIN_PLANNING_DATE}
                     max={MAX_PLANNING_DATE}
@@ -376,6 +382,7 @@ export default function WorkCalendarDialog({
                 <label>
                   Tür
                   <select
+                    disabled={busy}
                     value={type}
                     onChange={(event) =>
                       setType(event.target.value as CalendarDay["type"])
@@ -391,6 +398,7 @@ export default function WorkCalendarDialog({
                 <label>
                   Süre
                   <select
+                    disabled={busy}
                     value={fraction}
                     onChange={(event) =>
                       setFraction(Number(event.target.value) as 0.5 | 1)
@@ -403,6 +411,7 @@ export default function WorkCalendarDialog({
                 <label className="work-calendar-label">
                   Açıklama
                   <input
+                    disabled={busy}
                     value={label}
                     maxLength={100}
                     placeholder={types.find((item) => item.id === type)?.label}
@@ -412,6 +421,7 @@ export default function WorkCalendarDialog({
                 <button
                   type="button"
                   className="button primary"
+                  disabled={busy}
                   onClick={addDates}
                 >
                   <Plus size={14} />
