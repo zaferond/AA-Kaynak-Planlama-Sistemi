@@ -491,3 +491,39 @@ Betik gzip/identity'yi raw node:http ile ister; fetch'in otomatik açması wire 
 Ortak seed fixture'ına taşıma sonrası mevcut write/delta betiği ayrı 1.000 planlanan / 200 gerçekleşen / 200 yüzde / 20 çalışan / 20 izin profiliyle smoke kontrolünden geçti; 277 bayt delta ve final SQL snapshot/revision/audit eşitliği doğrulandı. Bu smoke sonucu yeni hız oranı olarak kullanılmaz.
 
 Betikler .env yüklemez ve gerçek DB/provider yolu kabul etmez; yalnız os.tmpdir içindeki sentetik SQL.js dosyalarını oluşturup siler. Şema/bağımlılıklar değişmedi. Native MSSQL, gerçek tarayıcı, WAN, bellek/RSS/GC ve çok kullanıcı yükü ölçülmedi. Yedi örnek üretim p95 veya kapasite garantisi sağlamaz.
+
+
+## İlk yüklemede kullanıcı kapsamı — 2 Ekim 2026
+
+Başlangıç `9b0579c`; Node v24.21.0. SQL okuma ile projectView ayrı ölçüldü. 100.000 planlanan, 48.000 gerçekleşen, 48.000 yüzde / 400 çalışan / 2.000 izin / 49 proje; üç sentetik kullanıcı. Yönetici ilk atanmış liderlikte, normal aynı liderlikteki bench-r0'a bağlı; admin bütün görünümü alır. Bu deney atanmamış yönetici ölçmüyor; doğruluğu regresyon testlerinde denetlendi.
+
+Bir rol/encoding başına bir ısınma + yedi örnek; identity/gzip sırası örnekler arasında dönüşümlü. Rol sırası admin → manager → normal. Önce/sonra ayrı süreçlerde sırayla çalıştı; test/build eşzamanlı değildi. Zamanlar UTC: 2026-10-02T06:50:03.101Z / 2026-10-02T07:01:06.993Z. projectView scope + public principal hazırlığını, admin'de ek user sorgusunu da içerir. readMs tam model SQL okumasını; viewMs read + projection + transaction'ı ölçer. Her sütun ayrı medyan olduğu için süreler birebir toplanmak zorunda değildir.
+
+| Rol / istenen encoding | Projection önce/sonra (ms) | SQL önce/sonra (ms) | Store.view önce/sonra (ms) | HTTP önce/sonra (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| admin / identity | 0.16 / 0.14 | 340.91 / 337.55 | 341.11 / 337.75 | 453.70 / 447.42 |
+| admin / gzip | 0.14 / 0.13 | 340.34 / 336.31 | 340.55 / 336.50 | 455.51 / 447.44 |
+| manager / identity | 271.96 / 178.08 | 344.71 / 343.25 | 616.76 / 521.41 | 638.32 / 542.59 |
+| manager / gzip | 279.65 / 177.09 | 343.47 / 339.55 | 618.51 / 517.45 | 651.12 / 549.45 |
+| normal / identity | 240.98 / 132.71 | 387.71 / 342.84 | 627.49 / 476.16 | 642.94 / 483.17 |
+| normal / gzip | 237.44 / 133.14 | 345.20 / 395.87 | 582.72 / 529.17 | 592.83 / 542.37 |
+
+Gzip profillerinde yönetici projection yaklaşık %36,7, normal %43,9 azalıyor; bunun tamamı belirli bir lookup fonksiyonuna atfedilemez. SQL sorguları ve okunan kapsam değişmedi. Normal gzip koşusunda SQL medyanı 345,20 → 395,87 ms yükseldi; bu nedenle HTTP toplam kazanımı daha düşük. Ayrı süreç/rol sırası, bellek/GC ve yerel sistem değişkenliği bu raporla ayrıştırılmadı. Admin projection zaten yaklaşık 0,1 ms; oradaki küçük fark yeni bir anlamlı hızlanma iddiası değildir.
+
+| Rol | Identity / gzip baytları (iki koşuda eşit) | Açılmış tam JSON SHA-256 (iki koşuda eşit) |
+| --- | ---: | --- |
+| admin | 12580866 / 983727 | `18df5faaf0c640a42f97773ebc1e04b916f586b6c35a7eb0251b6b01a40b83bd` |
+| manager | 2339452 / 184034 | `40eb7e07db4a01acad69c980732d4444096298cdcc31cb61902ab011642ce069` |
+| normal | 586380 / 48421 | `a781acc1277d10751db26c09faeba009d52c6991b1b7e7fd94896a33ff767143` |
+
+Her örnek açılmış gövdeyi o rolün SQL görüntüsünün JSON'u ile derin ve byte/hash olarak karşılaştırır. Projection optimizasyonundan sonra hiçbir alan, numeric değer, JSON sırası, revision, kullanıcı kapsamı veya yanıt boyutu değişmedi. Gzip kazanımı önceki paketteydi; bu pakette aktarım byte miktarı azaltılmadı. Decode/parse HTTP süresinden ayrı tutulur ve ham raporda vardır. Tam read sayısı her örnekte bir; SQL ve iş kuralı doğrulaması atlanmadı.
+
+Tekrar üretme:
+
+```sh
+node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --roles=admin,manager,normal --output=/tmp/benzersiz-scope.json
+```
+
+Önceki davranış için `9b0579c` checkout'una son benchmark-load betiğini alın. Son betikte rol bazlı ölçüm ve access/model/records kaynak hash'leri eklendi; eski tek admin komutunun varsayılan profili korunur. .env veya mevcut DB/provider yolu kabul edilmez; yalnız sentetik os.tmpdir SQL.js dosyaları oluşturulur ve silinir. Ham raporlar `/tmp/aa-scope-{before,after}-20261002.json`; /tmp kalıcı arşiv değildir. Kaynak SHA-256 değerleri bu dosyalarda bulunur.
+
+Gerçek tarayıcı, WAN, native MSSQL, peak memory/RSS/GC, eşzamanlı kapasite ve istatistiksel üretim p95 ölçülmedi. Yedi örnek hız garantisi sağlamaz. Shared fonksiyonlar kayıt yanıtlarında/ön yüz fallback toplamlarında da kullanılır; onlar için bu ilk yükleme oranları varsayılmaz. Sonraki maliyet SQL'deki tam okunan satırlar; kullanıcı kapsamına göre SQL daraltma bu pakette yapılmadı.

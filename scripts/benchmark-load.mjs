@@ -17,12 +17,12 @@ import { seedBenchmarkStore } from "./benchmark-fixture.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(samples|size|resources|actuals|percentages|calendar-days|output)=(.+)$/.exec(
+      /^--(samples|size|resources|actuals|percentages|calendar-days|roles|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --samples=7 --size=100000 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --output=/tmp/result.json",
+        "Use --samples=7 --size=100000 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --roles=admin,manager,normal --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -39,6 +39,13 @@ const resources = integer("resources", 400, 1, 10000);
 const actuals = integer("actuals", 48000, 0, 100000);
 const percentages = integer("percentages", actuals, 0, actuals);
 const calendarDays = integer("calendar-days", 2000, 0, 100000);
+const roles = (options.get("roles") || "admin").split(",");
+if (
+  !roles.length ||
+  new Set(roles).size !== roles.length ||
+  roles.some((role) => !["admin", "manager", "normal"].includes(role))
+)
+  throw Error("Expected unique --roles=admin,manager,normal.");
 const unzip = promisify(gunzip);
 const round = (value) => Math.round(value * 100) / 100;
 const median = (values) =>
@@ -55,7 +62,8 @@ const store = new Store({
 const server = http.createServer();
 let app, current;
 const originalView = store.view,
-  originalRead = store.read;
+  originalRead = store.read,
+  originalProjection = store.projectView;
 store.view = async function (...args) {
   const start = performance.now();
   try {
@@ -75,128 +83,157 @@ store.read = async function (...args) {
     }
   }
 };
+store.projectView = async function (...args) {
+  const start = performance.now();
+  try {
+    return await originalProjection.apply(this, args);
+  } finally {
+    if (current) current.projectMs += performance.now() - start;
+  }
+};
 const results = [];
 try {
   await store.connect();
   const password = "Synthetic-load-test-only-284!";
-  await store.bootstrapUser({
-    _id: "bench-admin",
-    username: "bench.admin",
-    name: "Synthetic admin",
-    role: "admin",
-    leaders: [],
-    resourceId: "",
-    active: true,
-    password: await hashPassword(password),
-    revision: 1,
-    version: 1,
-  });
   await seedBenchmarkStore(store, size, {
     resources,
     actuals,
     percentages,
     calendarDays,
   });
-  const user = await store.findUser({ id: "bench-admin" });
-  const expected = await store.view(user);
-  const expectedBytes = Buffer.from(JSON.stringify(expected));
+  const leader = (await store.read()).data.teams.find((team) => team.lead).lead;
+  const hashed = await hashPassword(password);
+  for (const role of roles) {
+    await store.bootstrapUser({
+      _id: "bench-" + role,
+      username: "bench." + role,
+      name: "Synthetic " + role,
+      role,
+      leaders: role === "admin" ? [] : [leader],
+      resourceId: role === "normal" ? "bench-r0" : "",
+      active: true,
+      password: hashed,
+      revision: 1,
+      version: 1,
+    });
+  }
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const origin = "http://127.0.0.1:" + server.address().port;
   app = createApp(store, { origin });
   server.on("request", app);
-  const login = await fetch(origin + "/api/auth/login", {
-    method: "POST",
-    headers: {
-      Origin: origin,
-      "Content-Type": "application/json",
-      "X-Requested-With": "KaynakPortal",
-    },
-    body: JSON.stringify({ username: user.username, password }),
-  });
-  assert.equal(login.status, 200);
-  const cookie = login.headers.get("set-cookie").split(";")[0];
-  await login.json();
-  async function load(encoding) {
-    const start = performance.now();
-    return new Promise((resolve, reject) => {
-      const request = http.get(
-        origin + "/api/data",
-        {
-          agent: false,
-          headers: { Cookie: cookie, "Accept-Encoding": encoding },
-        },
-        (response) => {
-          const headersMs = performance.now() - start,
-            chunks = [];
-          response.on("data", (chunk) => chunks.push(chunk));
-          response.on("error", reject);
-          response.on("end", () =>
-            resolve({
-              status: response.statusCode,
-              headers: response.headers,
-              bytes: Buffer.concat(chunks),
-              headersMs,
-              httpMs: performance.now() - start,
-            }),
-          );
-        },
-      );
-      request.on("error", reject);
+  for (const role of roles) {
+    const user = await store.findUser({ id: "bench-" + role });
+    const expected = JSON.parse(JSON.stringify(await store.view(user)));
+    const expectedBytes = Buffer.from(JSON.stringify(expected));
+    const login = await fetch(origin + "/api/auth/login", {
+      method: "POST",
+      headers: {
+        Origin: origin,
+        "Content-Type": "application/json",
+        "X-Requested-With": "KaynakPortal",
+      },
+      body: JSON.stringify({ username: user.username, password }),
     });
-  }
-  // Alternate encodings within each sample to reduce fixed run-order effects.
-  for (const encoding of ["identity", "gzip"]) await load(encoding);
-  const observations = { identity: [], gzip: [] };
-  for (let i = 0; i < samples; i++) {
-    for (const encoding of i % 2
-      ? ["gzip", "identity"]
-      : ["identity", "gzip"]) {
-      const observation = (current = { readMs: 0, viewMs: 0, readCalls: 0 });
-      const response = await load(encoding);
-      current = undefined;
-      assert.equal(response.status, 200);
-      assert.equal(response.headers["cache-control"], "no-store");
-      const decodeStart = performance.now();
-      const decoded =
-        response.headers["content-encoding"] === "gzip"
-          ? await unzip(response.bytes)
-          : response.bytes;
-      observation.decodeMs = performance.now() - decodeStart;
-      const parseStart = performance.now(),
-        value = JSON.parse(decoded);
-      observation.parseMs = performance.now() - parseStart;
-      assert.deepEqual(value, expected);
-      assert.equal(digest(decoded), digest(expectedBytes));
-      observations[encoding].push({
-        ...observation,
-        headersMs: response.headersMs,
-        httpMs: response.httpMs,
-        wireBytes: response.bytes.length,
-        decodedBytes: decoded.length,
-        contentEncoding: response.headers["content-encoding"] || "identity",
-        snapshotSha256: digest(decoded),
+    assert.equal(login.status, 200);
+    const cookie = login.headers.get("set-cookie").split(";")[0];
+    await login.json();
+    async function load(encoding) {
+      const start = performance.now();
+      return new Promise((resolve, reject) => {
+        const request = http.get(
+          origin + "/api/data",
+          {
+            agent: false,
+            headers: { Cookie: cookie, "Accept-Encoding": encoding },
+          },
+          (response) => {
+            const headersMs = performance.now() - start,
+              chunks = [];
+            response.on("data", (chunk) => chunks.push(chunk));
+            response.on("error", reject);
+            response.on("end", () =>
+              resolve({
+                status: response.statusCode,
+                headers: response.headers,
+                bytes: Buffer.concat(chunks),
+                headersMs,
+                httpMs: performance.now() - start,
+              }),
+            );
+          },
+        );
+        request.on("error", reject);
       });
     }
-  }
-  for (const encoding of ["identity", "gzip"]) {
-    const rows = observations[encoding];
-    results.push({
-      requestedEncoding: encoding,
-      contentEncoding: rows[0].contentEncoding,
-      wireBytes: rows[0].wireBytes,
-      decodedBytes: rows[0].decodedBytes,
-      snapshotSha256: rows[0].snapshotSha256,
-      readCalls: rows[0].readCalls,
-      medians: Object.fromEntries(
-        ["httpMs", "headersMs", "viewMs", "readMs", "decodeMs", "parseMs"].map(
-          (key) => [key, round(median(rows.map((row) => row[key])))],
+    // Alternate encodings within each sample to reduce fixed run-order effects.
+    for (const encoding of ["identity", "gzip"]) await load(encoding);
+    const observations = { identity: [], gzip: [] };
+    for (let i = 0; i < samples; i++) {
+      for (const encoding of i % 2
+        ? ["gzip", "identity"]
+        : ["identity", "gzip"]) {
+        const observation = (current = {
+          readMs: 0,
+          viewMs: 0,
+          projectMs: 0,
+          readCalls: 0,
+        });
+        const response = await load(encoding);
+        current = undefined;
+        assert.equal(response.status, 200);
+        assert.equal(response.headers["cache-control"], "no-store");
+        const decodeStart = performance.now();
+        const decoded =
+          response.headers["content-encoding"] === "gzip"
+            ? await unzip(response.bytes)
+            : response.bytes;
+        observation.decodeMs = performance.now() - decodeStart;
+        const parseStart = performance.now(),
+          value = JSON.parse(decoded);
+        observation.parseMs = performance.now() - parseStart;
+        assert.deepEqual(value, expected);
+        assert.equal(digest(decoded), digest(expectedBytes));
+        observations[encoding].push({
+          ...observation,
+          headersMs: response.headersMs,
+          httpMs: response.httpMs,
+          wireBytes: response.bytes.length,
+          decodedBytes: decoded.length,
+          contentEncoding: response.headers["content-encoding"] || "identity",
+          snapshotSha256: digest(decoded),
+        });
+      }
+    }
+    for (const encoding of ["identity", "gzip"]) {
+      const rows = observations[encoding];
+      results.push({
+        role,
+        requestedEncoding: encoding,
+        contentEncoding: rows[0].contentEncoding,
+        wireBytes: rows[0].wireBytes,
+        decodedBytes: rows[0].decodedBytes,
+        snapshotSha256: rows[0].snapshotSha256,
+        readCalls: rows[0].readCalls,
+        medians: Object.fromEntries(
+          [
+            "httpMs",
+            "headersMs",
+            "viewMs",
+            "readMs",
+            "projectMs",
+            "decodeMs",
+            "parseMs",
+          ].map((key) => [key, round(median(rows.map((row) => row[key])))]),
         ),
-      ),
-      observations: rows,
-    });
+        observations: rows,
+      });
+    }
+    assert.deepEqual(
+      JSON.parse(JSON.stringify(await store.view(user))),
+      expected,
+    );
   }
-  assert.deepEqual(await store.view(user), expected);
 } finally {
   current = undefined;
   app?.locals.close();
@@ -217,6 +254,7 @@ const report = {
   actuals,
   percentages,
   calendarDays,
+  roles,
   scope:
     "Synthetic authenticated first data load over local raw HTTP. Includes auth lookup, SQL view, response encoding and local transfer. Decode/JSON parsing measured separately; no browser, WAN, native MSSQL, peak memory or concurrent capacity claim.",
   sourceSha256: Object.fromEntries(
@@ -225,6 +263,9 @@ const report = {
         "backend/app.mjs",
         "backend/data-response.mjs",
         "backend/store.mjs",
+        "shared/access.ts",
+        "shared/model.ts",
+        "shared/records.ts",
         "scripts/benchmark-load.mjs",
         "scripts/benchmark-fixture.mjs",
       ].map(async (name) => [

@@ -288,26 +288,37 @@ export function visibleActualVersion(
     ? actualVersionAt(r, m)
     : undefined;
 }
-export function actualTeamTotalIndex(data: Data, allowedTeams?: Set<string>) {
+/** Build for one stable snapshot; discard after changing resource history. */
+export function createActualTeamIndex(resources: Resource[]) {
+  const byId = new Map(resources.map((resource) => [resource.id, resource]));
+  const teams = new Map<string, string | undefined>();
+  return {
+    get(resourceId: string, month: string) {
+      const key = resourceId + "|" + month;
+      if (!teams.has(key)) {
+        const resource = byId.get(resourceId);
+        teams.set(
+          key,
+          resource ? actualVersionAt(resource, month)?.team || "" : undefined,
+        );
+      }
+      return teams.get(key);
+    },
+  };
+}
+export function actualTeamTotalIndex(
+  data: Data,
+  allowedTeams?: Set<string>,
+  assignments = createActualTeamIndex(data.resources),
+) {
   const totals: Record<string, number> = {};
-  const resources = new Map(
-    data.resources.map((resource) => [resource.id, resource]),
-  );
-  const teamAt = new Map<string, string>();
-  for (const [key, amount] of Object.entries(data.actualAllocations || {})) {
-    const [resourceId, projectId, month] = key.split("|"),
-      assignment = resourceId + "|" + month;
-    if (!teamAt.has(assignment)) {
-      const resource = resources.get(resourceId);
-      teamAt.set(
-        assignment,
-        resource ? actualVersionAt(resource, month)?.team || "" : "",
-      );
-    }
-    const team = teamAt.get(assignment);
+  const actuals = data.actualAllocations || {};
+  for (const key of Object.keys(actuals)) {
+    const [resourceId, projectId, month] = key.split("|");
+    const team = assignments.get(resourceId, month);
     if (team && (!allowedTeams || allowedTeams.has(team))) {
       const totalKey = team + "|" + projectId + "|" + month;
-      totals[totalKey] = (totals[totalKey] || 0) + amount;
+      totals[totalKey] = (totals[totalKey] || 0) + actuals[key];
     }
   }
   return totals;
