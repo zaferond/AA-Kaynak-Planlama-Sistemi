@@ -190,12 +190,26 @@ function MilestoneTrack({
   const dragRef = useRef<DragState | null>(null);
   const suppressClickRef = useRef(false);
   const [trackHeight, setTrackHeight] = useState(36);
+  const [trackWidth, setTrackWidth] = useState(1000);
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track) return;
+    const measure = () => setTrackWidth(track.offsetWidth || 1000);
+    const observer = new ResizeObserver(measure);
+    observer.observe(track);
+    measure();
+    return () => observer.disconnect();
+  }, [periods]);
   const [weeklyLaneHeights, setWeeklyLaneHeights] = useState<number[]>([]);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const noteDragRef = useRef<NoteDragState | null>(null);
   const [notePreview, setNotePreview] = useState<NoteDragPreview | null>(null);
-  const [hoveredPoint, setHoveredPoint] = useState(false);
+  const [hoveredPoint, setHoveredPoint] = useState<{
+    name: string;
+    date: string;
+    completed: boolean;
+  } | null>(null);
   const [hoveredNote, setHoveredNote] = useState<WeeklyNoteBar | null>(null);
   const noteTooltipRef = useRef<HTMLDivElement>(null);
   const notePointerRef = useRef({ x: 0, y: 0 });
@@ -220,7 +234,7 @@ function MilestoneTrack({
     if (!hoveredNote && !hoveredPoint) return;
     const hide = () => {
       setHoveredNote(null);
-      setHoveredPoint(false);
+      setHoveredPoint(null);
     };
     window.addEventListener("scroll", hide, true);
     return () => window.removeEventListener("scroll", hide, true);
@@ -246,7 +260,7 @@ function MilestoneTrack({
       rect.width,
       periods,
     );
-    setHoveredPoint(false);
+    setHoveredPoint(null);
     const range = ranges[rangeIndex];
     const drag: DragState = {
       pointerId: event.pointerId,
@@ -610,7 +624,30 @@ function MilestoneTrack({
     update();
     return () => observer.disconnect();
   }, [weeklyLayout, notePreview?.days]);
-  const weeklyTrackHeight = weeklyLayout ? weeklyGeometry.height : trackHeight;
+  const pointLanes = new Map<number, number>();
+  const laneEnds: number[] = [];
+  bars
+    .map((bar, index) => ({ bar, index }))
+    .filter(({ bar }) => bar.range.displayKind === "milestone")
+    .sort((a, b) => a.bar.left - b.bar.left)
+    .forEach(({ bar, index }) => {
+      const center = ((bar.left + bar.width / 2) * trackWidth) / 100;
+      let lane = laneEnds.findIndex((end) => end < center - 15);
+      if (lane < 0) lane = laneEnds.length;
+      laneEnds[lane] = center + 15;
+      pointLanes.set(index, lane);
+    });
+  const pointBase = weeklyLayout
+    ? weeklyLayout.bars.length
+      ? weeklyGeometry.height
+      : 0
+    : bars.some((bar) => bar.range.displayKind !== "milestone")
+      ? trackHeight
+      : 0;
+  const weeklyTrackHeight = Math.max(
+    weeklyLayout ? weeklyGeometry.height : trackHeight,
+    pointLanes.size ? pointBase + laneEnds.length * 32 + 4 : 0,
+  );
   const dragStatus = notePreview || preview;
   return (
     <div
@@ -623,147 +660,118 @@ function MilestoneTrack({
         } as CSSProperties
       }
     >
-      {!weeklyLayout &&
-        bars.map((bar, index) => {
-          const rangeIndex = ranges.indexOf(bar.range);
-          const changed =
-            preview?.rangeIndex === rangeIndex &&
-            preview.days &&
-            !preview.message
-              ? preview.mode === "move"
-                ? shiftMilestoneRange(
-                    project,
-                    milestone,
-                    rangeIndex,
-                    preview.days,
-                  )
-                : resizeMilestoneRange(
-                    project,
-                    milestone,
-                    rangeIndex,
-                    preview.mode,
-                    preview.days,
-                  )
-              : null;
-          const displayed = changed
-            ? milestoneBarsForPeriods(
-                [milestoneRanges(changed)[rangeIndex]],
-                periods,
-              )[0] || bar
-            : bar;
-          const notes = rangeNotes(displayed.range).filter((note) =>
-            note.text.trim(),
-          );
-          const entries = notes.length
-            ? notes.map((note) => ({
-                text: note.text,
-                completed: !!note.completed,
-                ...noteDates(note, displayed.range),
-              }))
-            : [
-                {
-                  text: milestone.name,
-                  completed: false,
-                  start: displayed.range.start,
-                  end: displayed.range.end,
-                },
-              ];
-          const details = entries.map(
-            (entry) =>
-              "• " +
-              (entry.completed ? "Tamamlandı: " : "") +
-              entry.text +
-              " · " +
-              dateLabel(entry.start) +
-              " – " +
-              dateLabel(entry.end),
-          );
-          const barColor =
-            phasePalette.find((item) => item.id === bar.range.color) ||
-            defaultColor;
-          const barStyle = {
-            "--gantt-color": barColor.ink,
-            "--gantt-soft": barColor.bg,
-            "--gantt-ink": barColor.ink,
-            left: displayed.left + "%",
-            width: displayed.width + "%",
-          } as CSSProperties;
-          if (milestone.displayKind === "milestone")
-            return (
-              <button
-                type="button"
-                key={index}
-                className={"milestone-point" + (dragging ? " dragging" : "")}
-                style={{ left: displayed.left + displayed.width / 2 + "%" }}
-                aria-label={
-                  "Milestone: " +
-                  milestone.name +
-                  " · " +
-                  dateLabel(displayed.range.start)
-                }
-                onMouseEnter={(event) => {
-                  if (dragging) return;
-                  notePointerRef.current = {
-                    x: event.clientX,
-                    y: event.clientY,
-                  };
-                  setHoveredPoint(true);
-                }}
-                onMouseMove={(event) => {
-                  if (!dragging)
-                    positionPointerTooltip(
-                      noteTooltipRef.current,
-                      event.clientX,
-                      event.clientY,
-                    );
-                }}
-                onMouseLeave={() => setHoveredPoint(false)}
-                onFocus={(event) => {
-                  const rect = event.currentTarget.getBoundingClientRect();
-                  notePointerRef.current = {
-                    x: rect.left + rect.width / 2,
-                    y: rect.bottom,
-                  };
-                  setHoveredPoint(true);
-                }}
-                onBlur={() => setHoveredPoint(false)}
-                onClick={() => {
-                  if (suppressClickRef.current) {
-                    suppressClickRef.current = false;
-                    return;
-                  }
-                  if (isAdmin && !saving) onEditMilestone(milestone);
-                }}
-                onPointerDown={(event) => beginDrag(event, rangeIndex, "move")}
-                onPointerMove={moveDrag}
-                onPointerUp={endDrag}
-                onPointerCancel={cancelDrag}
-                onContextMenu={(event) => {
-                  setHoveredPoint(false);
-                  onMilestoneContextMenu(event, milestone, rangeIndex);
-                }}
-              >
-                <span
-                  className="milestone-diamond"
-                  style={{ background: barColor.border }}
-                />
-              </button>
-            );
+      {bars.map((bar, index) => {
+        const rangeIndex = ranges.indexOf(bar.range);
+        const changed =
+          preview?.rangeIndex === rangeIndex && preview.days && !preview.message
+            ? preview.mode === "move"
+              ? shiftMilestoneRange(
+                  project,
+                  milestone,
+                  rangeIndex,
+                  preview.days,
+                )
+              : resizeMilestoneRange(
+                  project,
+                  milestone,
+                  rangeIndex,
+                  preview.mode,
+                  preview.days,
+                )
+            : null;
+        const displayed = changed
+          ? milestoneBarsForPeriods(
+              [milestoneRanges(changed)[rangeIndex]],
+              periods,
+            )[0] || bar
+          : bar;
+        const notes = rangeNotes(displayed.range).filter((note) =>
+          note.text.trim(),
+        );
+        const entries = notes.length
+          ? notes.map((note) => ({
+              text: note.text,
+              completed: !!note.completed,
+              ...noteDates(note, displayed.range),
+            }))
+          : [
+              {
+                text: milestone.name,
+                completed: false,
+                start: displayed.range.start,
+                end: displayed.range.end,
+              },
+            ];
+        const details = entries.map(
+          (entry) =>
+            "• " +
+            (entry.completed ? "Tamamlandı: " : "") +
+            entry.text +
+            " · " +
+            dateLabel(entry.start) +
+            " – " +
+            dateLabel(entry.end),
+        );
+        const barColor =
+          phasePalette.find((item) => item.id === bar.range.color) ||
+          defaultColor;
+        const barStyle = {
+          "--gantt-color": barColor.ink,
+          "--gantt-soft": barColor.bg,
+          "--gantt-ink": barColor.ink,
+          left: displayed.left + "%",
+          width: displayed.width + "%",
+        } as CSSProperties;
+        if (bar.range.displayKind === "milestone")
           return (
             <button
               type="button"
               key={index}
-              className={
-                "gantt-bar start end " +
-                visibleMilestoneBarStyle(milestone.barStyle) +
-                (isAdmin ? " editable" : "") +
-                (dragging && preview?.rangeIndex === rangeIndex
-                  ? " dragging"
-                  : "")
+              className={"milestone-point" + (dragging ? " dragging" : "")}
+              style={{
+                left: displayed.left + displayed.width / 2 + "%",
+                top: pointBase + (pointLanes.get(index) || 0) * 32 + 3,
+              }}
+              aria-label={
+                "Milestone: " +
+                (rangeNotes(bar.range)[0]?.text || milestone.name) +
+                " · " +
+                dateLabel(displayed.range.start)
               }
-              style={barStyle}
-              title={`${milestone.name} · ${dateLabel(displayed.range.start)} – ${dateLabel(displayed.range.end)}\n${details.join("\n")}${isAdmin ? "\nTıklayın: düzenle · Basılı tutup sürükleyin: taşı · Uçlardan sürükleyin: daralt / genişlet" : ""}`}
-              aria-label={details.join(", ")}
+              onMouseEnter={(event) => {
+                if (dragging) return;
+                notePointerRef.current = {
+                  x: event.clientX,
+                  y: event.clientY,
+                };
+                setHoveredPoint({
+                  name: rangeNotes(bar.range)[0]?.text || milestone.name,
+                  date: displayed.range.start,
+                  completed: !!rangeNotes(bar.range)[0]?.completed,
+                });
+              }}
+              onMouseMove={(event) => {
+                if (!dragging)
+                  positionPointerTooltip(
+                    noteTooltipRef.current,
+                    event.clientX,
+                    event.clientY,
+                  );
+              }}
+              onMouseLeave={() => setHoveredPoint(null)}
+              onFocus={(event) => {
+                const rect = event.currentTarget.getBoundingClientRect();
+                notePointerRef.current = {
+                  x: rect.left + rect.width / 2,
+                  y: rect.bottom,
+                };
+                setHoveredPoint({
+                  name: rangeNotes(bar.range)[0]?.text || milestone.name,
+                  date: displayed.range.start,
+                  completed: !!rangeNotes(bar.range)[0]?.completed,
+                });
+              }}
+              onBlur={() => setHoveredPoint(null)}
               onClick={() => {
                 if (suppressClickRef.current) {
                   suppressClickRef.current = false;
@@ -775,62 +783,101 @@ function MilestoneTrack({
               onPointerMove={moveDrag}
               onPointerUp={endDrag}
               onPointerCancel={cancelDrag}
-              onContextMenu={(event) =>
-                onMilestoneContextMenu(event, milestone, rangeIndex)
-              }
+              onContextMenu={(event) => {
+                setHoveredPoint(null);
+                onMilestoneContextMenu(event, milestone, rangeIndex);
+              }}
             >
-              <ul className="gantt-note-list">
-                {entries.map((entry, noteIndex) => (
-                  <li
-                    key={noteIndex}
-                    className={entry.completed ? "completed" : undefined}
-                  >
-                    <strong className="gantt-note-text">{entry.text}</strong>
-                    <small className="gantt-note-dates">
-                      <time dateTime={entry.start}>
-                        {barDateLabel(entry.start)}
-                      </time>{" "}
-                      –{" "}
-                      <time dateTime={entry.end}>
-                        {barDateLabel(entry.end)}
-                      </time>
-                    </small>
-                  </li>
-                ))}
-              </ul>
-              {isAdmin &&
-                (["start", "end"] as const).map((edge) => (
-                  <span
-                    key={edge}
-                    className={"gantt-resize-handle " + edge}
-                    role="presentation"
-                    title={
-                      edge === "start"
-                        ? "Başlangıç tarihini sürükleyin"
-                        : "Bitiş tarihini sürükleyin"
-                    }
-                    onPointerDown={(event) => {
-                      event.stopPropagation();
-                      beginDrag(event, rangeIndex, edge);
-                    }}
-                    onPointerMove={(event) => {
-                      event.stopPropagation();
-                      moveDrag(event);
-                    }}
-                    onPointerUp={(event) => {
-                      event.stopPropagation();
-                      endDrag(event);
-                    }}
-                    onPointerCancel={(event) => {
-                      event.stopPropagation();
-                      cancelDrag(event);
-                    }}
-                    onClick={(event) => event.stopPropagation()}
-                  />
-                ))}
+              <span
+                className={
+                  "milestone-diamond" +
+                  (rangeNotes(bar.range)[0]?.completed ? " completed" : "")
+                }
+                style={{ background: barColor.border }}
+              />
             </button>
           );
-        })}
+        if (weeklyLayout) return null;
+        return (
+          <button
+            type="button"
+            key={index}
+            className={
+              "gantt-bar start end " +
+              visibleMilestoneBarStyle(milestone.barStyle) +
+              (isAdmin ? " editable" : "") +
+              (dragging && preview?.rangeIndex === rangeIndex
+                ? " dragging"
+                : "")
+            }
+            style={barStyle}
+            title={`${milestone.name} · ${dateLabel(displayed.range.start)} – ${dateLabel(displayed.range.end)}\n${details.join("\n")}${isAdmin ? "\nTıklayın: düzenle · Basılı tutup sürükleyin: taşı · Uçlardan sürükleyin: daralt / genişlet" : ""}`}
+            aria-label={details.join(", ")}
+            onClick={() => {
+              if (suppressClickRef.current) {
+                suppressClickRef.current = false;
+                return;
+              }
+              if (isAdmin && !saving) onEditMilestone(milestone);
+            }}
+            onPointerDown={(event) => beginDrag(event, rangeIndex, "move")}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onPointerCancel={cancelDrag}
+            onContextMenu={(event) =>
+              onMilestoneContextMenu(event, milestone, rangeIndex)
+            }
+          >
+            <ul className="gantt-note-list">
+              {entries.map((entry, noteIndex) => (
+                <li
+                  key={noteIndex}
+                  className={entry.completed ? "completed" : undefined}
+                >
+                  <strong className="gantt-note-text">{entry.text}</strong>
+                  <small className="gantt-note-dates">
+                    <time dateTime={entry.start}>
+                      {barDateLabel(entry.start)}
+                    </time>{" "}
+                    –{" "}
+                    <time dateTime={entry.end}>{barDateLabel(entry.end)}</time>
+                  </small>
+                </li>
+              ))}
+            </ul>
+            {isAdmin &&
+              (["start", "end"] as const).map((edge) => (
+                <span
+                  key={edge}
+                  className={"gantt-resize-handle " + edge}
+                  role="presentation"
+                  title={
+                    edge === "start"
+                      ? "Başlangıç tarihini sürükleyin"
+                      : "Bitiş tarihini sürükleyin"
+                  }
+                  onPointerDown={(event) => {
+                    event.stopPropagation();
+                    beginDrag(event, rangeIndex, edge);
+                  }}
+                  onPointerMove={(event) => {
+                    event.stopPropagation();
+                    moveDrag(event);
+                  }}
+                  onPointerUp={(event) => {
+                    event.stopPropagation();
+                    endDrag(event);
+                  }}
+                  onPointerCancel={(event) => {
+                    event.stopPropagation();
+                    cancelDrag(event);
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                />
+              ))}
+          </button>
+        );
+      })}
       {displayedWeeklyLayout?.bars.map((note) => {
         const color =
           phasePalette.find((item) => item.id === note.color) || defaultColor;
@@ -949,8 +996,13 @@ function MilestoneTrack({
           >
             {hoveredPoint ? (
               <>
-                <strong>{milestone.name}</strong>
-                <small>Milestone · {dateLabel(milestone.start)}</small>
+                <strong
+                  className={hoveredPoint.completed ? "completed" : undefined}
+                >
+                  {hoveredPoint.name}
+                </strong>
+                <small>Milestone · {dateLabel(hoveredPoint.date)}</small>
+                {hoveredPoint.completed && <em>Tamamlandı</em>}
               </>
             ) : (
               hoveredNote && (
@@ -1267,14 +1319,16 @@ export default function ProjectTimelineRows({
           )}
           {milestones.map((milestone, milestoneIndex) => {
             const ranges = milestoneRanges(milestone);
+            const pointCount = ranges.filter(
+              (range) => range.displayKind === "milestone",
+            ).length;
             const bars = milestoneBarsForPeriods(ranges, periods);
             const color =
               phasePalette.find(
                 (item) => item.id === (milestone.barColor || "red"),
               ) || phasePalette[3];
             const weeklyLayout =
-              periods[0]?.kind === "week" &&
-              milestone.displayKind !== "milestone"
+              periods[0]?.kind === "week"
                 ? weeklyNoteLayout(ranges, periods)
                 : null;
             return (
@@ -1375,13 +1429,20 @@ export default function ProjectTimelineRows({
                       >
                         {ranges.length === 0
                           ? "Kritik detay konu eklenmedi"
-                          : milestone.displayKind === "milestone"
+                          : ranges.length === 1 &&
+                              ranges[0].displayKind === "milestone"
                             ? "Milestone · " + dateLabel(milestone.start)
                             : ranges.length === 1
                               ? dateLabel(ranges[0].start) +
                                 " – " +
                                 dateLabel(ranges[0].end)
-                              : ranges.length + " tarih aralığı"}
+                              : pointCount
+                                ? (ranges.length > pointCount
+                                    ? ranges.length - pointCount + " aralık · "
+                                    : "") +
+                                  pointCount +
+                                  " Milestone"
+                                : ranges.length + " tarih aralığı"}
                       </small>
                       {!!weeklyLayout?.undated.length && (
                         <div className="weekly-undated-notes">

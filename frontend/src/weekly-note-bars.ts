@@ -64,6 +64,7 @@ export function weeklyNoteLayout(
   const bars: WeeklyNoteBar[] = [],
     undated: UndatedWeeklyNote[] = [];
   for (const [rangeIndex, range] of ranges.entries()) {
+    if (range.displayKind === "milestone") continue;
     for (const [noteIndex, note] of rangeNotes(range).entries()) {
       const text = note.text.trim();
       if (!text) continue;

@@ -27,6 +27,46 @@ export function noteDates(note: MilestoneNote, range: MilestoneRange) {
   return { start: note.start ?? range.start, end: note.end ?? range.end };
 }
 
+export function pointRangeAtDate(
+  range: MilestoneRange,
+  date: string,
+): MilestoneRange {
+  return {
+    ...range,
+    start: date,
+    end: date,
+    notes: rangeNotes(range).map((note) => ({
+      ...note,
+      start: date,
+      end: date,
+    })),
+  };
+}
+export function changeRangeDisplayKind(
+  range: MilestoneRange,
+  kind: "range" | "milestone",
+): MilestoneRange {
+  if (kind === "range") return { ...range, displayKind: "range" };
+  if (rangeNotes(range).length > 1)
+    throw Error("Birden fazla detay not içeren aralık Milestone'a çevrilemez.");
+  return pointRangeAtDate({ ...range, displayKind: "milestone" }, range.start);
+}
+export function assertPointRange(range: MilestoneRange) {
+  if (range.displayKind !== "milestone") return;
+  if (!rangeNotes(range)[0]?.text.trim()) throw Error("Milestone adı girin.");
+  if (
+    range.start !== range.end ||
+    rangeNotes(range).length > 1 ||
+    rangeNotes(range).some(
+      (note) =>
+        noteDates(note, range).start !== range.start ||
+        noteDates(note, range).end !== range.end,
+    )
+  )
+    throw Error(
+      "Milestone tek tarih içermelidir; başlangıç ve bitişi aynı gün olmalıdır.",
+    );
+}
 export function datedNotes(range: MilestoneRange): MilestoneNote[] {
   return rangeNotes(range).map((note) => ({
     ...note,
@@ -40,6 +80,15 @@ export function rangeWithNoteDates(
   notes: MilestoneNote[],
 ): MilestoneRange {
   const next = { ...range, description: notes[0]?.text || "", notes };
+  if (range.displayKind === "milestone") {
+    const dated = {
+      ...next,
+      start: notes[0]?.start ?? range.start,
+      end: notes[0]?.end ?? range.end,
+    };
+    assertPointRange(dated);
+    return dated;
+  }
   const dated = notes
     .filter((note) => note.text.trim())
     .map((note) => noteDates(note, range));
@@ -66,6 +115,8 @@ export function expandRangeToNoteDates(
   range: MilestoneRange,
   notes: MilestoneNote[],
 ): MilestoneRange {
+  if (range.displayKind === "milestone")
+    return rangeWithNoteDates(range, notes);
   const dated = notes
     .map((note) => noteDates(note, range))
     .filter((note) => note.start && note.end && note.start <= note.end);
@@ -93,6 +144,7 @@ export function assertMilestoneDateRanges(
     (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
   );
   for (const [index, range] of sorted.entries()) {
+    assertPointRange(range);
     if (!range.start || !range.end)
       throw Error("Tüm tarih aralıklarını doldurun.");
     if (range.start > range.end)
@@ -152,6 +204,9 @@ export function milestoneRanges(milestone: Milestone): MilestoneRange[] {
       start: milestone.start,
       end: milestone.end,
       color,
+      ...(milestone.displayKind === "milestone"
+        ? { displayKind: "milestone" as const }
+        : {}),
       ...(milestone.barText !== undefined
         ? { description: milestone.barText }
         : {}),
@@ -159,7 +214,16 @@ export function milestoneRanges(milestone: Milestone): MilestoneRange[] {
         milestone.barNotes ??
         (milestone.barText
           ? [{ text: milestone.barText, includeInReport: false }]
-          : []),
+          : milestone.displayKind === "milestone"
+            ? [
+                {
+                  text: milestone.name,
+                  includeInReport: false,
+                  start: milestone.start,
+                  end: milestone.end,
+                },
+              ]
+            : []),
     },
     ...(milestone.additionalRanges || []).map((range) => ({
       ...range,
@@ -180,12 +244,16 @@ export function withMilestoneRanges(
     barNotes: ___,
     barColor: ____,
     hasCriticalTopics: _____,
+    displayKind: ______,
     ...rest
   } = milestone;
   const [first, ...additionalRanges] = ranges;
   const firstNotes = rangeNotes(first);
   return {
     ...rest,
+    ...(first.displayKind === "milestone"
+      ? { displayKind: "milestone" as const }
+      : {}),
     start: first.start,
     end: first.end,
     barColor: first.color || milestone.barColor || "red",
@@ -207,6 +275,7 @@ export function withoutCriticalTopics(milestone: Milestone): Milestone {
     additionalRanges: _,
     barText: __,
     barNotes: ___,
+    displayKind: ____,
     ...rest
   } = milestone;
   return { ...rest, hasCriticalTopics: false, barText: "", barNotes: [] };
@@ -220,6 +289,10 @@ export function addMilestoneNote(
   const range = ranges[rangeIndex];
   if (!range) throw Error("Tarih aralığı bulunamadı.");
   const notes = rangeNotes(range);
+  if (range.displayKind === "milestone")
+    throw Error(
+      "Milestone tek bir ad içerir; yeni bir not veya Milestone ekleyin.",
+    );
   if (notes.length >= 10)
     throw Error("Bir tarih aralığına en fazla 10 açıklama eklenebilir.");
   const next = {
@@ -365,7 +438,7 @@ export function resizeMilestoneRange(
   edge: "start" | "end",
   days: number,
 ): Milestone {
-  if (milestone.displayKind === "milestone")
+  if (milestoneRanges(milestone)[rangeIndex]?.displayKind === "milestone")
     throw Error(
       "Milestone tek tarihli olduğundan genişletilemez; sürükleyerek taşıyın.",
     );

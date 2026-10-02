@@ -50,15 +50,6 @@ function milestoneChanges(
   if (draft.name.length > 200)
     throw Error("Kritik konu adı 200 karakteri geçemez.");
   let milestone: Milestone;
-  if (
-    draft.displayKind === "milestone" &&
-    (editor.draftEmpty ||
-      draft.start !== draft.end ||
-      draft.additionalRanges?.length ||
-      draft.barNotes?.length ||
-      draft.barText)
-  )
-    throw Error("Milestone için tek bir tarih seçin.");
   if (editor.draftEmpty) milestone = withoutCriticalTopics(draft);
   else {
     const ranges = milestoneRanges(draft).sort(

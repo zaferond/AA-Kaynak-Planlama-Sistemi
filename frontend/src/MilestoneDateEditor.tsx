@@ -3,6 +3,8 @@ import type { CSSProperties } from "react";
 import { phasePalette } from "./model";
 import type { Milestone, MilestoneNote, MilestoneRange } from "./model";
 import {
+  changeRangeDisplayKind,
+  pointRangeAtDate,
   addDraftMilestoneRange,
   addMilestoneNote,
   datedNotes,
@@ -102,6 +104,7 @@ export default function MilestoneDateEditor({
     <fieldset className="milestone-ranges">
       <legend>Kritik Detay Konular</legend>
       <p className="milestone-date-hint">
+        Her not için tarih aralığı veya tek tarihli Milestone seçebilirsiniz.
         Detay açıklama tarihleri üstteki tarih aralığını otomatik belirler.
         Üstteki tarihleri ayrıca elle değiştirebilirsiniz.
       </p>
@@ -114,162 +117,286 @@ export default function MilestoneDateEditor({
       <div className="milestone-range-list">
         {ranges.map((range, index) => {
           const notes = rangeNotes(range);
+          const point = range.displayKind === "milestone";
           return (
             <div className="milestone-range-row" key={index}>
               <span className="milestone-range-number">{index + 1}</span>
-              <div className="milestone-range-dates">
-                <strong>Açıklama</strong>
-                <div className="milestone-range-date-card">
-                  <label>
-                    Başlangıç Tarihi
-                    <input
-                      type="date"
-                      min={min}
-                      max={max}
-                      value={range.start}
-                      onChange={(event) =>
-                        updateRange(index, {
-                          start: event.target.value,
-                          end: endAfterStart(event.target.value, range.end),
-                        })
-                      }
-                    />
-                  </label>
-                  <span
-                    className="milestone-range-date-arrow"
-                    aria-hidden="true"
+              <div className="milestone-range-kind">
+                <span>Gösterim</span>
+                <div className="milestone-bar-options">
+                  <button
+                    type="button"
+                    className={!point ? "selected" : ""}
+                    aria-pressed={!point}
+                    onClick={() =>
+                      updateRange(index, changeRangeDisplayKind(range, "range"))
+                    }
                   >
-                    <ArrowRight size={16} />
-                  </span>
-                  <label>
-                    Bitiş Tarihi
-                    <input
-                      type="date"
-                      min={range.start || min}
-                      max={max}
-                      value={range.end}
-                      onChange={(event) =>
-                        updateRange(index, { end: event.target.value })
-                      }
-                    />
-                  </label>
+                    Tarih Aralığı
+                  </button>
+                  <button
+                    type="button"
+                    disabled={notes.length > 1}
+                    title={
+                      notes.length > 1
+                        ? "Birden fazla detay not içeren aralık Milestone'a çevrilemez."
+                        : "Tek tarihli baklava"
+                    }
+                    className={point ? "selected" : ""}
+                    aria-pressed={point}
+                    onClick={() =>
+                      updateRange(
+                        index,
+                        changeRangeDisplayKind(range, "milestone"),
+                      )
+                    }
+                  >
+                    Milestone (Tek Tarih)
+                  </button>
                 </div>
               </div>
-              <div className="milestone-range-notes">
-                <strong>Detay Açıklamalar</strong>
-                {notes.length === 0 && (
-                  <p className="milestone-note-empty">
-                    Bu tarih aralığında açıklama yok.
-                  </p>
-                )}
-                {notes.map((note, noteIndex) => (
-                  <div className="milestone-note-row" key={noteIndex}>
-                    <label className="milestone-note-input">
-                      <span className="milestone-note-number">
-                        {index + 1}.{noteIndex + 1} Açıklama
-                      </span>
-                      <textarea
-                        rows={3}
-                        value={note.text}
-                        placeholder="Açıklama yazın"
+              <div className="milestone-range-dates">
+                <strong>Açıklama</strong>
+                {point ? (
+                  <div className="milestone-range-date-card milestone-point-date-card">
+                    <label>
+                      Milestone Tarihi
+                      <input
+                        type="date"
+                        min={min}
+                        max={max}
+                        value={range.start}
+                        aria-label={`${index + 1}. milestone tarihi`}
                         onChange={(event) =>
-                          updateNote(index, noteIndex, {
-                            text: event.target.value,
+                          updateRange(
+                            index,
+                            pointRangeAtDate(range, event.target.value),
+                          )
+                        }
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <div className="milestone-range-date-card">
+                    <label>
+                      Başlangıç Tarihi
+                      <input
+                        type="date"
+                        min={min}
+                        max={max}
+                        value={range.start}
+                        onChange={(event) =>
+                          updateRange(index, {
+                            start: event.target.value,
+                            end: endAfterStart(event.target.value, range.end),
                           })
                         }
                       />
                     </label>
-                    <div className="milestone-note-dates">
-                      <label>
-                        Başlangıç
-                        <input
-                          type="date"
-                          min={min}
-                          max={max}
-                          value={noteDates(note, range).start}
-                          aria-label={`${index + 1}.${noteIndex + 1} açıklama başlangıç tarihi`}
-                          onChange={(event) =>
-                            updateNote(index, noteIndex, {
-                              start: event.target.value,
-                              end: endAfterStart(
-                                event.target.value,
-                                noteDates(note, range).end,
-                              ),
-                            })
-                          }
-                        />
-                      </label>
-                      <label>
-                        Bitiş
-                        <input
-                          type="date"
-                          min={noteDates(note, range).start || min}
-                          max={max}
-                          value={noteDates(note, range).end}
-                          aria-label={`${index + 1}.${noteIndex + 1} açıklama bitiş tarihi`}
-                          onChange={(event) =>
-                            updateNote(index, noteIndex, {
-                              end: event.target.value,
-                            })
-                          }
-                        />
-                      </label>
-                      <div className="milestone-note-flags">
-                        <label className="milestone-note-report">
-                          <input
-                            type="checkbox"
-                            checked={note.includeInReport}
-                            onChange={(event) =>
-                              updateNote(index, noteIndex, {
-                                includeInReport: event.target.checked,
-                              })
-                            }
-                          />
-                          Rapora Ekle
-                        </label>
-                        <label className="milestone-note-complete">
-                          <input
-                            type="checkbox"
-                            checked={!!note.completed}
-                            onChange={(event) =>
-                              updateNote(index, noteIndex, {
-                                completed: event.target.checked,
-                              })
-                            }
-                          />
-                          Tamamlandı
-                        </label>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="milestone-note-remove"
-                      aria-label={`${index + 1}.${noteIndex + 1} açıklamayı kaldır`}
-                      title="Açıklamayı kaldır"
-                      onClick={() =>
-                        onChange(removeMilestoneNote(value, index, noteIndex))
-                      }
+                    <span
+                      className="milestone-range-date-arrow"
+                      aria-hidden="true"
                     >
-                      <Trash2 size={14} />
-                    </button>
+                      <ArrowRight size={16} />
+                    </span>
+                    <label>
+                      Bitiş Tarihi
+                      <input
+                        type="date"
+                        min={range.start || min}
+                        max={max}
+                        value={range.end}
+                        onChange={(event) =>
+                          updateRange(index, { end: event.target.value })
+                        }
+                      />
+                    </label>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  className="milestone-note-add"
-                  disabled={notes.length >= 10}
-                  onClick={() => addNote(index)}
-                >
-                  <Plus size={13} />
-                  Detay Not Ekle
-                </button>
+                )}
               </div>
+              {point ? (
+                <div className="milestone-range-notes">
+                  <label>
+                    Milestone Adı
+                    <input
+                      value={notes[0]?.text || ""}
+                      aria-label={`${index + 1}. milestone adı`}
+                      onChange={(event) =>
+                        updateRange(index, {
+                          description: event.target.value,
+                          notes: [
+                            {
+                              ...(notes[0] || { includeInReport: false }),
+                              text: event.target.value,
+                              start: range.start,
+                              end: range.start,
+                            },
+                          ],
+                        })
+                      }
+                    />
+                  </label>
+                  <div className="milestone-note-flags milestone-point-flags">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!!notes[0]?.includeInReport}
+                        onChange={(event) =>
+                          updateRange(index, {
+                            notes: [
+                              {
+                                ...(notes[0] || { text: "" }),
+                                includeInReport: event.target.checked,
+                                start: range.start,
+                                end: range.start,
+                              },
+                            ],
+                          })
+                        }
+                      />
+                      Rapora Ekle
+                    </label>
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={!!notes[0]?.completed}
+                        onChange={(event) =>
+                          updateRange(index, {
+                            notes: [
+                              {
+                                ...(notes[0] || {
+                                  text: "",
+                                  includeInReport: false,
+                                }),
+                                completed: event.target.checked,
+                                start: range.start,
+                                end: range.start,
+                              },
+                            ],
+                          })
+                        }
+                      />
+                      Tamamlandı
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div className="milestone-range-notes">
+                  <strong>Detay Açıklamalar</strong>
+                  {notes.length === 0 && (
+                    <p className="milestone-note-empty">
+                      Bu tarih aralığında açıklama yok.
+                    </p>
+                  )}
+                  {notes.map((note, noteIndex) => (
+                    <div className="milestone-note-row" key={noteIndex}>
+                      <label className="milestone-note-input">
+                        <span className="milestone-note-number">
+                          {index + 1}.{noteIndex + 1} Açıklama
+                        </span>
+                        <textarea
+                          rows={3}
+                          value={note.text}
+                          placeholder="Açıklama yazın"
+                          onChange={(event) =>
+                            updateNote(index, noteIndex, {
+                              text: event.target.value,
+                            })
+                          }
+                        />
+                      </label>
+                      <div className="milestone-note-dates">
+                        <label>
+                          Başlangıç
+                          <input
+                            type="date"
+                            min={min}
+                            max={max}
+                            value={noteDates(note, range).start}
+                            aria-label={`${index + 1}.${noteIndex + 1} açıklama başlangıç tarihi`}
+                            onChange={(event) =>
+                              updateNote(index, noteIndex, {
+                                start: event.target.value,
+                                end: endAfterStart(
+                                  event.target.value,
+                                  noteDates(note, range).end,
+                                ),
+                              })
+                            }
+                          />
+                        </label>
+                        <label>
+                          Bitiş
+                          <input
+                            type="date"
+                            min={noteDates(note, range).start || min}
+                            max={max}
+                            value={noteDates(note, range).end}
+                            aria-label={`${index + 1}.${noteIndex + 1} açıklama bitiş tarihi`}
+                            onChange={(event) =>
+                              updateNote(index, noteIndex, {
+                                end: event.target.value,
+                              })
+                            }
+                          />
+                        </label>
+                        <div className="milestone-note-flags">
+                          <label className="milestone-note-report">
+                            <input
+                              type="checkbox"
+                              checked={note.includeInReport}
+                              onChange={(event) =>
+                                updateNote(index, noteIndex, {
+                                  includeInReport: event.target.checked,
+                                })
+                              }
+                            />
+                            Rapora Ekle
+                          </label>
+                          <label className="milestone-note-complete">
+                            <input
+                              type="checkbox"
+                              checked={!!note.completed}
+                              onChange={(event) =>
+                                updateNote(index, noteIndex, {
+                                  completed: event.target.checked,
+                                })
+                              }
+                            />
+                            Tamamlandı
+                          </label>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="milestone-note-remove"
+                        aria-label={`${index + 1}.${noteIndex + 1} açıklamayı kaldır`}
+                        title="Açıklamayı kaldır"
+                        onClick={() =>
+                          onChange(removeMilestoneNote(value, index, noteIndex))
+                        }
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="milestone-note-add"
+                    disabled={notes.length >= 10}
+                    onClick={() => addNote(index)}
+                  >
+                    <Plus size={13} />
+                    Detay Not Ekle
+                  </button>
+                </div>
+              )}
               <div
                 className="milestone-range-colors"
                 role="group"
                 aria-label={`${index + 1}. tarih aralığının bar rengi`}
               >
-                <span>Bar Rengi</span>
+                <span>{point ? "Milestone Rengi" : "Bar Rengi"}</span>
                 {phasePalette.map((color) => (
                   <button
                     type="button"

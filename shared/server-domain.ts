@@ -15,7 +15,10 @@ import {
   HOURS_PER_WORKDAY,
   MAX_RECORDED_MONTHLY_HOURS,
 } from "./actual-units.ts";
-import { CRITICAL_DATE_OVERLAP_MESSAGE } from "./milestone-ranges.ts";
+import {
+  assertPointRange,
+  CRITICAL_DATE_OVERLAP_MESSAGE,
+} from "./milestone-ranges.ts";
 export {
   actualInputToFte,
   calendarHoursInMonth,
@@ -77,6 +80,7 @@ const milestone = z.object({
       z.object({
         start: day,
         end: day,
+        displayKind: z.enum(["range", "milestone"]).optional(),
         description: z.string().trim().optional(),
         notes: z.array(milestoneNote).max(10).optional(),
         color: z
@@ -313,19 +317,9 @@ export function validate(input: unknown): Data {
     if (new Set(milestones.map((m) => m.id)).size !== milestones.length)
       throw bad("Aynı kilometre taşı kimliği iki kez kullanılamaz.");
     for (const m of milestones) {
-      if (
-        m.displayKind === "milestone" &&
-        (m.start !== m.end ||
-          m.hasCriticalTopics === false ||
-          m.additionalRanges?.length ||
-          m.barNotes?.length ||
-          m.barText?.trim())
-      )
-        throw bad(
-          "Milestone tek tarih içermelidir; tarih aralığı ve detay not içeremez.",
-        );
       if (m.hasCriticalTopics === false) {
         if (
+          m.displayKind === "milestone" ||
           m.additionalRanges?.length ||
           m.barNotes?.length ||
           m.barText?.trim()
@@ -334,10 +328,22 @@ export function validate(input: unknown): Data {
         continue;
       }
       const ranges = [
-        { start: m.start, end: m.end, notes: m.barNotes },
+        {
+          start: m.start,
+          end: m.end,
+          notes: m.barNotes,
+          displayKind: m.displayKind,
+          description:
+            m.barText || (m.displayKind === "milestone" ? m.name : ""),
+        },
         ...(m.additionalRanges || []),
       ].sort((a, b) => a.start.localeCompare(b.start));
       for (const [index, range] of ranges.entries()) {
+        try {
+          assertPointRange(range);
+        } catch (error) {
+          throw bad((error as Error).message);
+        }
         if (
           range.start > range.end ||
           range.start < p.start + "-01" ||

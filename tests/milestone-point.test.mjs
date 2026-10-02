@@ -51,9 +51,12 @@ test("single-date milestone validates; inconsistent range/detail/date/type rejec
   for (const bad of [
     { end: "2026-03-21" },
     { hasCriticalTopics: false },
-    { barText: "note" },
     { barNotes: [{ text: "note" }] },
-    { additionalRanges: [{ start: "2026-04-01", end: "2026-04-02" }] },
+    {
+      additionalRanges: [
+        { displayKind: "milestone", start: "2026-04-01", end: "2026-04-02" },
+      ],
+    },
     { displayKind: "unknown" },
     { start: "2025-12-31", end: "2025-12-31" },
   ]) {
@@ -122,13 +125,13 @@ test("editor appends point, color paste preserves kind/date, empty or range-shap
   assert.equal(colored.barColor, "purple");
   assert.equal(colored.displayKind, "milestone");
   assert.equal(colored.start, colored.end);
-  assert.throws(() =>
-    prepareEditorChanges(
-      data,
-      { ...editor, draftEmpty: true },
-      { start: "2026-01", resourceIds: [] },
-    ),
-  );
+  const empty = prepareEditorChanges(
+    data,
+    { ...editor, draftEmpty: true },
+    { start: "2026-01", resourceIds: [] },
+  )[0].value.milestones.at(-1);
+  assert.equal(empty.hasCriticalTopics, false);
+  assert.equal(empty.displayKind, undefined);
   assert.throws(() =>
     prepareEditorChanges(
       data,
@@ -183,7 +186,26 @@ test("version 27 defaults existing bars to range, preserves data, persists point
       "range",
     );
     await store.mutate(user, (data) => {
-      data.projects[0].milestones.push({ ...point(), id: "new" });
+      data.projects[0].milestones.push({
+        ...point(),
+        id: "new",
+        additionalRanges: [
+          {
+            displayKind: "milestone",
+            start: "2026-05-01",
+            end: "2026-05-01",
+            color: "purple",
+            notes: [
+              {
+                text: "Independent approval",
+                includeInReport: true,
+                start: "2026-05-01",
+                end: "2026-05-01",
+              },
+            ],
+          },
+        ],
+      });
     });
     await store.close();
     store = new Store({ env });
@@ -192,6 +214,12 @@ test("version 27 defaults existing bars to range, preserves data, persists point
     assert.equal(saved.displayKind, "milestone");
     assert.equal(saved.start, saved.end);
     assert.equal(saved.barColor, "green");
+    assert.equal(saved.additionalRanges[0].displayKind, "milestone");
+    assert.equal(
+      saved.additionalRanges[0].notes[0].text,
+      "Independent approval",
+    );
+    assert.equal(saved.additionalRanges[0].color, "purple");
     assert.equal(
       (
         await store.db.query(

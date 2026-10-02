@@ -777,33 +777,6 @@
 .milestone-point.dragging {
   cursor: grabbing;
 }
-.milestone-point-editor {
-  display: grid;
-  gap: 16px;
-  padding: 18px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-}
-.milestone-point-colors {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.milestone-point-colors button {
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: white;
-}
-.milestone-point-colors button.selected {
-  outline: 2px solid #2563eb;
-  outline-offset: 2px;
-}
 .milestone-point-preview {
   display: flex;
   align-items: center;

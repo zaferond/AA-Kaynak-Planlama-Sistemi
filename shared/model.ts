@@ -22,6 +22,7 @@ export type MilestoneNote = {
   end?: string;
 };
 export type MilestoneRange = {
+  displayKind?: "range" | "milestone";
   start: string;
   end: string;
   description?: string;
@@ -33,6 +34,7 @@ export type Milestone = {
   name: string;
   start: string;
   end: string;
+  /** Kind of the first detail; further detail kinds are stored in additionalRanges. */
   displayKind?: "range" | "milestone";
   hasCriticalTopics?: boolean;
   additionalRanges?: MilestoneRange[];
