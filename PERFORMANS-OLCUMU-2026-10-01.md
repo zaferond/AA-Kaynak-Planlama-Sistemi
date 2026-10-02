@@ -338,3 +338,36 @@ Dense için `--sizes=100000 --resources=2000 --actuals=50000 --calendar-days=100
 - schemaSha256: `40774711b6218062d1ada75511d0c4973c5b338e38b6b951b3519b49b7a9e2d7`
 - benchmarkSha256: `eb7f744cfaf4c5e0700a0e0353a6704722acccd1327d03a64b377f322b239b12`
 - changeSetSha256: `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8`
+
+
+## Tam doğrulama ve fark karşılaştırması — 2 Ekim 2026
+
+Önceki `22503c1` ve bu paket; Node v24.21.0; yalnız geçici sentetik SQL.js veritabanları. Başlangıç ve bitiş UTC zamanları: `2026-10-02T04:48:42.763Z` / `2026-10-02T04:52:13.695Z`. Bir ısınma ve yedi örnek; ölçümler sırayla ve test/derleme işinden ayrı çalıştı.
+
+Profil: 100.000 planlanan hücre, 50.000 gerçekleşen hücre, 2.000 çalışan, 10.000 kişisel izin kaydı ve 50.000 audit olayı. Gerçekleşen yüzde girdisi bulunmuyor; yoğun yüzde/aylık takvim hesabının hızlanması bu ölçümden çıkarılamaz.
+
+| Medyan maliyet (ms) | Önce | Sonra |
+| --- | ---: | ---: |
+| Kayıt + görüntü | 1071.99 | 860.09 |
+| Tam okuma | 335.40 | 315.06 |
+| Snapshot kopyası | 80.68 | 79.76 |
+| Fark hesabı + persistence | 128.90 | 84.00 |
+| Dosya commit | 54.31 | 40.12 |
+| İstemci veri birleştirme | 104.32 | 90.12 |
+
+Gözlenen kayıt + görüntü azalması yaklaşık **%19,8**; persist azalması yaklaşık **%34,8**. Tam model doğrulaması ayrı zamanlanmadığı için doğrudan bir “doğrulama ms” sonucu yok. Tam okuma/dosya maliyetleri de değişti; toplam farkın tamamı değiştirilen kodun kazancı olarak yorumlanmaz. Ağ/HTTP/tarayıcı çizimi/native MSSQL/çok kullanıcı kapasitesi ölçülmedi; yedi örnek istatistiksel üretim p95 sağlamaz. Rastgele sentetik audit kimlikleri nedeniyle fiziksel DB boyutları birebir aynı değildir. Bellek/RSS/GC kapasitesi iddiası yok.
+
+İki koşuda da: tek tam okuma, tek kopya, 304.113 seçilen satır, 4.113 query satır nesnesi, allocation/revision/audit/settings için birer yazma (toplam 4), 334 bayt yazma parametresi ve 277 bayt yanıt. Son istemci snapshot'ı yeni SQL görüntüsüyle eşit; audit/revision/generation kontrolü geçti. Ara çift dizilerinin ve birleşik Set'in kaldırılması okunan/kontrol edilen kayıt kapsamını azaltmaz.
+
+Tekrar üretme:
+
+`node scripts/benchmark-store.mjs --sizes=100000 --samples=7 --resources=2000 --actuals=50000 --calendar-days=10000 --audit-events=50000 --response=delta --snapshot-copy=numeric --output=/tmp/benzersiz-validation-diff.json`
+
+Önceki davranış için ayrı checkout'ta `22503c1` sürümünün aynı betiğini kullanın. Betik .env yüklemez, gerçek DB yolu/provider kabul etmez; yalnız geçici veritabanı oluşturup siler. Ham dosyalar `/tmp/aa-validation-diff-dense-{before,after}-20261002.json`; `/tmp` kalıcı arşiv değildir. Kaynak hash'leri:
+
+| Kaynak | Önce SHA-256 | Sonra SHA-256 |
+| --- | --- | --- |
+| schemaSha256 | `40774711b6218062d1ada75511d0c4973c5b338e38b6b951b3519b49b7a9e2d7` | `399be2e54b2a89ccdd5147fde62de2aab50fe600838bdbca7adedb18931bf3dd` |
+| changeSetSha256 | `6189c27a21044e2ce3150fc275e1964d5da616ce9323c6e80ce6730e76a9dfc8` | `be6d66568b205ad5893bca479285131440d2f100d31dd21d4fda7875a2152439` |
+| storeSha256 | `355ddfcac40ae55cfe78a490448d8b64ccb2750537b880eb7976b399c9e23d0c` | `390ed4a3180bdb3ba1c10a5228d6a7172d6dea1afd6702c303791ff0058cff36` |
+| benchmarkSha256 | `eb7f744cfaf4c5e0700a0e0353a6704722acccd1327d03a64b377f322b239b12` | `eb7f744cfaf4c5e0700a0e0353a6704722acccd1327d03a64b377f322b239b12` |

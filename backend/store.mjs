@@ -1377,12 +1377,14 @@ export class Store {
       );
     await c.upsert(
       "revisions",
-      Object.entries(next.revisions)
+      Object.keys(next.revisions)
         .filter(
-          ([k, v]) =>
-            !k.startsWith("user:") && v !== (before.revisions[k] || 0),
+          (k) =>
+            !k.startsWith("user:") &&
+            next.revisions[k] !== (before.revisions[k] || 0),
         )
-        .map(([k, revision]) => {
+        .map((k) => {
+          const revision = next.revisions[k];
           const i = k.indexOf(":");
           return k.startsWith("risk:")
             ? { kind: "allocation", record_id: "@risk:" + k.slice(5), revision }

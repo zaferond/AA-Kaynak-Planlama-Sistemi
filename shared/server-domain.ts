@@ -216,11 +216,13 @@ const schema = z.object({
 });
 export function validate(input: unknown): Data {
   const d = schema.parse(input) as Data;
+  // Record keys (and their split parts) are already strings. Use the same
+  // predicates as the schemas without rebuilding a Zod result for each key.
   delete d.users;
   if (Object.keys(d.workCalendar || {}).length > 5000)
     throw bad("Çalışma takviminde en fazla 5000 tarih bulunabilir.");
   for (const date of Object.keys(d.workCalendar || {}))
-    if (!day.safeParse(date).success)
+    if (!validPlanningDate(date))
       throw bad("Çalışma takviminde geçersiz tarih var.");
   if (Object.keys(d.personCalendar || {}).length > 100000)
     throw bad("Kişisel takvimde çok fazla kayıt var.");
@@ -256,7 +258,7 @@ export function validate(input: unknown): Data {
     if (
       extra.length ||
       !resourcesById.has(resourceId) ||
-      !day.safeParse(date).success ||
+      !validPlanningDate(date) ||
       (type !== undefined && type !== entry.type)
     )
       throw bad("Geçersiz kişisel takvim kaydı.");
@@ -347,16 +349,18 @@ export function validate(input: unknown): Data {
       }
     }
   }
-  for (const [k, n] of Object.entries(d.allocations)) {
+  for (const k of Object.keys(d.allocations)) {
+    const n = d.allocations[k];
     const [t, p, m, ...extra] = k.split("|");
-    if (extra.length || !teamIds.has(t) || !mo.safeParse(m).success)
+    if (extra.length || !teamIds.has(t) || !validPlanningMonth(m))
       throw bad("Geçersiz dağıtım kaydı.");
     const pr = projectsById.get(p);
     if (!pr || (n > 0 && (m < pr.start || m > pr.end)))
       throw bad("Proje tarihleri dışında kaynak dağıtımı var.");
   }
   d.actualAllocations ??= {};
-  for (const [k, n] of Object.entries(d.actualAllocations)) {
+  for (const k of Object.keys(d.actualAllocations)) {
+    const n = d.actualAllocations[k];
     const [resourceId, projectId, month, ...extra] = k.split("|");
     const resource = resourcesById.get(resourceId),
       project = projectsById.get(projectId);
@@ -364,7 +368,7 @@ export function validate(input: unknown): Data {
       extra.length ||
       !resource ||
       !project ||
-      !mo.safeParse(month).success ||
+      !validPlanningMonth(month) ||
       (n > 0 && (month < project.start || month > project.end))
     )
       throw bad("Geçersiz gerçekleşen dağılım kaydı.");
@@ -375,18 +379,19 @@ export function validate(input: unknown): Data {
     if (
       extra.length ||
       !resourcesById.has(resourceId) ||
-      !mo.safeParse(month).success
+      !validPlanningMonth(month)
     )
       throw bad("Geçersiz çalışılan saat kaydı.");
   }
   d.actualPercentEntries ??= {};
-  for (const [key, percent] of Object.entries(d.actualPercentEntries)) {
+  for (const key of Object.keys(d.actualPercentEntries)) {
+    const percent = d.actualPercentEntries[key];
     const [resourceId, projectId, month, ...extra] = key.split("|");
     if (
       extra.length ||
       !resourcesById.has(resourceId) ||
       !projectsById.has(projectId) ||
-      !mo.safeParse(month).success ||
+      !validPlanningMonth(month) ||
       d.actualAllocations[key] === undefined
     )
       throw bad("Geçersiz yüzde dağılımı kaydı.");
@@ -412,6 +417,6 @@ export function validate(input: unknown): Data {
     if (!leaderNames.has(name)) throw bad("Geçersiz liderlik yöneticisi.");
   for (const p of d.projects)
     for (const m of Object.keys(p.phases))
-      if (!mo.safeParse(m).success) throw bad("Geçersiz proje ayı.");
+      if (!validPlanningMonth(m)) throw bad("Geçersiz proje ayı.");
   return d;
 }

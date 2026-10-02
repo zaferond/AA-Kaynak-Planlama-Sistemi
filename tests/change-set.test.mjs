@@ -11,6 +11,96 @@ const freeze = (value) => {
   return value;
 };
 
+// Previous implementation is the oracle for order, JSON equality and own keys.
+const referenceChanges = (before = {}, after = {}) => {
+  const own = (record, id) =>
+    Object.hasOwn(record, id) ? record[id] : undefined;
+  return [...new Set([...Object.keys(before), ...Object.keys(after)])]
+    .map((id) => ({ id, before: own(before, id), value: own(after, id) }))
+    .filter(
+      ({ before, value }) =>
+        before !== value && JSON.stringify(before) !== JSON.stringify(value),
+    );
+};
+
+test("two-pass changes match the previous union for ordered, hidden and inherited keys", () => {
+  const before = Object.assign(Object.create({ inherited: 9 }), {
+    10: 0,
+    2: 1,
+    removed: 0,
+    hiddenAfter: 2,
+  });
+  const after = Object.assign(Object.create({ removed: 0 }), {
+    3: 3,
+    2: 2,
+    hiddenBefore: 4,
+    propertyIsEnumerable: "data",
+  });
+  Object.defineProperty(before, "hiddenBefore", { value: 3 });
+  Object.defineProperty(after, "hiddenAfter", { value: 3 });
+  for (const map of [before, after])
+    Object.defineProperty(map, "__proto__", {
+      value: map === before ? 0 : 1,
+      enumerable: true,
+    });
+  before[Symbol("ignored")] = 1;
+  assert.deepEqual(
+    recordChanges(before, after),
+    referenceChanges(before, after),
+  );
+  assert.deepEqual(
+    recordChanges(after, before),
+    referenceChanges(after, before),
+  );
+  assert.deepEqual(recordChanges(), []);
+  assert.throws(() => recordChanges(null, {}), TypeError);
+  assert.throws(() => recordChanges({}, null), TypeError);
+});
+
+test("changes match the previous comparison across varied immutable snapshots", () => {
+  const keys = ["0", "10", "constructor", "toString", "__proto__", "a", "z"];
+  const values = [
+    undefined,
+    null,
+    0,
+    -0,
+    0.25,
+    1,
+    "",
+    "0",
+    NaN,
+    Infinity,
+    { text: "same", nested: [1, 2] },
+    { nested: [1, 2], text: "same" },
+    [0, { text: "changed" }],
+  ];
+  for (let iteration = 0; iteration < 120; iteration++) {
+    const make = (offset) =>
+      freeze(
+        Object.assign(
+          Object.create(null),
+          Object.fromEntries(
+            keys
+              .filter((_, i) => (i + iteration + offset) % 4 !== 0)
+              .map((key, i) => [
+                key,
+                structuredClone(
+                  values[(iteration + i + offset) % values.length],
+                ),
+              ]),
+          ),
+        ),
+      );
+    const before = make(0),
+      after = make(1);
+    assert.deepEqual(
+      recordChanges(before, after),
+      referenceChanges(before, after),
+    );
+    assert.deepEqual(recordChanges(before, structuredClone(before)), []);
+  }
+});
+
 test("record changes distinguish zero, deletion and creation using own values for prototype-like keys", () => {
   const before = freeze(
     Object.fromEntries([

@@ -6,15 +6,21 @@ const indexed = (items = []) =>
 
 export function recordChanges(before = {}, after = {}) {
   const changed = [];
-  for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    const previous = ownValue(before, id),
-      value = ownValue(after, id);
+  const compare = (id, previous, value) => {
     if (
       previous === value ||
       JSON.stringify(previous) === JSON.stringify(value)
     )
-      continue;
+      return;
     changed.push({ id, before: previous, value });
+  };
+  // Preserve before-first order without building a combined list and Set.
+  // Enumerable membership matters: the other side may own a hidden property.
+  for (const id of Object.keys(before))
+    compare(id, before[id], ownValue(after, id));
+  for (const id of Object.keys(after)) {
+    if (Object.prototype.propertyIsEnumerable.call(before, id)) continue;
+    compare(id, ownValue(before, id), after[id]);
   }
   return changed;
 }

@@ -316,3 +316,39 @@ test("failure after the settings write rolls back changed rows, leaders, metadat
     await reopened.close();
   }
 });
+
+test("a planned edit cannot commit while an unrelated draft record fails full validation", async (t) => {
+  const { store, user, team, upserts, queries, clear } = await setup(t);
+  const before = await store.read(),
+    audit = (await store.auditLog(user)).total;
+  for (const corrupt of [
+    (data) => {
+      data.actualAllocations["missing|p|2026-09"] = 0.25;
+    },
+    (data) => {
+      data.actualWorkedHours["r|2026-13"] = 1;
+    },
+    (data) => {
+      data.personCalendar["r|2026-02-30|leave"] = {
+        type: "leave",
+        hours: 1,
+        label: "",
+      };
+    },
+  ]) {
+    clear();
+    await assert.rejects(
+      () =>
+        store.mutate(user, (data) => {
+          data.allocations[team.id + "|p|2026-09"] = 0.25;
+          data.revisions["allocation:" + team.id + "|p|2026-09"] = 1;
+          corrupt(data);
+        }),
+      (e) => e.status === 400,
+    );
+    assert.deepEqual(upserts, []);
+    assert.deepEqual(queries, []);
+    assert.deepEqual(await store.read(), before);
+    assert.equal((await store.auditLog(user)).total, audit);
+  }
+});
