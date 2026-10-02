@@ -16,6 +16,7 @@ export default function ProjectContextMenus({
   saving,
 }: Props) {
   const {
+    phaseGrid,
     menuRef,
     phaseMenu,
     setPhaseMenu,
@@ -32,8 +33,6 @@ export default function ProjectContextMenus({
     pastePhaseBundle,
     copyMilestoneColor,
     pasteMilestoneColor,
-    canPastePhase,
-    copiedRowCounts,
   } = menus;
   return (
     <>
@@ -58,8 +57,12 @@ export default function ProjectContextMenus({
               style={{ left: phaseMenu.x, top: phaseMenu.y }}
             >
               <div className="phase-menu-title">
-                {phaseMenu.projectIds.length ? (
-                  phaseMenu.projectIds.length + " proje satırı · Tüm aylar"
+                {phaseGrid.menuSelection(
+                  phaseGrid.key(phaseMenu.projectId, phaseMenu.month),
+                ).length > 1 ? (
+                  phaseGrid.menuSelection(
+                    phaseGrid.key(phaseMenu.projectId, phaseMenu.month),
+                  ).length + " aşama hücresi"
                 ) : (
                   <>
                     {
@@ -70,16 +73,7 @@ export default function ProjectContextMenus({
                   </>
                 )}
               </div>
-              <button
-                type="button"
-                role="menuitem"
-                disabled={
-                  !phaseMenu.projectIds.length &&
-                  !data?.projects.find((p) => p.id === phaseMenu.projectId)
-                    ?.phases[phaseMenu.month]
-                }
-                onClick={copyPhase}
-              >
+              <button type="button" role="menuitem" onClick={copyPhase}>
                 <Copy size={15} />
                 Metni Kopyala
               </button>
@@ -87,13 +81,11 @@ export default function ProjectContextMenus({
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={!canPastePhase("text") || saving}
+                  disabled={copiedPhase === null || saving}
                   onClick={pastePhase}
                 >
                   <ClipboardPaste size={15} />
-                  {copiedRowCounts.text
-                    ? "Satırları Yapıştır (Metin)"
-                    : "Metni Yapıştır"}
+                  Metni Yapıştır
                 </button>
               )}
               <div className="phase-menu-divider" role="separator" />
@@ -105,13 +97,11 @@ export default function ProjectContextMenus({
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={!canPastePhase("color") || saving}
+                  disabled={!phaseGrid.clipboards.color || saving}
                   onClick={pastePhaseColor}
                 >
                   <PaintBucket size={15} />
-                  {copiedRowCounts.color
-                    ? "Satırları Yapıştır (Renk)"
-                    : "Rengi Yapıştır"}
+                  Rengi Yapıştır
                   {copiedPhaseColor && (
                     <span
                       className="phase-color-swatch"
@@ -136,34 +126,25 @@ export default function ProjectContextMenus({
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={!canPastePhase("bundle") || saving}
+                  disabled={copiedPhaseBundle === null || saving}
                   onClick={pastePhaseBundle}
                 >
                   <ClipboardPaste size={15} />
-                  {copiedRowCounts.bundle
-                    ? "Satırları Yapıştır (Metin + Renk)"
-                    : "Metin ve Rengi Yapıştır"}
+                  Metin ve Rengi Yapıştır
                   {copiedPhaseBundle && (
                     <span
                       className="phase-color-swatch"
                       style={{
                         background: phasePalette.find(
-                          (c) => c.id === copiedPhaseBundle.color,
+                          (c) => c.id === copiedPhaseBundle.values[0][0].color,
                         )?.bg,
                         borderColor: phasePalette.find(
-                          (c) => c.id === copiedPhaseBundle.color,
+                          (c) => c.id === copiedPhaseBundle.values[0][0].color,
                         )?.border,
                       }}
                     />
                   )}
                 </button>
-              )}
-              {(phaseMenu.projectIds.length > 0 ||
-                Object.values(copiedRowCounts).some(Boolean)) && (
-                <p className="phase-row-copy-note">
-                  Aylar aynı takvim aylarına yapıştırılır. Tek kaynak satırı
-                  birden fazla projeye uygulanabilir.
-                </p>
               )}
             </div>
           </>

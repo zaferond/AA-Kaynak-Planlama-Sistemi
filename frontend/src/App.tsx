@@ -505,6 +505,7 @@ export default function Portal() {
   } = plannedGrid;
   const projectMenus = useProjectMenus({
     data,
+    months,
     visibleProjects: projects.slice(
       effectiveProjectPage * 20,
       (effectiveProjectPage + 1) * 20,
@@ -1229,7 +1230,7 @@ export default function Portal() {
               {tab === "projects" && (
                 <TabsContent value="projects">
                   <ProjectTimelinePanel
-                    selection={projectMenus}
+                    selection={projectMenus.phaseGrid}
                     projects={projects}
                     months={months}
                     weekly={projectWeekly}

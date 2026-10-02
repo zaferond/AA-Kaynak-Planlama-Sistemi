@@ -734,6 +734,21 @@ export class Store {
               "UPDATE kp_settings SET generation=generation+1 WHERE id=1",
             );
         }
+        if (!versions.includes(27)) {
+          if (!auto)
+            throw Error(
+              "Milestone görünümü için IT npm run db:migrate çalıştırmalı.",
+            );
+          await c.batch(
+            await fs.readFile(
+              new URL(
+                "./migrations/027_" + this.provider + ".sql",
+                import.meta.url,
+              ),
+              "utf8",
+            ),
+          );
+        }
         if (
           !(await c.query("SELECT id FROM kp_settings WHERE id=1")).rows.length
         ) {
@@ -965,6 +980,7 @@ export class Store {
             .slice(0, 10),
         barColor: r.bar_color || "red",
         barStyle: r.bar_style || "solid",
+        ...(r.display_kind === "milestone" ? { displayKind: "milestone" } : {}),
         ...(Number(r.has_critical_topics) === 0
           ? { hasCriticalTopics: false }
           : {}),
@@ -1363,6 +1379,7 @@ export class Store {
             end_date: milestone.end,
             bar_color: milestone.barColor || "red",
             bar_style: milestone.barStyle || "solid",
+            display_kind: milestone.displayKind || "range",
             has_critical_topics: milestone.hasCriticalTopics === false ? 0 : 1,
             bar_text: milestone.barText || "",
             bar_notes: JSON.stringify(milestone.barNotes || []),

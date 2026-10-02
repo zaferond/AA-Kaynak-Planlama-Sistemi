@@ -2,7 +2,6 @@ import type { Change } from "../../../shared/commands.ts";
 import {
   phaseColor,
   phasePalette,
-  monthsFrom,
   type Data,
   type Project,
 } from "../../../shared/model.ts";
@@ -11,6 +10,11 @@ import {
   withMilestoneRanges,
 } from "../../../shared/milestone-ranges.ts";
 import { validPlanningMonth } from "../../../shared/planning-dates.ts";
+import {
+  copyGridCells,
+  pasteGridCells,
+  type GridClipboard,
+} from "../plan-cell-grid.ts";
 export type PhaseTarget = { projectId: string; month: string };
 export type MilestoneTarget = {
   projectId: string;
@@ -19,9 +23,77 @@ export type MilestoneTarget = {
 };
 export type PhaseClipboard = { text: string; color: string };
 export type PhaseCopyKind = "text" | "color" | "bundle";
-export type PhaseRowsClipboard = {
-  rows: { name: string; cells: { month: string; value: PhaseClipboard }[] }[];
-};
+export type PhaseGridClipboard = GridClipboard<PhaseClipboard>;
+export const phaseCellKey = (projectId: string, month: string) =>
+  projectId + "|" + month;
+export function phaseCellTarget(key: string): PhaseTarget {
+  const separator = key.lastIndexOf("|");
+  return {
+    projectId: key.slice(0, separator),
+    month: key.slice(separator + 1),
+  };
+}
+export function phaseCellAvailable(data: Data, key: string) {
+  const { projectId, month } = phaseCellTarget(key);
+  const project = data.projects.find((project) => project.id === projectId);
+  return (
+    !!project &&
+    validPlanningMonth(month) &&
+    month >= project.start &&
+    month <= project.end
+  );
+}
+export function copyPhaseCells(
+  data: Data,
+  rows: string[],
+  months: string[],
+  selected: string[],
+): PhaseGridClipboard {
+  return copyGridCells(rows, months, selected, (key) => {
+    const { projectId, month } = phaseCellTarget(key);
+    if (!phaseCellAvailable(data, key))
+      throw Error("Proje dönemi dışındaki aşama hücreleri kopyalanamaz.");
+    return phaseClipboard(projectFor(data, projectId), month);
+  });
+}
+export function preparePhaseCellsPaste(
+  data: Data,
+  rows: string[],
+  months: string[],
+  anchor: string,
+  selected: string[],
+  clipboard: PhaseGridClipboard,
+  kind: PhaseCopyKind,
+): Change<"project">[] {
+  const cells = pasteGridCells(
+    rows,
+    months,
+    anchor,
+    selected,
+    clipboard,
+    (key) => phaseCellAvailable(data, key),
+  );
+  const projects = new Map<string, Project>();
+  for (const { key, value } of cells) {
+    const { projectId, month } = phaseCellTarget(key);
+    let project = projects.get(projectId);
+    if (!project) {
+      const current = projectFor(data, projectId);
+      project = {
+        ...current,
+        ...(kind !== "color" ? { phases: { ...current.phases } } : {}),
+        ...(kind !== "text" ? { phaseColors: { ...current.phaseColors } } : {}),
+      };
+      projects.set(projectId, project);
+    }
+    if (kind !== "text") {
+      assertColor(value.color);
+      project.phaseColors![month] = value.color;
+    }
+    if (kind !== "color") project.phases[month] = value.text;
+  }
+  return [...projects.values()].map((project) => projectChange(data, project));
+}
 export type PhasePaste =
   | { kind: "text"; text: string }
   | { kind: "color"; color: string }
@@ -75,91 +147,6 @@ export function preparePhasePaste(
     ...(content.kind !== "text"
       ? { phaseColors: { ...project.phaseColors, [month]: content.color } }
       : {}),
-  });
-}
-export function copyPhaseRows(projects: Project[]): PhaseRowsClipboard {
-  if (!projects.length) throw Error("Önce proje satırlarını seçin.");
-  return {
-    rows: projects.map((project) => {
-      if (
-        !validPlanningMonth(project.start) ||
-        !validPlanningMonth(project.end) ||
-        project.start > project.end
-      )
-        throw Error("Geçersiz proje dönemi.");
-      const [startYear, startMonth] = project.start.split("-").map(Number);
-      const [endYear, endMonth] = project.end.split("-").map(Number);
-      const months = monthsFrom(
-        project.start,
-        (endYear - startYear) * 12 + endMonth - startMonth + 1,
-      );
-      return {
-        name: project.name,
-        cells: months.map((month) => ({
-          month,
-          value: phaseClipboard(project, month),
-        })),
-      };
-    }),
-  };
-}
-// One source row may fill several projects; several sources require an equal
-// target count. Calendar columns keep their dates, independent of weekly zoom.
-export function preparePhaseRowsPaste(
-  data: Data,
-  targetIds: string[],
-  clipboard: PhaseRowsClipboard,
-  kind: PhaseCopyKind,
-): Change<"project">[] {
-  const ids = [...new Set(targetIds)];
-  if (!ids.length || !clipboard.rows.length)
-    throw Error("Önce hedef proje satırlarını seçin.");
-  if (clipboard.rows.length !== 1 && clipboard.rows.length !== ids.length)
-    throw Error(
-      "Birden fazla satır yapıştırırken kaynak ve hedef proje sayıları eşit olmalıdır.",
-    );
-  return ids.map((id, index) => {
-    const project = projectFor(data, id);
-    const source = clipboard.rows[clipboard.rows.length === 1 ? 0 : index];
-    const phases = { ...project.phases },
-      phaseColors = { ...project.phaseColors };
-    for (const { month, value } of source.cells) {
-      if (
-        !validPlanningMonth(month) ||
-        month < project.start ||
-        month > project.end
-      )
-        throw Error(
-          project.name +
-            ": kopyalanan aylar hedef proje dönemi dışında. Proje tarihlerini kontrol edin.",
-        );
-      if (kind !== "color") phases[month] = value.text;
-      if (kind !== "text") {
-        assertColor(value.color);
-        phaseColors[month] = value.color;
-      }
-    }
-    return projectChange(data, {
-      ...project,
-      ...(kind !== "color" ? { phases } : {}),
-      ...(kind !== "text" ? { phaseColors } : {}),
-    });
-  });
-}
-export function preparePhaseRowsFill(
-  data: Data,
-  targetIds: string[],
-  content: PhasePaste,
-): Change<"project">[] {
-  return [...new Set(targetIds)].map((id) => {
-    const project = projectFor(data, id);
-    const clipboard = copyPhaseRows([project]);
-    for (const cell of clipboard.rows[0].cells)
-      cell.value = {
-        text: content.kind === "color" ? cell.value.text : content.text,
-        color: content.kind === "text" ? cell.value.color : content.color,
-      };
-    return preparePhaseRowsPaste(data, [id], clipboard, content.kind)[0];
   });
 }
 function milestoneFor(data: Data, target: MilestoneTarget) {

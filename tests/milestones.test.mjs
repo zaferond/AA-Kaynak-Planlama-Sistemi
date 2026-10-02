@@ -449,7 +449,7 @@ test("existing month milestones become full date ranges during migration", async
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        26,
+        27,
       );
       assert.deepEqual(
         (await store.read()).data.projects.find((p) => p.id === "p").milestones,

@@ -33,6 +33,7 @@ export type Milestone = {
   name: string;
   start: string;
   end: string;
+  displayKind?: "range" | "milestone";
   hasCriticalTopics?: boolean;
   additionalRanges?: MilestoneRange[];
   barColor?: string;

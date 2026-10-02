@@ -742,3 +742,79 @@
   border-radius: 3px;
   border: 1px solid;
 }
+
+.milestone-point {
+  position: absolute;
+  top: 3px;
+  width: 30px;
+  height: 30px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: grab;
+  touch-action: none;
+  z-index: 2;
+}
+.milestone-diamond {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  transform: rotate(45deg);
+  border: 1px solid #0002;
+  border-radius: 2px;
+  box-shadow: 0 2px 3px #0f172a20;
+  flex-shrink: 0;
+}
+.milestone-point:hover .milestone-diamond,
+.milestone-point:focus-visible .milestone-diamond {
+  outline: 2px solid #94a3b8;
+  outline-offset: 3px;
+}
+.milestone-point.dragging {
+  cursor: grabbing;
+}
+.milestone-point-editor {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.milestone-point-colors {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.milestone-point-colors button {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: white;
+}
+.milestone-point-colors button.selected {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+.milestone-point-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+}
+.milestone-point-preview strong,
+.milestone-point-preview small {
+  display: block;
+  overflow-wrap: anywhere;
+}

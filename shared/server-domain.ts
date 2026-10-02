@@ -70,6 +70,7 @@ const milestone = z.object({
   name: z.string().trim().min(1).max(200),
   start: day,
   end: day,
+  displayKind: z.enum(["range", "milestone"]).optional(),
   hasCriticalTopics: z.boolean().optional(),
   additionalRanges: z
     .array(
@@ -312,6 +313,17 @@ export function validate(input: unknown): Data {
     if (new Set(milestones.map((m) => m.id)).size !== milestones.length)
       throw bad("Aynı kilometre taşı kimliği iki kez kullanılamaz.");
     for (const m of milestones) {
+      if (
+        m.displayKind === "milestone" &&
+        (m.start !== m.end ||
+          m.hasCriticalTopics === false ||
+          m.additionalRanges?.length ||
+          m.barNotes?.length ||
+          m.barText?.trim())
+      )
+        throw bad(
+          "Milestone tek tarih içermelidir; tarih aralığı ve detay not içeremez.",
+        );
       if (m.hasCriticalTopics === false) {
         if (
           m.additionalRanges?.length ||

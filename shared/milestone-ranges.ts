@@ -365,6 +365,10 @@ export function resizeMilestoneRange(
   edge: "start" | "end",
   days: number,
 ): Milestone {
+  if (milestone.displayKind === "milestone")
+    throw Error(
+      "Milestone tek tarihli olduğundan genişletilemez; sürükleyerek taşıyın.",
+    );
   const ranges = milestoneRanges(milestone);
   if (!Number.isInteger(days) || rangeIndex < 0 || rangeIndex >= ranges.length)
     throw Error("Düzenlenecek tarih aralığı bulunamadı.");

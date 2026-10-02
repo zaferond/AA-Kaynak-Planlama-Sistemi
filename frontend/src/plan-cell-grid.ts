@@ -1,8 +1,9 @@
-export type PlanClipboard = {
-  values: number[][];
+export type GridClipboard<T> = {
+  values: T[][];
   rowCount: number;
   columnCount: number;
 };
+export type PlanClipboard = GridClipboard<number>;
 
 export function mergePlanSelection(
   existing: string[],
@@ -34,8 +35,12 @@ export function rectangleKeys(
   to: string,
   canUse: (key: string) => boolean,
 ): string[] {
-  const firstRow = rows.findIndex((row) => from.startsWith(row + "|"));
-  const lastRow = rows.findIndex((row) => to.startsWith(row + "|"));
+  const firstRow = rows.findIndex(
+    (row) => from.slice(0, from.lastIndexOf("|")) === row,
+  );
+  const lastRow = rows.findIndex(
+    (row) => to.slice(0, to.lastIndexOf("|")) === row,
+  );
   const firstMonth = months.indexOf(from.slice(from.lastIndexOf("|") + 1));
   const lastMonth = months.indexOf(to.slice(to.lastIndexOf("|") + 1));
   if ([firstRow, lastRow, firstMonth, lastMonth].some((index) => index < 0))
@@ -58,17 +63,17 @@ export function rectangleKeys(
   return keys;
 }
 
-export function copyPlanCells(
+export function copyGridCells<T>(
   rows: string[],
   months: string[],
   selected: string[],
-  allocations: Record<string, number>,
-): PlanClipboard {
+  read: (key: string) => T,
+): GridClipboard<T> {
   const selection = new Set(selected);
   if (
     selected.some(
       (key) =>
-        !rows.some((row) => key.startsWith(row + "|")) ||
+        !rows.some((row) => key.slice(0, key.lastIndexOf("|")) === row) ||
         !months.includes(key.slice(key.lastIndexOf("|") + 1)),
     )
   ) {
@@ -90,31 +95,33 @@ export function copyPlanCells(
     rowEnd = rowIndexes.at(-1)!;
   const columnStart = columnIndexes[0],
     columnEnd = columnIndexes.at(-1)!;
-  const values: number[][] = [];
+  const values: T[][] = [];
   for (let r = rowStart; r <= rowEnd; r++) {
-    const line: number[] = [];
+    const line: T[] = [];
     for (let c = columnStart; c <= columnEnd; c++) {
       const key = rows[r] + "|" + months[c];
       if (!selection.has(key))
         throw Error(
           "Kopyalamak için kesintisiz dikdörtgen bir hücre aralığı seçin.",
         );
-      line.push(allocations[key] || 0);
+      line.push(read(key));
     }
     values.push(line);
   }
   return { values, rowCount: values.length, columnCount: values[0].length };
 }
 
-export function pastePlanCells(
+export function pasteGridCells<T>(
   rows: string[],
   months: string[],
   anchor: string,
   selected: string[],
-  clipboard: PlanClipboard,
+  clipboard: GridClipboard<T>,
   canUse: (key: string) => boolean,
-): { key: string; value: number }[] {
-  let anchorRow = rows.findIndex((row) => anchor.startsWith(row + "|"));
+): { key: string; value: T }[] {
+  let anchorRow = rows.findIndex(
+    (row) => anchor.slice(0, anchor.lastIndexOf("|")) === row,
+  );
   let anchorColumn = months.indexOf(anchor.slice(anchor.lastIndexOf("|") + 1));
   if (anchorRow < 0 || anchorColumn < 0)
     throw Error("Yapıştırma hücresi görünür tabloda bulunamadı.");
@@ -154,7 +161,7 @@ export function pastePlanCells(
       anchorColumn = selectedColumns[0];
     }
   }
-  const result: { key: string; value: number }[] = [];
+  const result: { key: string; value: T }[] = [];
   for (let r = 0; r < clipboard.rowCount; r++) {
     for (let c = 0; c < clipboard.columnCount; c++) {
       const row = rows[anchorRow + r],
@@ -170,4 +177,23 @@ export function pastePlanCells(
     }
   }
   return result;
+}
+
+export function copyPlanCells(
+  rows: string[],
+  months: string[],
+  selected: string[],
+  allocations: Record<string, number>,
+): PlanClipboard {
+  return copyGridCells(rows, months, selected, (key) => allocations[key] || 0);
+}
+export function pastePlanCells(
+  rows: string[],
+  months: string[],
+  anchor: string,
+  selected: string[],
+  clipboard: PlanClipboard,
+  canUse: (key: string) => boolean,
+): { key: string; value: number }[] {
+  return pasteGridCells(rows, months, anchor, selected, clipboard, canUse);
 }

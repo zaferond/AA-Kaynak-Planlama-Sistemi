@@ -128,7 +128,7 @@ test("resource month dates migrate to first and last calendar day", async () => 
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        26,
+        27,
       );
       await store.db.transaction((c) =>
         c.query(

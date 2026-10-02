@@ -14,6 +14,7 @@ import {
   rangeNotes,
   visibleMilestoneBarStyle,
 } from "../milestone-ranges";
+import MilestonePointEditor from "./MilestonePointEditor";
 import MilestoneDateEditor from "../MilestoneDateEditor";
 import {
   phasePalette,
@@ -95,7 +96,9 @@ export default function PortalEditorDialog({
               : editor?.kind === "projectPhase"
                 ? "Aşama metnini ve takvim rengini güncelleyin."
                 : editor?.kind === "milestone"
-                  ? "Tarih aralıklarını ve takvimde görünecek barı düzenleyin."
+                  ? editor.value.displayKind === "milestone"
+                    ? "Tek tarihi ve Milestone rengini düzenleyin."
+                    : "Tarih aralıklarını ve takvimde görünecek barı düzenleyin."
                   : editor?.kind === "resource"
                     ? "Çalışan bilgilerini ve işbaşı / ayrılış tarihlerini gün bazında girin."
                     : editor?.kind === "bulkResources"
@@ -271,8 +274,63 @@ export default function PortalEditorDialog({
                     {data?.projects.find((p) => p.id === editor.projectId)?.end}
                   </span>
                 </div>
+                {editor.isNew && (
+                  <fieldset className="milestone-kind">
+                    <legend>Gösterim</legend>
+                    <div className="milestone-bar-options">
+                      <button
+                        type="button"
+                        aria-pressed={editor.value.displayKind !== "milestone"}
+                        className={
+                          editor.value.displayKind !== "milestone"
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() =>
+                          setEditor({
+                            ...editor,
+                            value: { ...editor.value, displayKind: "range" },
+                          })
+                        }
+                      >
+                        Tarih Aralığı
+                      </button>
+                      <button
+                        type="button"
+                        disabled={
+                          !!editor.value.additionalRanges?.length ||
+                          !!editor.value.barNotes?.length ||
+                          !!editor.value.barText?.trim()
+                        }
+                        aria-pressed={editor.value.displayKind === "milestone"}
+                        className={
+                          editor.value.displayKind === "milestone"
+                            ? "selected"
+                            : ""
+                        }
+                        onClick={() => {
+                          setFormError("");
+                          setEditor({
+                            ...editor,
+                            draftEmpty: false,
+                            value: {
+                              ...editor.value,
+                              displayKind: "milestone",
+                              end: editor.value.start,
+                              hasCriticalTopics: true,
+                            },
+                          });
+                        }}
+                      >
+                        Milestone (Tek Tarih)
+                      </button>
+                    </div>
+                  </fieldset>
+                )}
                 <label>
-                  Kritik Konu
+                  {editor.value.displayKind === "milestone"
+                    ? "Milestone Adı"
+                    : "Kritik Konu"}
                   <input
                     maxLength={200}
                     autoFocus
@@ -285,107 +343,134 @@ export default function PortalEditorDialog({
                     }
                   />
                 </label>
-                <MilestoneDateEditor
-                  value={editor.value}
-                  isEmpty={!!editor.draftEmpty}
-                  projectStart={
-                    data!.projects.find((p) => p.id === editor.projectId)!.start
-                  }
-                  projectEnd={
-                    data!.projects.find((p) => p.id === editor.projectId)!.end
-                  }
-                  onChange={(value, draftEmpty = false) => {
-                    setFormError("");
-                    setEditor({ ...editor, value, draftEmpty });
-                  }}
-                />
-                <fieldset className="milestone-style">
-                  <legend>Bar Görünümü</legend>
-                  <div className="milestone-bar-options">
-                    {(
-                      [
-                        ["solid", "Düz"],
-                        ["outline", "Çerçeveli"],
-                      ] as const
-                    ).map(([id, label]) => (
-                      <button
-                        type="button"
-                        key={id}
-                        className={
-                          visibleMilestoneBarStyle(editor.value.barStyle) === id
-                            ? "selected"
-                            : ""
-                        }
-                        aria-pressed={
-                          visibleMilestoneBarStyle(editor.value.barStyle) === id
-                        }
-                        onClick={() =>
-                          setEditor({
-                            ...editor,
-                            value: { ...editor.value, barStyle: id },
-                          })
-                        }
-                      >
-                        <span className={"sample " + id} />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </fieldset>
-                <div className="timeline-live-preview">
-                  <span>BAR ÖNİZLEMESİ</span>
-                  <div className="milestone-preview-list">
-                    {editor.draftEmpty && (
-                      <p className="milestone-preview-empty">
-                        Kritik detay konu eklenmedi. Kritik konuyu bu haliyle
-                        kaydedebilirsiniz.
-                      </p>
-                    )}
-                    {(editor.draftEmpty
-                      ? []
-                      : milestoneRanges(editor.value)
-                    ).map((range, index) => {
-                      const color =
-                        phasePalette.find((c) => c.id === range.color) ||
-                        phasePalette[3];
-                      return (
-                        <div key={index}>
-                          <small>{index + 1}. Tarih Aralığı</small>
-                          <div
+                {editor.value.displayKind === "milestone" ? (
+                  <MilestonePointEditor
+                    value={editor.value}
+                    projectStart={
+                      data!.projects.find((p) => p.id === editor.projectId)!
+                        .start
+                    }
+                    projectEnd={
+                      data!.projects.find((p) => p.id === editor.projectId)!.end
+                    }
+                    onChange={(value) => {
+                      setFormError("");
+                      setEditor({ ...editor, value, draftEmpty: false });
+                    }}
+                  />
+                ) : (
+                  <>
+                    <MilestoneDateEditor
+                      value={editor.value}
+                      isEmpty={!!editor.draftEmpty}
+                      projectStart={
+                        data!.projects.find((p) => p.id === editor.projectId)!
+                          .start
+                      }
+                      projectEnd={
+                        data!.projects.find((p) => p.id === editor.projectId)!
+                          .end
+                      }
+                      onChange={(value, draftEmpty = false) => {
+                        setFormError("");
+                        setEditor({ ...editor, value, draftEmpty });
+                      }}
+                    />
+                    <fieldset className="milestone-style">
+                      <legend>Bar Görünümü</legend>
+                      <div className="milestone-bar-options">
+                        {(
+                          [
+                            ["solid", "Düz"],
+                            ["outline", "Çerçeveli"],
+                          ] as const
+                        ).map(([id, label]) => (
+                          <button
+                            type="button"
+                            key={id}
                             className={
-                              "timeline-milestone-preview " +
-                              visibleMilestoneBarStyle(editor.value.barStyle)
+                              visibleMilestoneBarStyle(
+                                editor.value.barStyle,
+                              ) === id
+                                ? "selected"
+                                : ""
                             }
-                            style={
-                              {
-                                "--preview-color": color.border,
-                                "--preview-soft": color.bg,
-                                "--preview-ink": color.ink,
-                              } as CSSProperties
+                            aria-pressed={
+                              visibleMilestoneBarStyle(
+                                editor.value.barStyle,
+                              ) === id
+                            }
+                            onClick={() =>
+                              setEditor({
+                                ...editor,
+                                value: { ...editor.value, barStyle: id },
+                              })
                             }
                           >
-                            <ul className="milestone-preview-notes">
-                              {(rangeNotes(range).filter((note) =>
-                                note.text.trim(),
-                              ).length
-                                ? rangeNotes(range)
-                                    .filter((note) => note.text.trim())
-                                    .map((note) => note.text)
-                                : [editor.value.name || "Kritik Konu"]
-                              ).map((text, noteIndex) => (
-                                <li key={noteIndex}>{text}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <small>
-                    Her açıklama ve renk kendi tarih aralığının barında
-                    gösterilir.
-                  </small>
-                </div>
+                            <span className={"sample " + id} />
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </fieldset>
+                    <div className="timeline-live-preview">
+                      <span>BAR ÖNİZLEMESİ</span>
+                      <div className="milestone-preview-list">
+                        {editor.draftEmpty && (
+                          <p className="milestone-preview-empty">
+                            Kritik detay konu eklenmedi. Kritik konuyu bu
+                            haliyle kaydedebilirsiniz.
+                          </p>
+                        )}
+                        {(editor.draftEmpty
+                          ? []
+                          : milestoneRanges(editor.value)
+                        ).map((range, index) => {
+                          const color =
+                            phasePalette.find((c) => c.id === range.color) ||
+                            phasePalette[3];
+                          return (
+                            <div key={index}>
+                              <small>{index + 1}. Tarih Aralığı</small>
+                              <div
+                                className={
+                                  "timeline-milestone-preview " +
+                                  visibleMilestoneBarStyle(
+                                    editor.value.barStyle,
+                                  )
+                                }
+                                style={
+                                  {
+                                    "--preview-color": color.border,
+                                    "--preview-soft": color.bg,
+                                    "--preview-ink": color.ink,
+                                  } as CSSProperties
+                                }
+                              >
+                                <ul className="milestone-preview-notes">
+                                  {(rangeNotes(range).filter((note) =>
+                                    note.text.trim(),
+                                  ).length
+                                    ? rangeNotes(range)
+                                        .filter((note) => note.text.trim())
+                                        .map((note) => note.text)
+                                    : [editor.value.name || "Kritik Konu"]
+                                  ).map((text, noteIndex) => (
+                                    <li key={noteIndex}>{text}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <small>
+                        Her açıklama ve renk kendi tarih aralığının barında
+                        gösterilir.
+                      </small>
+                    </div>
+                  </>
+                )}
               </>
             )}
             {editor.kind === "resource" && (

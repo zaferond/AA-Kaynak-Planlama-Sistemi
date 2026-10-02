@@ -128,11 +128,3 @@
   border-radius: 3px;
   flex: none;
 }
-.phase-row-copy-note {
-  margin: 5px 4px 2px;
-  padding: 7px 5px 3px;
-  border-top: 1px solid #e4ebf3;
-  color: #657a8e;
-  font-size: 10px;
-  line-height: 1.45;
-}

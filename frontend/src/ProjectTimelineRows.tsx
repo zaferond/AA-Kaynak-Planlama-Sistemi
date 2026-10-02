@@ -74,10 +74,9 @@ function positionPointerTooltip(
   tooltip.style.top = top / zoom + "px";
 }
 
+import type { usePhaseGrid } from "./features/usePhaseGrid";
 type Props = {
-  rowSelected: boolean;
-  onToggleRowSelection: (shift: boolean) => void;
-  onRowContextMenu: (event: MouseEvent<HTMLElement>) => void;
+  phaseSelection: ReturnType<typeof usePhaseGrid>;
   project: Project;
   periods: TimelinePeriod[];
   density: "detail" | "compact" | "overview";
@@ -196,6 +195,7 @@ function MilestoneTrack({
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const noteDragRef = useRef<NoteDragState | null>(null);
   const [notePreview, setNotePreview] = useState<NoteDragPreview | null>(null);
+  const [hoveredPoint, setHoveredPoint] = useState(false);
   const [hoveredNote, setHoveredNote] = useState<WeeklyNoteBar | null>(null);
   const noteTooltipRef = useRef<HTMLDivElement>(null);
   const notePointerRef = useRef({ x: 0, y: 0 });
@@ -209,19 +209,22 @@ function MilestoneTrack({
   );
   useEffect(() => setHoveredNote(null), [periods]);
   useLayoutEffect(() => {
-    if (hoveredNote)
+    if (hoveredNote || hoveredPoint)
       positionPointerTooltip(
         noteTooltipRef.current,
         notePointerRef.current.x,
         notePointerRef.current.y,
       );
-  }, [hoveredNote]);
+  }, [hoveredNote, hoveredPoint]);
   useEffect(() => {
-    if (!hoveredNote) return;
-    const hide = () => setHoveredNote(null);
+    if (!hoveredNote && !hoveredPoint) return;
+    const hide = () => {
+      setHoveredNote(null);
+      setHoveredPoint(false);
+    };
     window.addEventListener("scroll", hide, true);
     return () => window.removeEventListener("scroll", hide, true);
-  }, [hoveredNote]);
+  }, [hoveredNote, hoveredPoint]);
 
   function beginDrag(
     event: PointerEvent<HTMLElement>,
@@ -243,6 +246,7 @@ function MilestoneTrack({
       rect.width,
       periods,
     );
+    setHoveredPoint(false);
     const range = ranges[rangeIndex];
     const drag: DragState = {
       pointerId: event.pointerId,
@@ -623,7 +627,9 @@ function MilestoneTrack({
         bars.map((bar, index) => {
           const rangeIndex = ranges.indexOf(bar.range);
           const changed =
-            preview?.rangeIndex === rangeIndex && preview.days
+            preview?.rangeIndex === rangeIndex &&
+            preview.days &&
+            !preview.message
               ? preview.mode === "move"
                 ? shiftMilestoneRange(
                     project,
@@ -682,6 +688,67 @@ function MilestoneTrack({
             left: displayed.left + "%",
             width: displayed.width + "%",
           } as CSSProperties;
+          if (milestone.displayKind === "milestone")
+            return (
+              <button
+                type="button"
+                key={index}
+                className={"milestone-point" + (dragging ? " dragging" : "")}
+                style={{ left: displayed.left + displayed.width / 2 + "%" }}
+                aria-label={
+                  "Milestone: " +
+                  milestone.name +
+                  " · " +
+                  dateLabel(displayed.range.start)
+                }
+                onMouseEnter={(event) => {
+                  if (dragging) return;
+                  notePointerRef.current = {
+                    x: event.clientX,
+                    y: event.clientY,
+                  };
+                  setHoveredPoint(true);
+                }}
+                onMouseMove={(event) => {
+                  if (!dragging)
+                    positionPointerTooltip(
+                      noteTooltipRef.current,
+                      event.clientX,
+                      event.clientY,
+                    );
+                }}
+                onMouseLeave={() => setHoveredPoint(false)}
+                onFocus={(event) => {
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  notePointerRef.current = {
+                    x: rect.left + rect.width / 2,
+                    y: rect.bottom,
+                  };
+                  setHoveredPoint(true);
+                }}
+                onBlur={() => setHoveredPoint(false)}
+                onClick={() => {
+                  if (suppressClickRef.current) {
+                    suppressClickRef.current = false;
+                    return;
+                  }
+                  if (isAdmin && !saving) onEditMilestone(milestone);
+                }}
+                onPointerDown={(event) => beginDrag(event, rangeIndex, "move")}
+                onPointerMove={moveDrag}
+                onPointerUp={endDrag}
+                onPointerCancel={cancelDrag}
+                onContextMenu={(event) => {
+                  setHoveredPoint(false);
+                  onMilestoneContextMenu(event, milestone, rangeIndex);
+                }}
+              >
+                <span
+                  className="milestone-diamond"
+                  style={{ background: barColor.border }}
+                />
+              </button>
+            );
           return (
             <button
               type="button"
@@ -872,7 +939,7 @@ function MilestoneTrack({
           </button>
         );
       })}
-      {hoveredNote &&
+      {(hoveredNote || hoveredPoint) &&
         createPortal(
           <div
             ref={noteTooltipRef}
@@ -880,13 +947,27 @@ function MilestoneTrack({
             role="tooltip"
             style={{ left: -10000, top: -10000 }}
           >
-            <strong className={hoveredNote.completed ? "completed" : undefined}>
-              {hoveredNote.text}
-            </strong>
-            <small>
-              {dateLabel(hoveredNote.start)} – {dateLabel(hoveredNote.end)}
-            </small>
-            {hoveredNote.completed && <em>Tamamlandı</em>}
+            {hoveredPoint ? (
+              <>
+                <strong>{milestone.name}</strong>
+                <small>Milestone · {dateLabel(milestone.start)}</small>
+              </>
+            ) : (
+              hoveredNote && (
+                <>
+                  <strong
+                    className={hoveredNote.completed ? "completed" : undefined}
+                  >
+                    {hoveredNote.text}
+                  </strong>
+                  <small>
+                    {dateLabel(hoveredNote.start)} –{" "}
+                    {dateLabel(hoveredNote.end)}
+                  </small>
+                  {hoveredNote.completed && <em>Tamamlandı</em>}
+                </>
+              )
+            )}
           </div>,
           document.body,
         )}
@@ -948,9 +1029,6 @@ function MilestoneTrack({
 }
 
 export default function ProjectTimelineRows({
-  rowSelected,
-  onToggleRowSelection,
-  onRowContextMenu,
   project,
   periods,
   density,
@@ -959,6 +1037,7 @@ export default function ProjectTimelineRows({
   saving,
   onProjectInfo,
   onPhaseClick,
+  phaseSelection,
   onPhaseContextMenu,
   onAddMilestone,
   onEditMilestone,
@@ -1016,27 +1095,9 @@ export default function ProjectTimelineRows({
   const milestones = project.milestones || [];
   return (
     <>
-      <TableRow
-        className={
-          "project-main-row" + (rowSelected ? " project-row-selected" : "")
-        }
-        aria-selected={rowSelected}
-      >
-        <TableCell onContextMenu={onRowContextMenu}>
+      <TableRow className="project-main-row">
+        <TableCell>
           <div className="project-name-cell">
-            <input
-              className="project-row-select"
-              type="checkbox"
-              checked={rowSelected}
-              disabled={saving}
-              aria-label={project.name + " proje satırını seç"}
-              title="Satırı seç · Shift: aradaki proje satırlarını seç"
-              onChange={(event) =>
-                onToggleRowSelection(
-                  !!(event.nativeEvent as globalThis.MouseEvent).shiftKey,
-                )
-              }
-            />
             <button
               type="button"
               className="project-expand"
@@ -1078,7 +1139,23 @@ export default function ProjectTimelineRows({
           const month = phaseMonthForPeriod(period, project);
           const phaseText = active ? project.phases[month]?.trim() : "";
           return (
-            <TableCell key={period.key}>
+            <TableCell
+              key={period.key}
+              data-phase-cell={phaseSelection.key(project.id, month)}
+              className={
+                phaseSelection.cells.includes(
+                  phaseSelection.key(project.id, month),
+                )
+                  ? "phase-cell-selected"
+                  : undefined
+              }
+              onPointerDown={(event) =>
+                phaseSelection.startDrag(
+                  event,
+                  phaseSelection.key(project.id, month),
+                )
+              }
+            >
               <button
                 className="phasebutton"
                 disabled={!active}
@@ -1128,9 +1205,25 @@ export default function ProjectTimelineRows({
                   setHoveredPhase("");
                   onPhaseContextMenu(event, month);
                 }}
-                onClick={() => {
+                aria-pressed={phaseSelection.cells.includes(
+                  phaseSelection.key(project.id, month),
+                )}
+                onClick={(event) => {
+                  setHoveredPhase("");
+                  phaseSelection.choose(
+                    event,
+                    phaseSelection.key(project.id, month),
+                  );
+                }}
+                onDoubleClick={() => {
                   setHoveredPhase("");
                   onPhaseClick(month);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onPhaseClick(month);
+                  }
                 }}
               >
                 <span className="phasepreview">
@@ -1180,7 +1273,8 @@ export default function ProjectTimelineRows({
                 (item) => item.id === (milestone.barColor || "red"),
               ) || phasePalette[3];
             const weeklyLayout =
-              periods[0]?.kind === "week"
+              periods[0]?.kind === "week" &&
+              milestone.displayKind !== "milestone"
                 ? weeklyNoteLayout(ranges, periods)
                 : null;
             return (
@@ -1281,11 +1375,13 @@ export default function ProjectTimelineRows({
                       >
                         {ranges.length === 0
                           ? "Kritik detay konu eklenmedi"
-                          : ranges.length === 1
-                            ? dateLabel(ranges[0].start) +
-                              " – " +
-                              dateLabel(ranges[0].end)
-                            : ranges.length + " tarih aralığı"}
+                          : milestone.displayKind === "milestone"
+                            ? "Milestone · " + dateLabel(milestone.start)
+                            : ranges.length === 1
+                              ? dateLabel(ranges[0].start) +
+                                " – " +
+                                dateLabel(ranges[0].end)
+                              : ranges.length + " tarih aralığı"}
                       </small>
                       {!!weeklyLayout?.undated.length && (
                         <div className="weekly-undated-notes">
