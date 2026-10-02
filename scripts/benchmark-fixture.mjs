@@ -6,7 +6,8 @@ import {
   DEFAULT_MONTHLY_HOURS,
 } from "../shared/server-domain.ts";
 
-// Only synthetic data. Callers create a disposable SQL.js Store in os.tmpdir().
+// Only synthetic data. Callers provide a disposable test Store; SQL.js callers
+// use os.tmpdir(), while native MSSQL callers must hold the test database lease.
 export async function seedBenchmarkStore(
   store,
   size,

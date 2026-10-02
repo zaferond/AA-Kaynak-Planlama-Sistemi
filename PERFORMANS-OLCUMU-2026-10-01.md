@@ -616,3 +616,15 @@ node scripts/benchmark-reset.mjs --mode=committed --size=10000 --samples=5 --out
 ```
 
 İlk rapor `52795e8` davranışı ve yeni betikle, ikinci rapor bu paketin returnView yoluyla alınmıştır. Betiğin biçimlendirilmesi profil/döngüyü değiştirmez; kaynak hash'leri raporlarda bulunur. Ham raporlar `/tmp/aa-bulk-reset-before-20261002.json` ve `/tmp/aa-bulk-reset-after-20261002.json`; /tmp kalıcı arşiv değildir. Toplu import/restore iş kuralı maliyetinin ve MSSQL global kilidinin ayrıca ölçülmesi hâlâ gereklidir.
+
+## 31. adım — native MSSQL ölçüm paketi hazır, sonuç bekleniyor
+
+2 Ekim 2026. Ayrı MSSQL bağlantısı/engine bulunmadığından **bu bölümde ölçülmüş native süre, satır azaltma oranı veya üretim kapasitesi sonucu yoktur**. Önceki SQL.js sayıları MSSQL sonucu olarak kullanılmaz.
+
+`npm run test:db` artık uygulama `.env` dosyasından bağımsız `TEST_DB_*` bağlantısı kullanır. Boş veritabanı/dbo/yetki/compatibility kontrolü, ayrı test lease'i ve kontrollü temizliğin ardından native senaryolar ve sentetik profil çalışır. [Komutlar ve kapsam](MSSQL-TEST-KILAVUZU.md) kılavuzda yer alır.
+
+Profil: 24–100.000 planlanan kayıt, 80 çalışan, 200 gerçekleşen/yüzde kaydı, 20 kişisel gün; bir ısınma ve 1–10 örnek. Admin/yönetici/normal snapshot bağımsız tam SQL okuma referansıyla karşılaştırılır. Rol başına Store.view medyanı/en uzun örneği, allocation/revision query'lerinden dönen satır sayısı ve JSON baytı raporlanır. İki bağımsız havuzdaki 24 yazmanın toplam süresi ve kendi commit/generation/revision görüntüsü kontrol edilir. Profil öncesinde test şeması yenilenerek önceki suite verisi ve audit'i temizlenir.
+
+Rapor bütün testler ve temizlik başarılı olduktan sonra, mevcut dosyanın üzerine yazmadan oluşturulur. Node/SQL Server/şema/compatibility bilgisi, Store/adapter/domain/test/fixture kaynakları ve bütün MSSQL migration SQL hash'leri bulunur. Şifre, hesap veya kullanıcı verisi rapora yazılmaz.
+
+Global veri kilidi korunur. Bu ölçüm Store/SQL zinciridir; HTTP/WAN/tarayıcı çizimi, fiziksel SQL IO/sorgu planı, istatistiksel üretim p95, bellek/GC veya kurum kapasitesi sonucu vermez. Mevcut ilk yükleme ve bulk iş kurallarının kalan maliyetleri hâlâ açıktır. Elle başlatılabilir GitHub workflow'u hazırdır; native koşu sonucu henüz doğrulanmamıştır.

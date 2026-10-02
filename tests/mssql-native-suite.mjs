@@ -1,0 +1,606 @@
+import assert from "node:assert/strict";
+import sql from "mssql";
+import fs from "node:fs/promises";
+import { hashPassword } from "../backend/auth.mjs";
+import { applyChanges, reset } from "../backend/operations.mjs";
+import { readCompositeMap, readRevisionMap } from "../backend/read-records.mjs";
+import { tables } from "../backend/tables.mjs";
+import { seedBenchmarkStore } from "../scripts/benchmark-fixture.mjs";
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+const lockProbe =
+  "DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=N'aa_kaynak_data', @LockMode=@p0, @LockOwner=N'Transaction', @LockTimeout=0; SELECT @r AS result;";
+
+// node:test records a failing subtest without rejecting its returned promise.
+// Propagate the failure so a later profile cannot produce a success report.
+export function checkedNativeContext(t) {
+  return {
+    diagnostic: (message) => t.diagnostic(message),
+    async test(name, fn) {
+      let error;
+      await t.test(name, async (sub) => {
+        try {
+          return await fn(sub);
+        } catch (e) {
+          error = e;
+          throw e;
+        }
+      });
+      if (error) throw error;
+    },
+  };
+}
+
+export async function nativeUpgradeSuite(store) {
+  await store.db.open();
+  await store.db.transaction(async (c) => {
+    for (const version of ["001", "002"])
+      await c.batch(
+        await fs.readFile(
+          new URL(
+            `../backend/migrations/${version}_mssql.sql`,
+            import.meta.url,
+          ),
+          "utf8",
+        ),
+      );
+    await c.batch(`
+      INSERT INTO kp_settings VALUES(1,4,NULL);
+      INSERT INTO kp_teams VALUES(N'legacy-t',N'Takım',NULL,0,1);
+      INSERT INTO kp_projects VALUES(N'legacy-p',N'Proje','2026-01','2026-12');
+      INSERT INTO kp_resources VALUES(N'legacy-a',N'Ali',N'',NULL),(N'legacy-b',N'Ayşe',N'',NULL);
+      INSERT INTO kp_resource_versions VALUES(N'legacy-a','2026-01',N'legacy-t',NULL,N'Aktif Çalışan',1,NULL,NULL,1),(N'legacy-b','2026-01',N'legacy-t',NULL,N'Gear Up',1,NULL,NULL,1);
+      INSERT INTO kp_person_allocations VALUES(N'legacy-a',N'legacy-p','2026-09',0.5),(N'legacy-b',N'legacy-p','2026-09',0.25);
+    `);
+  });
+  await store.connect();
+  const before = await store.read();
+  assert.equal(before.data.allocations["legacy-t|legacy-p|2026-09"], 0.75);
+  assert.equal(
+    before.data.resources.find((r) => r.id === "legacy-b").name,
+    "Ayşe",
+  );
+  assert.equal(
+    Number(
+      (await store.db.query("SELECT COUNT(*) AS n FROM kp_person_allocations"))
+        .rows[0].n,
+    ),
+    0,
+  );
+  assert.equal(
+    Number(
+      (
+        await store.db.query(
+          "SELECT MAX(version) AS n FROM kp_schema_migrations",
+        )
+      ).rows[0].n,
+    ),
+    28,
+  );
+  await store.close();
+  await store.connect();
+  assert.deepEqual(await store.read(), before);
+}
+
+// This suite requires separate native connection pools, not mock SQL strings.
+export async function nativePoolSuite(stores, t) {
+  const [first, second] = stores;
+  assert.notEqual(first.db.pool, second.db.pool);
+  const metadata = await first.db.query(
+    "SELECT t.name AS table_name,c.name AS column_name FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE SCHEMA_NAME(t.schema_id)='dbo'",
+  );
+  for (const [name, spec] of Object.entries(tables)) {
+    if (name === "person_allocations") continue; // Optional legacy v2 table.
+    for (const column of Object.keys(spec.columns))
+      assert(
+        metadata.rows.some(
+          (r) => r.table_name === "kp_" + name && r.column_name === column,
+        ),
+        name + "." + column,
+      );
+  }
+  assert.equal(
+    Number(
+      (
+        await first.db.query(
+          "SELECT MAX(version) AS version FROM kp_schema_migrations",
+        )
+      ).rows[0].version,
+    ),
+    28,
+  );
+
+  await seedBenchmarkStore(first, 1000, {
+    resources: 20,
+    actuals: 100,
+    percentages: 100,
+    calendarDays: 10,
+  });
+  const password = await hashPassword("Native-test-only-284!");
+  await first.bootstrapUser({
+    _id: "native-admin",
+    username: "native.admin",
+    name: "Synthetic admin",
+    role: "admin",
+    leaders: [],
+    active: true,
+    password,
+    revision: 1,
+    version: 1,
+  });
+  const admin = await first.findUser({ id: "native-admin" });
+  const change = (store, edits) =>
+    store.mutate(admin, (d, u) => applyChanges(d, u, edits), {
+      returnView: true,
+    });
+  const key = Object.keys((await first.read()).data.allocations)[0];
+
+  await t.test(
+    "separate native pools racing on one revision commit once",
+    async () => {
+      const before = await first.read();
+      const replies = await Promise.allSettled(
+        Array.from({ length: 12 }, (_, i) =>
+          change(stores[i % stores.length], [
+            {
+              kind: "allocation",
+              id: key,
+              value: (i + 1) / 10,
+              revision: before.data.revisions["allocation:" + key],
+            },
+          ]),
+        ),
+      );
+      const winners = replies.filter((r) => r.status === "fulfilled");
+      assert.equal(winners.length, 1);
+      assert(
+        replies
+          .filter((r) => r.status === "rejected")
+          .every((r) => r.reason.status === 409),
+      );
+      const after = await second.read();
+      assert.equal(after.generation, before.generation + 1);
+      assert.equal(
+        after.data.revisions["allocation:" + key],
+        before.data.revisions["allocation:" + key] + 1,
+      );
+      assert.equal(
+        after.data.allocations[key],
+        winners[0].value.data.allocations[key],
+      );
+    },
+  );
+
+  await t.test(
+    "native shared readers coexist and exclude writes across pools",
+    async () => {
+      const entered = deferred(),
+        release = deferred();
+      const holder = first.transaction(async () => {
+        entered.resolve();
+        await release.promise;
+      }, true);
+      try {
+        await Promise.race([
+          entered.promise,
+          holder.then(() => {
+            throw Error("Reader did not reach the barrier");
+          }),
+        ]);
+        const probe = await second.transaction(async (c) => {
+          // This transaction already owns Shared. Exclusive upgrade must fail
+          // while the other connection holds Shared on the same resource.
+          return Number(
+            (await c.query(lockProbe, ["Exclusive"])).rows[0].result,
+          );
+        }, true);
+        assert.equal(probe, -1);
+      } finally {
+        release.resolve();
+        await holder;
+      }
+    },
+  );
+
+  await t.test(
+    "a reader on another pool cannot see half of a native two-cell write",
+    async () => {
+      const keys = Object.keys((await first.read()).data.allocations).slice(
+        1,
+        3,
+      );
+      const entered = deferred(),
+        release = deferred();
+      const writer = first.mutate(
+        admin,
+        async (d, u, c) => {
+          applyChanges(
+            d,
+            u,
+            keys.map((id) => ({
+              kind: "allocation",
+              id,
+              value: 2.5,
+              revision: d.revisions["allocation:" + id],
+            })),
+          );
+          // Persist one SQL cell early to make an unprotected reader observe half.
+          const [team, project, month] = keys[0].split("|");
+          await c.query(
+            "UPDATE kp_allocations SET amount=@p0 WHERE team_id=@p1 AND project_id=@p2 AND month=@p3",
+            [2.5, team, project, month],
+          );
+          entered.resolve();
+          await release.promise;
+        },
+        { returnView: true },
+      );
+      let reader;
+      try {
+        await Promise.race([
+          entered.promise,
+          writer.then(() => {
+            throw Error("Writer did not reach the barrier");
+          }),
+        ]);
+        const probe = new sql.Transaction(second.db.pool);
+        await probe.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+        try {
+          assert.equal(
+            Number(
+              (await second.db.request(probe, lockProbe, ["Shared"])).rows[0]
+                .result,
+            ),
+            -1,
+          );
+        } finally {
+          await probe.rollback();
+        }
+        reader = second.view(admin);
+        release.resolve();
+        const [written, read] = await Promise.all([writer, reader]);
+        for (const id of keys) {
+          assert.equal(read.data.allocations[id], 2.5);
+          assert.equal(written.data.allocations[id], 2.5);
+          assert.equal(
+            read.data.revisions["allocation:" + id],
+            written.data.revisions["allocation:" + id],
+          );
+        }
+        assert.equal(read.generation, written.generation);
+      } finally {
+        release.resolve();
+        await Promise.allSettled([writer, reader]);
+      }
+    },
+  );
+
+  await t.test(
+    "native projection errors roll back reset, revisions, generation and audit",
+    async () => {
+      const before = await first.read();
+      const audit = (
+        await first.db.query("SELECT COUNT(*) AS n FROM kp_audit_events")
+      ).rows[0].n;
+      const original = first.projectView;
+      first.projectView = () => {
+        throw Error("Synthetic projection failure");
+      };
+      try {
+        await assert.rejects(
+          first.mutate(
+            admin,
+            (d, u) =>
+              reset(
+                d,
+                u,
+                Object.fromEntries(
+                  Object.entries(d.revisions).filter(([k]) =>
+                    k.startsWith("allocation:"),
+                  ),
+                ),
+              ),
+            { returnView: true },
+          ),
+          /Synthetic projection/,
+        );
+      } finally {
+        first.projectView = original;
+      }
+      assert.deepEqual(await second.read(), before);
+      assert.equal(
+        (await second.db.query("SELECT COUNT(*) AS n FROM kp_audit_events"))
+          .rows[0].n,
+        audit,
+      );
+    },
+  );
+
+  await t.test(
+    "native OPENJSON retains Unicode, long notes, mixed bars and outline milestones",
+    async () => {
+      const before = await first.read(),
+        project = before.data.projects[0];
+      const note = "İı Şş Ğğ Çç Öö Üü — ".repeat(1000).trim();
+      const milestones = [
+        {
+          id: "native-topic",
+          name: "Başlık",
+          start: "2026-03-10",
+          end: "2026-03-10",
+          displayKind: "milestone",
+          diamondStyle: "outline",
+          barColor: "green",
+          barStyle: "outline",
+          barText: note,
+          barNotes: [{ text: note, includeInReport: true, completed: true }],
+          additionalRanges: [
+            {
+              start: "2026-04-10",
+              end: "2026-04-12",
+              description: "Aralık",
+              color: "purple",
+              notes: [{ text: "Detay", includeInReport: false }],
+            },
+          ],
+        },
+      ];
+      await change(first, [
+        {
+          kind: "project",
+          id: project.id,
+          value: { ...project, milestones },
+          revision: before.data.revisions["project:" + project.id] || 0,
+        },
+      ]);
+      const actual = (await second.read()).data.projects.find(
+        (p) => p.id === project.id,
+      ).milestones[0];
+      assert.equal(actual.barText, note);
+      assert.equal(actual.barNotes[0].completed, true);
+      assert.equal(actual.diamondStyle, "outline");
+      assert.equal(actual.additionalRanges[0].notes[0].text, "Detay");
+      for (const [column, invalid] of [
+        ["diamond_style", "invalid"],
+        ["display_kind", "invalid"],
+      ])
+        await assert.rejects(
+          first.db.query(
+            `UPDATE kp_project_milestones SET [${column}]=@p0 WHERE project_id=@p1 AND id=@p2`,
+            [invalid, project.id, "native-topic"],
+          ),
+          (e) => e.number === 547,
+        );
+      assert.equal(
+        (await second.read()).data.projects.find((p) => p.id === project.id)
+          .milestones[0].diamondStyle,
+        "outline",
+      );
+    },
+  );
+
+  await t.test(
+    "native BIN2 scoped revisions handle case, Unicode, literal wildcards and 900/901 binds",
+    async () => {
+      const ids = [
+        "A_%[",
+        "a_%[",
+        "İstanbul",
+        "__proto__",
+        "constructor",
+        "x'); DROP TABLE kp_revisions;--",
+      ];
+      await first.transaction((c) =>
+        c.upsert("revisions", [
+          ...ids.map((id, i) => ({
+            kind: "allocation",
+            record_id: id + "|p|2026-01",
+            revision: i,
+          })),
+          {
+            kind: "allocation",
+            record_id: "@risk:native-deleted",
+            revision: 7,
+          },
+        ]),
+      );
+      const selected = ids.filter((_, i) => i !== 1);
+      await first.transaction(async (c) => {
+        const full = await readRevisionMap(c, "mssql");
+        for (const scope of [
+          [],
+          selected,
+          Array.from({ length: 900 }, (_, i) =>
+            i < selected.length ? selected[i] : "absent" + i,
+          ),
+          Array.from({ length: 901 }, (_, i) => "absent" + i),
+          ["legacy|team"],
+        ]) {
+          const filtered =
+            scope.length <= 900 && !scope.some((id) => id.includes("|"));
+          const expected = Object.fromEntries(
+            Object.entries(full).filter(
+              ([key]) =>
+                !filtered ||
+                !key.startsWith("allocation:") ||
+                scope.includes(key.slice(11).split("|")[0]),
+            ),
+          );
+          assert.deepEqual(await readRevisionMap(c, "mssql", scope), expected);
+        }
+        const composite = await readCompositeMap(
+          c,
+          "mssql",
+          "allocations",
+          "amount",
+        );
+        assert.deepEqual(
+          await readCompositeMap(c, "mssql", "allocations", "amount", []),
+          {},
+        );
+        assert.deepEqual(
+          await readCompositeMap(
+            c,
+            "mssql",
+            "allocations",
+            "amount",
+            Array.from({ length: 901 }, (_, i) => "absent" + i),
+          ),
+          composite,
+        );
+      }, true);
+    },
+  );
+}
+
+export async function nativeLoadProfile(stores, t, { size, samples }) {
+  assert(Number.isInteger(size) && size >= 24 && size <= 100000);
+  assert(Number.isInteger(samples) && samples >= 1 && samples <= 10);
+  const [store] = stores;
+  await seedBenchmarkStore(store, size, {
+    resources: 80,
+    actuals: 200,
+    percentages: 200,
+    calendarDays: 20,
+  });
+  const team = (await store.read()).data.teams.find((x) => x.lead);
+  const password = await hashPassword("Native-profile-only-284!");
+  const users = {};
+  for (const role of ["admin", "manager", "normal"]) {
+    await store.bootstrapUser({
+      _id: "native-profile-" + role,
+      username: "native.profile." + role,
+      name: "Synthetic " + role,
+      role,
+      leaders: role === "admin" ? [] : [team.lead],
+      resourceId: role === "normal" ? "bench-r0" : "",
+      active: true,
+      password,
+      revision: 1,
+      version: 1,
+    });
+    users[role] = await store.findUser({ id: "native-profile-" + role });
+  }
+  const measurements = [];
+  for (const [role, user] of Object.entries(users)) {
+    const reference = await store.transaction(async (c) => {
+      const { data, generation } = await store.read(c);
+      return store.projectView(
+        data,
+        generation,
+        await store.findUser({ id: user._id }, c),
+        c,
+      );
+    }, true);
+    const observations = [],
+      request = store.db.request;
+    store.db.request = async function (owner, text, values) {
+      const result = await request.call(this, owner, text, values);
+      if (
+        /^SELECT\b/.test(text) &&
+        /FROM (?:\[kp_allocations\]|kp_revisions)/.test(text)
+      )
+        observations.push({
+          kind: text.includes("kp_revisions") ? "revisions" : "allocations",
+          rows: result.rows.length,
+        });
+      return result;
+    };
+    const timings = [];
+    let allocationRows, revisionRows;
+    try {
+      for (let i = 0; i <= samples; i++) {
+        observations.length = 0;
+        const start = performance.now(),
+          view = await store.view(user);
+        const elapsed = performance.now() - start;
+        assert.deepEqual(view, reference);
+        allocationRows = observations
+          .filter((x) => x.kind === "allocations")
+          .reduce((n, x) => n + x.rows, 0);
+        revisionRows = observations
+          .filter((x) => x.kind === "revisions")
+          .reduce((n, x) => n + x.rows, 0);
+        if (i) timings.push(elapsed);
+      }
+    } finally {
+      store.db.request = request;
+    }
+    timings.sort((a, b) => a - b);
+    measurements.push({
+      role,
+      medianMs:
+        (timings[Math.floor((timings.length - 1) / 2)] +
+          timings[Math.floor(timings.length / 2)]) /
+        2,
+      maxMs: timings.at(-1),
+      allocationRows,
+      revisionRows,
+      jsonBytes: Buffer.byteLength(JSON.stringify(reference)),
+    });
+  }
+  const before = await store.read(),
+    keys = Object.keys(before.data.allocations).slice(0, 24);
+  const start = performance.now();
+  const replies = await Promise.allSettled(
+    keys.map((id, i) =>
+      stores[i % stores.length].mutate(
+        users.admin,
+        (d, u) =>
+          applyChanges(d, u, [
+            {
+              kind: "allocation",
+              id,
+              value: 0.5,
+              revision: before.data.revisions["allocation:" + id],
+            },
+          ]),
+        { returnView: true },
+      ),
+    ),
+  );
+  assert(
+    replies.every((r) => r.status === "fulfilled"),
+    "Every independent write must succeed",
+  );
+  const elapsed = performance.now() - start,
+    views = replies.map((r) => r.value);
+  assert.deepEqual(
+    views.map((v) => v.generation).sort((a, b) => a - b),
+    keys.map((_, i) => before.generation + i + 1),
+  );
+  for (let i = 0; i < keys.length; i++) {
+    assert.equal(views[i].data.allocations[keys[i]], 0.5);
+    assert.equal(
+      keys.filter((id) => views[i].data.allocations[id] === 0.5).length,
+      views[i].generation - before.generation,
+    );
+  }
+  const after = await store.read();
+  for (const id of keys) {
+    assert.equal(after.data.allocations[id], 0.5);
+    assert.equal(
+      after.data.revisions["allocation:" + id],
+      before.data.revisions["allocation:" + id] + 1,
+    );
+  }
+  assert.equal(after.generation, before.generation + 24);
+  t.diagnostic(
+    `Native SQL profile: ${size} allocations, ${samples} samples, ${stores.length} pools. No HTTP/browser/production capacity claim.`,
+  );
+  return {
+    size,
+    samples,
+    pools: stores.length,
+    measurements,
+    parallelWrites: { requests: 24, elapsedMs: elapsed },
+    scope:
+      "Synthetic native SQL Store pipeline, including global application lock. No HTTP/browser or production p95/capacity claim.",
+  };
+}

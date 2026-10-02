@@ -121,13 +121,13 @@ Altı otomatik test grubu: parola, yetki, revizyon, iş kuralları, ortam yapıl
 
 Gerçek SQL Server erişimi olmadığından native MSSQL testi bu teslim ortamında çalıştırılamadı. Yerel SQLite testleri MSSQL'in T-SQL, kimlik doğrulama, sertifika ve çok bağlantılı kilit davranışlarını kanıtlamaz. Canlıya geçmeden önce IT'nin test SQL Server'ında aşağıdaki testi çalıştırın.
 
-IT'nin **boş, ayrı ve adı `_test` ile biten** veritabanını `TEST_DB_DATABASE=AA_KaynakPlanlama_test` olarak `.env` içine yazın. Bağlantı hesabı bu test veritabanında tablo oluşturma/silme yetkisine sahip olmalıdır. Sonra:
+IT'nin **boş, ayrı ve adı `_test` ile biten** veritabanı için `.env.mssql.test.example` dosyasını `.env.mssql.test` olarak kopyalayıp `TEST_DB_*` bağlantı alanlarını doldurun. Test komutu uygulamanın `.env` dosyasını okumaz ve `DB_*` alanlarına geri dönmez. Bağlantı hesabının varsayılan şeması `dbo`; yetkileri veritabanında `VIEW DEFINITION`, `CREATE TABLE` ve `dbo` üzerinde `ALTER`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` olmalıdır. Sonra:
 
 ```powershell
-npm.cmd run test:db
+npm.cmd run test:db -- --env-file .env.mssql.test --report native-mssql-report.json
 ```
 
-Test, veritabanında kp_ tablosu varsa çalışmayı reddeder. Yalnızca ayrı test veritabanında kp_ tablolarını oluşturur, senaryoları çalıştırır ve oluşturduğu test tablolarını temizler. Aynı test veritabanını eşzamanlı başka bir süreçle kullanmayın. Production veritabanı bu değişkene yazılmamalıdır. Test hataları çözülmeden canlı kullanıma geçilmemelidir.
+Test, veritabanında herhangi bir kullanıcı tablosu/görünüm/yordam gibi nesne varsa çalışmayı reddeder. Ayrı test kilidi ikinci çalıştırıcının aynı ortamı kullanmasını engeller. Yalnızca boşluğu doğrulanan test veritabanında sabit uygulama tablolarını oluşturur ve temizler; beklenmeyen nesne oluşursa otomatik temizlik durur. Native şema geçişi, HTTP, iki bağımsız havuzda paralel yazma/okuma kilidi ve sentetik rol bazlı ölçüm senaryoları hazırdır. **Gerçek MSSQL koşusu bu bilgisayarda hâlâ yapılmadı.** Komutlar, ölçüm sınırları ve elle çalıştırılabilen GitHub test ortamı [MSSQL test kılavuzunda](MSSQL-TEST-KILAVUZU.md) açıklanır.
 
 ## 7. Kod dosyaları
 
