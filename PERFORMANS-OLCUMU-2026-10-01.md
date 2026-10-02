@@ -559,3 +559,32 @@ node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actu
 ```
 
 Önceki davranış için `fbfbd69` checkout'una bu paketin benchmark-load betiğini alın. Profil/döngü aynı; betik SQL satır sayacı ve bağımsız tam okuma referansını ekler. Betik .env yüklemez, mevcut DB/provider yolu kabul etmez; yalnız os.tmpdir içinde sentetik SQL.js dosyası üretip siler. Ham raporlar `/tmp/aa-sql-scope-before-20261002.json` ve `/tmp/aa-sql-scope-after-v2-20261002.json`; /tmp kalıcı arşiv değildir. Kaynak hash'leri raporlarda bulunur. Native MSSQL, gerçek tarayıcı, WAN, peak memory/GC ve eşzamanlı kapasite test edilmedi.
+
+## İlk yüklemede planlanan revision satırlarını daraltma — 2 Ekim 2026
+
+Başlangıç `987ce76`; Node v24.21.0; şema 28. Önce/sonra aynı sentetik SQL.js profili: 100.000 planlanan, 48.000 gerçekleşen ve 48.000 yüzde kaydı; 400 çalışan, 2.000 izin, 49 proje. Her rol/encoding için bir ısınma ve yedi ölçüm; identity/gzip sırası dönüşümlü. İki süreç sırayla, test/build ile eşzamanlı olmadan çalıştı. Ölçüm zamanları UTC: `2026-10-02T11:01:40.189Z` / `2026-10-02T11:06:15.993Z`.
+
+| Rol / encoding | Revision SQL satırları önce/sonra | SQL okuma önce/sonra (ms) | Store.view önce/sonra (ms) | Yerel HTTP önce/sonra (ms) |
+| --- | ---: | ---: | ---: | ---: |
+| admin / identity | 148000 / 148000 | 337.96 / 338.83 | 338.17 / 339.03 | 448.83 / 449.35 |
+| admin / gzip | 148000 / 148000 | 337.69 / 338.77 | 337.89 / 339.00 | 451.38 / 451.78 |
+| manager / identity | 148000 / 66602 | 313.05 / 222.66 | 464.59 / 347.84 | 492.19 / 368.08 |
+| manager / gzip | 148000 / 66602 | 346.43 / 221.86 | 515.94 / 346.32 | 542.71 / 371.56 |
+| normal / identity | 148000 / 48000 | 298.63 / 181.13 | 398.96 / 268.41 | 405.98 / 275.18 |
+| normal / gzip | 148000 / 48000 | 276.95 / 181.26 | 391.20 / 267.97 | 402.36 / 275.84 |
+
+Yönetici için dönen revision satırları yaklaşık %55,0, normal kullanıcı için %67,6 azalıyor. Bunlar SQL motorunun taradığı satırlar veya bütün veri tablolarına ait oranlar değildir. SQL ifadesi birleşik anahtarın ilk parçasını karşılaştırır; yeni index veya fiziksel I/O kazancı iddiası yoktur. Bu sentetik profilde özel revision satırları hâlâ 48.000 olarak tam okunur. Admin'e daraltma uygulanmaz; küçük süre farkı iyileştirme sayılmaz.
+
+Gzip profillerinde yerel HTTP medyanı yönetici için 542,71 → 371,56 ms, normal için 402,36 → 275,84 ms oldu. Yedi örnek, yerel SQL.js/HTTP ölçümü; native MSSQL, WAN, tarayıcı çizimi, p95, peak memory/GC ve eşzamanlı kullanıcı kapasitesi ölçülmedi. Başlangıç yönetici identity/gzip süreleri farklı; süreç/GC/sistem etkileri ayrıştırılmadı. Gözlenen süre bütün uygulama için hız garantisi değildir.
+
+Altı rol/encoding profilinin **snapshot SHA-256, JSON byte içeriği, yanıt boyutu ve Store.read sayısı aynı**. Admin 12.580.866 / 983.727; yönetici 2.339.452 / 184.034; normal 586.380 / 48.421 identity/gzip bayt. Her örnek ayrıca kapsam daraltması uygulanmayan Store.read + projectView referansıyla karşılaştırılır. SQL.js için filtreli revision sonuçlarında ORDER BY rowid önceki anahtar sırasını korur. MSSQL'in önceki sorgusu da sırasızdı; native sunucuda JSON sıra garantisi veya hız sonucu iddia edilmez.
+
+Yalnız authenticated, salt okunur Store.view yolunda planlanan sürüm satırları daraltılır. Yönetici için güncel visibleTeamScope kullanılır; normal kullanıcı planlanan revision almadığı için bu satırlar hiç okunmaz. `@` ile başlayan tüm özel namespace'ler, risk silme sürümleri, gerçekleşen/saat/kişisel takvim/ortak takvim kayıtları ve ordinary metadata tam kalır. Nihai scopeData aynı tarihsel mahremiyet denetimini yapar. Admin ve mutate/restore/migration/default Store.read tam model/sürüm haritası okur. 900'den fazla takım veya legacy ayıraçlı kimlikte tam okuma fallback'i vardır; listeler kesilmez.
+
+Tekrar üretme:
+
+```sh
+node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --roles=admin,manager,normal --output=/tmp/benzersiz-revision-read.json
+```
+
+Önceki davranış `987ce76` sürümüyle aynı betik/profil kullanılarak ölçülebilir. Betik .env yüklemez ve gerçek DB/provider yolu kabul etmez; yalnız geçici sentetik SQL.js dosyaları oluşturup siler. Ham raporlar `/tmp/aa-revision-read-before-20261002.json` ve `/tmp/aa-revision-read-after-20261002.json`; kaynak hash'leri raporlarda yer alır. /tmp kalıcı arşiv değildir. Sonraki ana inceleme toplu yönetim/import/restore işlemleridir; ilk yüklemenin kalan actual/saat/yüzde/özel revision maliyetleri ayrıca açık tutulur.

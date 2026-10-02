@@ -105,6 +105,47 @@ export async function readCompositeMap(
   );
 }
 
+// Only remove planned revision rows that scopeData cannot expose. Keep every
+// special @ namespace (including deleted risks/calendar/person/actual records),
+// and leave the final resource-month visibility check to scopeData.
+export async function readRevisionMap(c, provider, planningTeams) {
+  if (!["sqljs", "mssql"].includes(provider))
+    throw Error("Invalid revision read provider");
+  let where = "",
+    parameters = [];
+  if (planningTeams !== undefined) {
+    if (
+      !Array.isArray(planningTeams) ||
+      !planningTeams.every((id) => typeof id === "string")
+    )
+      throw Error("Invalid revision read scope");
+    const ids = [...new Set(planningTeams)];
+    // Large/legacy scopes keep complete reads; never truncate a team's revisions.
+    if (ids.length <= 900 && !ids.some((id) => id.includes("|"))) {
+      parameters = ids;
+      const team =
+        provider === "sqljs"
+          ? "substr([record_id],1,instr([record_id]||'|','|')-1)"
+          : "LEFT([record_id],CHARINDEX('|',[record_id]+'|')-1) COLLATE Latin1_General_100_BIN2";
+      where =
+        " WHERE ([kind]<>'allocation' OR [record_id] LIKE '@%'" +
+        (ids.length
+          ? ` OR ${team} IN (${ids.map((_, i) => "@p" + i).join(",")})`
+          : "") +
+        ")";
+    }
+  }
+  const order = where && provider === "sqljs" ? " ORDER BY rowid" : "";
+  return readRecordMap(
+    c,
+    "SELECT kind,record_id,revision FROM kp_revisions" + where + order,
+    ["kind", "record_id", "revision"],
+    revisionRecordKey,
+    Number,
+    parameters,
+  );
+}
+
 export function revisionRecordKey(values) {
   const kind = values[0],
     id = values[1];

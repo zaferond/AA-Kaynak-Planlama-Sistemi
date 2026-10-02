@@ -3,6 +3,24 @@
 Tarih: 1 Ekim 2026  
 Referans: 30 Eylül 2026 tarihli mimari ve güvenlik incelemesi; başlangıç Git sürümü `4c60665`.
 
+## Güncel durum — 2 Ekim 2026
+
+- Kullanıcı arayüzü taleplerine geçmeden önce son tamamlanan mimari kontrol **28. adım: ilk yüklemede planlanan SQL kayıt kapsamı** idi. Aradaki hücre seçimi, Milestone, hizalama ve Başlık geliştirmeleri `987ce76` sürümüne kadar tamamlandı.
+- Mimari incelemeye dönülerek **29. adım: ilk yüklemede planlanan kayıt sürümlerinin SQL kapsamı** tamamlandı. Yönetici/normal kullanıcı için gereksiz planlanan revision satırları azaltıldı; özel kayıt sürümleri ve tam yazma doğrulaması korundu. Ayrıntılar raporun son bölümünde ve performans raporunda.
+- İlk yükleme aktarımı, kapsam hazırlığı, planlanan SQL kayıtları ve planlanan revision okumaları iyileştirildi. Gerçekleşen/saat/yüzde haritaları ile özel revision satırları henüz tam okunuyor; bütün veritabanı okuma maliyetinin çözüldüğü söylenmez. Kayıt sırasında tam model doğrulaması ve global MSSQL kilidi korunuyor.
+- Proje/planlanan kaynak ekranlarının son akışları gerçek Chrome'da, geçici veritabanıyla kontrol edildi. Diğer ekranların tam tarayıcı kontrolü hâlâ açık. Native MSSQL/Windows kurulumu için ayrı test ortamı gerekiyor.
+
+Güncel kalan sıra:
+
+1. **30. adım:** Toplu yönetim, liderlik değişimi, sıfırlama, içe aktarma ve yedek geri yükleme yollarını işlem bütünlüğü/yanıt maliyeti açısından incelemek; ilk yüklemenin kalan maliyetlerini ayrıca izlemek.
+2. **31. adım:** Ayrı native MSSQL test ortamında veri bütünlüğü, paralel yazma ve yük doğrulaması; global kilit/repository değişikliği ancak ölçüm ve bütünlük testleriyle değerlendirilecek.
+3. **32. adım:** Kalan büyük bileşenler, düzenleme sorumlulukları ve CSS tekrarlarını görsel sonuçları koruyarak sadeleştirmek.
+4. **33. adım:** Risk otomatik kayıt, izin/eğitim, yetki/geçmiş, import/restore ve kalan ekranların gerçek tarayıcı akışlarını tamamlamak.
+5. **34. adım:** İşlem geçmişinin saklama, arşivleme ve tam veritabanı yedekleme politikasını belirlemek.
+6. **35. adım:** Çok sunuculu kurulum gereksinimi varsa ortak giriş denemesi sınırı deposunu ve kurum proxy yapılandırmasını değerlendirmek.
+
+Aşağıdaki önceki test sayıları, şema sürümleri ve erişim sınırlamaları ilgili adımların tarihsel durumudur; güncel doğrulama 29. adımın sonunda yer alır.
+
 ## Özet
 
 İnceleme raporundaki doğrulanmış davranış hataları düzeltildi. İş kuralları ortak `shared/` katmanına taşındı, değişiklik geçmişi eklendi ve kalite kontrolleri otomatikleştirildi. Ana ekranın modülerleştirilmesi ilerledi; büyük stil dosyası kural sırası korunarak bölündü. Veritabanının tüm veri kümesini işleyen yapısı, kalan ekran modülleri ve stil tekrarlarının sadeleştirilmesi açık çalışmalardır.
@@ -557,3 +575,19 @@ Referans: 30 Eylül 2026 tarihli mimari ve güvenlik incelemesi; başlangıç Gi
 - Gercek Chrome + gecici SQL.js/HTTP: **7 hedefli senaryo** basarili; page error yok. Baslik adlari, bagimsiz stil/onizleme, renk/tooltip, aylik/haftalik gunluk surukleme, doluya geri donme, yenilemede kalicilik ve raporun ortak formu dogrulandi. Uc ekran goruntusu incelendi. Gercek hesaba test login veya gercek DB uzerinde test kaydi yapilmadi.
 - Calisan ust klasordeki 23 kaynak/rapor yolu onceki commit ile karsilastirildi. Kaynaklar/site/kapali DB yedegi: `/Users/beyzakap/Desktop/AA Kaynak Yedekleri/diamond-styles-20261002-135411`. Yeni varliklar ve index aktarildi; eski hashli varliklar korundu. Calisan kopyada **287/287 test** ve TypeScript basarili; onceki tek bagimsiz test farki korundu.
 - Uygulama `http://localhost:3000` uzerinde calisiyor (PID 17146). Salt okunur aktarim kontrolu (`2026-10-02T10:54:51.191029+00:00` UTC): **20 tablonun mevcut sutunlardaki kayit icerikleri/sayilari yedekle ayni**. Beklenen tek sema farklari migration 28 satiri ve mevcut kayitlarda solid varsayilan diamond_style sutunu. Ana sayfa + iki JS/CSS HTTP 200 ve derleme byte esit; oturumsuz /api/data 401. .env/bagimliliklar degismedi; gercek veriye test kaydi/login/restore yapilmadi. Kontrol aktarim anina aittir.
+
+## Yirmi dokuzuncu kontrol adımı — ilk yüklemede planlanan kayıt sürümlerinin SQL kapsamı
+
+2 Ekim 2026. Başlangıç `987ce76`; arayüz taleplerinden sonra mimari kontrole dönüldü. Git çalışma alanı başlangıçta temizdi.
+
+- İlk yüklemede bütün planlanan kayıt sürümleri okunup nihai scopeData içinde eleniyordu. Yeni readRevisionMap, yalnız authenticated read-only Store.view için görünür takımların planlanan revision satırlarını bağlı parametrelerle okur. Normal kullanıcıya planlanan revision dönmediğinden bu satırlar okunmaz. Güncel hesap, liderlik ve takımlar aynı transaction'dan gelir; caller'ın role/leader iddiaları kullanılmaz.
+- Tüm `@` namespace'leri korunur: risk tombstone'ları, gerçekleşen, çalışılan saat, kişisel gün ve ortak takvim sürümleri. Proje/takım/kaynak metadata'sı da tam kalır. Nihai scopeData tarihsel transfer, ilk kayıt öncesi fallback, işten ayrılma, kişisel kapsam ve mahremiyet kontrollerini aynı kuralla yapar. Silme revision'ları kayıt tablolarına JOIN ile daraltılmaz; silinmiş kaydın sürümü kaybolmaz.
+- Birleşik revision kimliğinin ilk parçası tam takım değeriyle karşılaştırılır; SQL metnine kimlik eklenmez, LIKE wildcard'ı olarak yorumlanmaz. MSSQL karşılaştırması BIN2 kolasyonu kullanır. 900 bind sınırı, büyük liste/legacy ayıraçlı kimlik fallback'i ve eksik scan kontrolü korunur. SQL.js ORDER BY rowid önceki JSON anahtar sırasını korur. Native MSSQL sorgu planı/sırası çalıştırılarak doğrulanmadı.
+- Admin, mutate, restore/migration ve default Store.read tam model/sürüm haritası okur. Kayıt yetkisi, revision conflict, atomik commit/rollback, generation ve audit kuralları değiştirilmedi. Planlanan SQL kapsamı bir kez hazırlanıp allocation ve revision okumalarında paylaşılır. Şema 28, bağımlılıklar ve .env değişmedi; UI derlemesinde görsel değişiklik yok.
+- Yedi yeni test: SQL parametreleri/iki adapter ve scan-query yolları/special-zero revisions; boş/tam/900/901/legacy scope ve eksik okuma; gerçek SQL'de wildcard/Unicode/case/reserved/bare tombstone kimliklerinin tam eşleşmesi ve sıra; beş kullanıcı rolünde full-read byte eşitliği/tarihsel transfer/risk-actual-calendar silme sürümleri; persisted hesap ve liderlik/pasif hesap/spoof; yönetici mutate'in tam revision haritası, gizli takım korunması ve stale 409/rollback; boş liderlik/legacy kimlik view referansı. Mevcut 17 ilgili test de geçti.
+- Aynı 100.000 planlanan / 48.000 gerçekleşen / 48.000 yüzde sentetik profilinde revision SQL satırları yönetici için **148.000 → 66.602**, normal için **148.000 → 48.000**. Altı rol/encoding snapshot hash'i ve wire/JSON boyutları aynı. Gzip yerel HTTP medyanları yönetici **542,71 → 371,56 ms**, normal **402,36 → 275,84 ms**. Bunlar SQL.js yerel yedi örnek sonuçlarıdır; gerçek MSSQL/üretim kapasitesi garantisi değildir. Ayrıntılar performans raporunda.
+- Güncel kalan iş sırası raporun başına taşındı; önceki bölüm/test/sürüm kayıtları tarihçe olarak korundu. **Sıradaki 30. adım toplu yönetim/import/restore yollarıdır.** Native MSSQL, kalan bileşen/CSS ve tarayıcı akışları, audit saklama, çok sunuculu giriş sınırı işleri açık. Gerçekleşen/saat/yüzde/özel revision ilk yükleme maliyetleri hâlâ tamdır.
+
+- `npm run verify`: **295/295 test**, biçim, TypeScript ve üretim derlemesi başarılı. Üretim HTML/JS/CSS byte içeriği önceki çalışan siteyle aynı; bu paket ön yüz tasarımını değiştirmedi. Native MSSQL/Windows veya yeni tarayıcı testi bu backend paketi için yapılmadı.
+- Beş değişen kaynak/test/rapor yolu çalışan üst klasörde önceki commit ile karşılaştırıldı. Kaynak/site/kapalı DB yedeği: `/Users/beyzakap/Desktop/AA Kaynak Yedekleri/revision-sql-read-20261002-141001`. Güncellemeler aktarıldı; .env, bağımlılıklar ve önceden farklı olan bağımsız test/başlatıcı dosyaları korundu. Çalışan kopyada **294/294 test** ve TypeScript başarılı; önceki tek test farkı devam ediyor.
+- Güncel backend `http://localhost:3000` üzerinde çalışıyor (PID 18074). Aktarım sonrası salt okunur kontrol (`2026-10-02T11:10:42.815667+00:00` UTC): **20 tablonun bütün mevcut kayıt içerikleri/sayıları ve sütunları yedekle aynı**; şema 28 değişmedi. Ana sayfa + iki JS/CSS HTTP 200 ve canonical derlemeyle byte eşit; oturumsuz /api/data 401. Gerçek hesapla test login'i veya gerçek DB üzerinde test kaydı/silme/restore yapılmadı. Bu kontrol aktarım anını doğrular.

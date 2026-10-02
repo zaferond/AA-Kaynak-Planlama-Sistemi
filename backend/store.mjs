@@ -4,11 +4,7 @@ import {
   cloneMutationSnapshot,
   numericSnapshotMaps,
 } from "./mutation-snapshot.mjs";
-import {
-  readRecordMap,
-  readCompositeMap,
-  revisionRecordKey,
-} from "./read-records.mjs";
+import { readCompositeMap, readRevisionMap } from "./read-records.mjs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -1046,18 +1042,19 @@ export class Store {
             : ""),
         amount: r.amount,
       });
+    // Legacy IDs containing a composite separator retain complete-read semantics.
+    const planningTeams =
+      viewUser &&
+      viewUser.role !== "admin" &&
+      !d.teams.some((t) => t.id.includes("|"))
+        ? [...visibleTeamScope(d, viewUser).ids]
+        : undefined;
     d.allocations = await readCompositeMap(
       c,
       this.provider,
       "allocations",
       "amount",
-      // Legacy IDs containing a composite separator must keep the previous
-      // complete-read semantics, which scopeData resolves by key prefix.
-      viewUser &&
-        viewUser.role !== "admin" &&
-        !d.teams.some((t) => t.id.includes("|"))
-        ? [...visibleTeamScope(d, viewUser).ids]
-        : undefined,
+      planningTeams,
     );
     d.actualAllocations = await readCompositeMap(
       c,
@@ -1077,12 +1074,10 @@ export class Store {
       "actual_percent_entries",
       "percent",
     );
-    d.revisions = await readRecordMap(
+    d.revisions = await readRevisionMap(
       c,
-      "SELECT kind,record_id,revision FROM kp_revisions",
-      ["kind", "record_id", "revision"],
-      revisionRecordKey,
-      Number,
+      this.provider,
+      viewUser?.role === "normal" ? [] : planningTeams,
     );
     return { data: d, generation: Number(s.generation) };
   }
@@ -1091,7 +1086,7 @@ export class Store {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
-      // Only this authenticated read-only path may narrow planned SQL rows.
+      // Only this authenticated read-only path narrows planned rows/revisions.
       // Mutations still validate and persist a complete snapshot; actual rows
       // remain complete here to compute historical anonymous team totals.
       const { data, generation } = await this.read(c, publicUser(active));
