@@ -4,7 +4,6 @@
   thead
   tr:not(.yearrow)
   > th:nth-child(-n + 2) {
-  background: #f2f6fb;
   color: #334b64;
 }
 .app.tab-overview .remaining-report thead tr:not(.yearrow) > th:nth-child(1),

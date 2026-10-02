@@ -220,7 +220,6 @@
 }
 .person-allocation .actual-unit-item select {
   width: 110px;
-  max-width: 100%;
 }
 .person-allocation .actual-hours-item input {
   text-align: right;
@@ -269,7 +268,6 @@
 }
 @media (max-width: 600px) {
   .person-allocation .actual-control-fields {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     max-width: none;
   }
   .person-allocation .actual-control-fields > .actual-control-item {

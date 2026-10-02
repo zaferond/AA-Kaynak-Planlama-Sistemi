@@ -16,7 +16,6 @@
   gap: 0;
 }
 .app .workspace-nav .navtabs {
-  width: 100%;
   min-width: 0;
   max-width: 100%;
   flex-wrap: nowrap;
@@ -24,7 +23,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
-  scrollbar-width: thin;
 }
 .app .workspace-nav-actions {
   width: 100%;

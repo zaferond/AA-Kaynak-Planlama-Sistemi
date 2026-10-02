@@ -36,8 +36,6 @@
 .app .workspace-nav .navtabs {
   flex: 0 1 auto;
   width: auto;
-  min-width: 0;
-  max-width: 100%;
   margin: 0;
   border-bottom: 0 !important;
 }
@@ -116,7 +114,6 @@
   border: 1px solid #102f50;
   border-radius: 3px;
   background: #102f50;
-  color: #fff;
   font-size: 11px;
   font-weight: 700;
   box-shadow: none;
@@ -247,7 +244,6 @@
 /* Filters stay left; planning actions share the same row on the right. */
 .app .planning-filterbar {
   display: flex;
-  align-items: flex-end;
   gap: 12px;
   width: 100%;
   margin-bottom: 8px;
@@ -261,7 +257,6 @@
   gap: 8px;
   min-width: 0;
   max-width: 900px;
-  margin: 0;
 }
 .app .planning-filterbar .filters > .pick:nth-child(-n + 3) {
   flex: 1 1 125px;

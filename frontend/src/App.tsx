@@ -1,3 +1,4 @@
+import { usePortalEditor } from "./features/usePortalEditor";
 import { ownValue } from "../../shared/records";
 import WorkspaceHeader, { FullPlanHeader } from "./features/WorkspaceHeader";
 import WorkspaceNavigation from "./features/WorkspaceNavigation";
@@ -9,7 +10,6 @@ import {
   prepareTimelineChange,
   prepareMilestoneReorder,
 } from "./features/project-timeline-commands";
-import { prepareEditorChanges } from "./features/editor-commands";
 import {
   PLANNING_PERIODS,
   validPlanningMonth,
@@ -33,7 +33,6 @@ import {
   downloadPlannedAllocations,
 } from "./allocation-export";
 import { capacityStatus } from "./capacity-status";
-import type { PortalEditor } from "./features/editor-state";
 import PortalEditorDialog from "./features/PortalEditorDialog";
 import RemainingResourceTable, {
   type ReportGroup,
@@ -42,12 +41,10 @@ import { usePlannedGrid } from "./features/usePlannedGrid";
 import { fmt, monthLabel } from "./format";
 import HeadcountTrend from "./HeadcountTrend";
 import { buildCapacityIndex, groupPage, projectTotalIndex } from "./metrics";
-import { visibleMilestoneBarStyle } from "./milestone-ranges";
 import {
   Data,
   Milestone,
   Project,
-  Resource,
   activeTeamMembers,
   actualTeamTotalIndex,
   fold,
@@ -68,16 +65,11 @@ import { downloadProjects } from "./project-export";
 import ProjectInfoReport from "./ProjectInfoReport";
 import ProjectResponsible from "./ProjectResponsible";
 import ProjectTimelinePanel from "./features/ProjectTimelinePanel";
-import {
-  currentPlanningDate,
-  currentYearStartDate,
-  resourceMonthFraction,
-} from "./resource-dates";
+import { currentPlanningDate, resourceMonthFraction } from "./resource-dates";
 import {
   downloadResourceReport,
   type ResourceReportGroup,
 } from "./resource-report-export";
-import { resourceVersionForEdit } from "./resource-version-edit";
 import ResourcesPanel from "./features/ResourcesPanel";
 import RiskManagement from "./RiskManagement";
 import { DEFAULT_FILTERS, TAB_LABELS } from "./settings";
@@ -170,9 +162,7 @@ export default function Portal() {
       fullPlan ? initialCount : DEFAULT_FILTERS.count,
     ),
     [search, setSearch] = useState("");
-  const [editor, setEditor] = useState<PortalEditor | null>(null),
-    [saving, setSaving] = useState(false),
-    [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
   const [cells, setCells] = useState<string[]>([]),
     [resourceIds, setResourceIds] = useState<string[]>([]),
     [personIds, setPersonIds] = useState<string[]>([]),
@@ -182,6 +172,38 @@ export default function Portal() {
   const teamReportTableRef = useRef<HTMLTableElement>(null);
   const [showProjectDetails, setShowProjectDetails] = useState(false);
   const [projectWeekly, setProjectWeekly] = useState(false);
+  const {
+    editor,
+    setEditor,
+    formError,
+    setFormError,
+    openProject,
+    deleteProject,
+    openMilestone,
+    deleteMilestone,
+    deleteEditedMilestone,
+    openResource,
+    chooseResourceStatus,
+    openBulk,
+    submit,
+  } = usePortalEditor({
+    data,
+    isAdmin: !!isAdmin,
+    saving,
+    start,
+    count,
+    leads,
+    resourceIds,
+    batch,
+    change,
+    setError,
+    setNotice,
+    onProjectDeleted: (id) => {
+      setProjectIds((ids) => ids.filter((item) => item !== id));
+      setCells((keys) => keys.filter((key) => key.split("|")[1] !== id));
+    },
+    onSubmitted: () => setResourceIds([]),
+  });
   async function load() {
     try {
       setData(await readLocal());
@@ -621,157 +643,6 @@ export default function Portal() {
       setError((e as Error).message);
     }
   }
-  function openProject(p?: Project, m?: string) {
-    if (!isAdmin) return;
-    setFormError("");
-    if (p && m)
-      setEditor({
-        kind: "projectPhase",
-        value: structuredClone(p),
-        phaseMonth: m,
-      });
-    else
-      setEditor({
-        kind: "project",
-        isNew: !p,
-        value: p
-          ? structuredClone(p)
-          : {
-              id: crypto.randomUUID(),
-              name: "",
-              responsibleName: "",
-              start,
-              end: monthsFrom(start, count)[count - 1],
-              phases: {},
-              phaseColors: {},
-              milestones: [],
-            },
-      });
-  }
-  async function deleteProject() {
-    if (
-      !data ||
-      !isAdmin ||
-      saving ||
-      editor?.kind !== "project" ||
-      editor.isNew
-    )
-      return;
-    const project = data.projects.find((p) => p.id === editor.value.id);
-    if (!project) {
-      setFormError("Proje bulunamadı. Verileri yenileyip tekrar deneyin.");
-      return;
-    }
-    const planned = Object.keys(data.allocations).filter(
-      (key) => key.split("|")[1] === project.id,
-    ).length;
-    const actual = Object.keys(data.actualAllocations || {}).filter(
-      (key) => key.split("|")[1] === project.id,
-    ).length;
-    if (
-      !confirm(
-        `“${project.name}” projesi silinsin mi?\n\nBu projeye bağlı ${planned} planlanan ve ${actual} gerçekleşen kaynak dağılımı kaydı, yüzde girişleri, aşamalar ve kritik proje konuları da kalıcı olarak silinecek.\n\nDiğer projelerin kayıtları korunur. İşlemi geri almak için silme öncesi veri yedeği gerekir.`,
-      )
-    )
-      return;
-    setFormError("");
-    try {
-      await batch([
-        { ...change("project", project.id, null), operation: "delete" },
-      ]);
-      setEditor(null);
-      setProjectIds((ids) => ids.filter((id) => id !== project.id));
-      setCells((keys) =>
-        keys.filter((key) => key.split("|")[1] !== project.id),
-      );
-      setNotice(
-        `“${project.name}” projesi ve bağlı kaynak dağılımları silindi.`,
-      );
-    } catch (e) {
-      setFormError((e as Error).message);
-    }
-  }
-  function openMilestone(project: Project, milestone?: Milestone) {
-    if (!isAdmin) return;
-    setFormError("");
-    const first =
-      months.find((month) => month >= project.start && month <= project.end) ||
-      project.start;
-    setEditor({
-      kind: "milestone",
-      projectId: project.id,
-      isNew: !milestone,
-      draftEmpty: !milestone || milestone.hasCriticalTopics === false,
-      value: milestone
-        ? {
-            ...structuredClone(milestone),
-            barStyle: visibleMilestoneBarStyle(milestone.barStyle),
-          }
-        : {
-            id: crypto.randomUUID(),
-            name: "",
-            start: first + "-01",
-            end: first + "-01",
-            barColor: "red",
-            barStyle: "outline",
-            barText: "",
-          },
-    });
-  }
-  async function deleteMilestone(project: Project, milestone: Milestone) {
-    if (!data || !isAdmin || saving) return;
-    const current = data.projects.find((item) => item.id === project.id);
-    if (!current?.milestones?.some((item) => item.id === milestone.id)) {
-      const message =
-        "Kritik konu bulunamadı. Verileri yenileyip tekrar deneyin.";
-      if (editor?.kind === "milestone" && editor.value?.id === milestone.id)
-        setFormError(message);
-      else setError(message);
-      return;
-    }
-    if (
-      !confirm(
-        "“" +
-          milestone.name +
-          "” kritik konusu tüm tarih aralıkları ve açıklamalarıyla silinsin mi?",
-      )
-    )
-      return;
-    try {
-      await batch([
-        change("project", current.id, {
-          ...current,
-          milestones: current.milestones.filter(
-            (item) => item.id !== milestone.id,
-          ),
-        }),
-      ]);
-      setEditor((active: PortalEditor | null) =>
-        active?.kind === "milestone" && active.value?.id === milestone.id
-          ? null
-          : active,
-      );
-      setNotice("Kritik konu ve bağlı açıklamaları silindi.");
-    } catch (e) {
-      if (editor?.kind === "milestone" && editor.value?.id === milestone.id)
-        setFormError((e as Error).message);
-      else setError((e as Error).message);
-    }
-  }
-  function deleteEditedMilestone() {
-    if (!data || editor?.kind !== "milestone" || editor.isNew) return;
-    const project = data.projects.find((item) => item.id === editor.projectId);
-    const milestone = project?.milestones?.find(
-      (item) => item.id === editor.value.id,
-    );
-    if (!project || !milestone) {
-      setFormError(
-        "Kritik konu bulunamadı. Verileri yenileyip tekrar deneyin.",
-      );
-      return;
-    }
-    void deleteMilestone(project, milestone);
-  }
   async function reorderMilestone(
     project: Project,
     sourceId: string,
@@ -853,88 +724,6 @@ export default function Portal() {
       );
     } catch (error) {
       setError((error as Error).message);
-    }
-  }
-  function openResource(r?: Resource) {
-    setFormError("");
-    const v = r
-      ? resourceVersionForEdit(r, start)
-      : {
-          effective: start,
-          team: "",
-          lead: leads.length === 1 ? leads[0] : "",
-          status: "Aktif Çalışan",
-          included: true,
-          start: currentYearStartDate(),
-          end: "",
-          amount: 1,
-        };
-    const workStart =
-      !v.start && isWorkingStatus(v.status) ? currentYearStartDate() : v.start;
-    setEditor({
-      kind: "resource",
-      isNew: !r,
-      value: r
-        ? structuredClone(r)
-        : { id: crypto.randomUUID(), name: "", note: "", versions: [] },
-      version: {
-        ...v,
-        start: workStart,
-        lead: v.lead || data?.teams.find((t) => t.id === v.team)?.lead || "",
-      },
-    });
-  }
-  function chooseResourceStatus(status: string) {
-    if (
-      editor?.kind !== "resource" ||
-      !status ||
-      status === editor.version.status
-    )
-      return;
-    const posting = status === "Aktif İlan" || status === "Pasif İlan";
-    const previousPosting =
-      editor.version.status === "Aktif İlan" ||
-      editor.version.status === "Pasif İlan";
-    setEditor({
-      ...editor,
-      version: {
-        ...editor.version,
-        status,
-        included: !posting,
-        start: posting
-          ? ""
-          : previousPosting || !editor.version.start
-            ? currentYearStartDate()
-            : editor.version.start,
-        end:
-          editor.version.status === "İşten Ayrıldı" ? "" : editor.version.end,
-      },
-    });
-  }
-  function openBulk() {
-    setFormError("");
-    setEditor({
-      kind: "bulkResources",
-      effective: start,
-      team: "",
-      lead: "",
-      status: "",
-      included: "keep",
-    });
-  }
-  async function submit() {
-    if (!data || !editor) return;
-    setFormError("");
-    try {
-      const changes = prepareEditorChanges(data, editor, {
-        start,
-        resourceIds,
-      });
-      await batch(changes);
-      setEditor(null);
-      setResourceIds([]);
-    } catch (e) {
-      setFormError((e as Error).message);
     }
   }
   function phaseText(p: Project, m: string) {
