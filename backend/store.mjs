@@ -1,6 +1,9 @@
 import { auditEntries } from "./audit.mjs";
 import { dataChanges } from "./change-set.mjs";
-import { cloneMutationSnapshot } from "./mutation-snapshot.mjs";
+import {
+  cloneMutationSnapshot,
+  numericSnapshotMaps,
+} from "./mutation-snapshot.mjs";
 import {
   readRecordMap,
   readCompositeMap,
@@ -1104,7 +1107,7 @@ export class Store {
   async mutate(
     u,
     fn,
-    { auditUsers = false, returnPlanningView = false, planningDelta } = {},
+    { auditUsers = false, returnView = false, planningDelta } = {},
   ) {
     return this.transaction(async (c) => {
       const active = await this.findUser({ id: u._id }, c);
@@ -1151,22 +1154,23 @@ export class Store {
         "UPDATE kp_settings SET " + assignments.join(",") + " WHERE id=1",
         values,
       );
-      if (returnPlanningView) {
+      if (returnView) {
         // Preserve the SQL read representation of unchanged entities. If
         // validation normalized metadata, re-read within the same transaction.
         const metadataKeys = new Set([
           ...Object.keys(before),
           ...Object.keys(valid),
         ]);
-        metadataKeys.delete("allocations");
-        metadataKeys.delete("revisions");
+        for (const key of numericSnapshotMaps) metadataKeys.delete(key);
         const unchanged = [...metadataKeys].every(
           (key) => JSON.stringify(before[key]) === JSON.stringify(valid[key]),
         );
         const responseData = unchanged
           ? {
               ...before,
-              allocations: valid.allocations,
+              ...Object.fromEntries(
+                numericSnapshotMaps.map((key) => [key, valid[key]]),
+              ),
               revisions: { ...valid.revisions },
             }
           : (await this.read(c)).data;
@@ -1178,7 +1182,22 @@ export class Store {
         );
         // Only an unchanged, matching base can receive a patch. Scope the entire
         // view first so values and deletion revisions follow existing permissions.
-        if (unchanged && planningDelta?.baseGeneration === generation) {
+        const planningOnly =
+          unchanged &&
+          planningDelta?.baseGeneration === generation &&
+          ["actual", "workedHours", "percent"].every(
+            (kind) => changeSet[kind].length === 0,
+          ) &&
+          // A same-value write can advance a non-planning revision too.
+          // Such revisions cannot be represented by an allocation-only patch.
+          [before.revisions, valid.revisions].every((revisions) =>
+            Object.keys(revisions).every(
+              (key) =>
+                key.startsWith("allocation:") ||
+                before.revisions[key] === valid.revisions[key],
+            ),
+          );
+        if (planningOnly) {
           const ids = new Set([
             ...planningDelta.ids,
             ...changeSet.allocation.map((change) => change.id),

@@ -684,3 +684,284 @@ test("authenticated HTTP delta writes fall back after another client's committed
   assert.deepEqual(result, await store.view(users.admin));
   assert.equal(result.data.allocations[hiddenKey], 0.5);
 });
+
+test("actual and hour responses use one transaction/read and match SQL views for each role", async (t) => {
+  const { store, users } = await setup(t);
+  const originalRead = store.read;
+  const originalTransaction = store.transaction;
+  let reads = 0,
+    transactions = 0;
+  t.mock.method(store, "read", async function (...args) {
+    reads++;
+    return originalRead.apply(this, args);
+  });
+  t.mock.method(store, "transaction", function (...args) {
+    transactions++;
+    return originalTransaction.apply(this, args);
+  });
+  for (const role of ["admin", "manager", "normal"]) {
+    const user = users[role];
+    let state = await store.view(user);
+    const batches = [
+      {
+        kind: "actual",
+        id: "r0|p|2026-01",
+        value: { unit: "percent", value: 10 },
+      },
+      { kind: "workedHours", id: "r0|2026-01", value: 230 },
+      { kind: "workedHours", id: "r0|2026-01", value: null },
+      {
+        kind: "actual",
+        id: "r0|p|2026-01",
+        value: { unit: "hours", value: 4 },
+      },
+      { kind: "actual", id: "r0|p|2026-01", value: 0 },
+      { kind: "actual", id: "r0|p|2026-01", operation: "delete" },
+    ];
+    for (const change of batches) {
+      reads = transactions = 0;
+      const revision = state.data.revisions[change.kind + ":" + change.id] || 0;
+      const result = await changeAndView(store, user, [
+        { ...change, revision },
+      ]);
+      assert.equal(reads, 1);
+      assert.equal(transactions, 1);
+      assert.equal(result.generation, state.generation + 1);
+      assert.deepEqual(result, await store.view(user));
+      assert.equal(JSON.stringify(result).includes('"password"'), false);
+      state = result;
+    }
+    assert.equal(
+      Object.hasOwn(state.data.actualAllocations, "r0|p|2026-01"),
+      false,
+    );
+    assert.equal(
+      Object.hasOwn(state.data.actualPercentEntries, "r0|p|2026-01"),
+      false,
+    );
+    if (role !== "admin") {
+      assert.equal(state.data.actualAllocations["r1|p|2026-01"], undefined);
+      assert.equal(state.data.users, undefined);
+      assert.equal(state.data.legacyArchive, undefined);
+      assert.equal(state.data.actualTeamTotals !== undefined, true);
+    }
+  }
+});
+
+test("concurrent non-planning responses retain their own commit generation and snapshot", async (t) => {
+  const { store, users } = await setup(t);
+  const before = await store.view(users.normal);
+  const firstKey = "r0|p|2026-07",
+    secondKey = "r0|p|2026-08";
+  const [first, second] = await Promise.all([
+    changeAndView(store, users.normal, [
+      { kind: "actual", id: firstKey, revision: 0, value: 0.1 },
+    ]),
+    changeAndView(store, users.normal, [
+      { kind: "actual", id: secondKey, revision: 0, value: 0.2 },
+    ]),
+  ]);
+  assert.equal(first.generation, before.generation + 1);
+  assert.equal(second.generation, before.generation + 2);
+  assert.equal(first.data.actualAllocations[firstKey], 0.1);
+  assert.equal(Object.hasOwn(first.data.actualAllocations, secondKey), false);
+  assert.equal(second.data.actualAllocations[firstKey], 0.1);
+  assert.equal(second.data.actualAllocations[secondKey], 0.2);
+  assert.deepEqual(second, await store.view(users.normal));
+});
+
+test("calendar and personal-day changes re-read metadata within the write transaction and project deletion retains cascades", async (t) => {
+  const { store, users } = await setup(t);
+  await changeAndView(store, users.normal, [
+    {
+      kind: "actual",
+      id: "r0|p|2026-01",
+      revision: 1,
+      value: { unit: "percent", value: 10 },
+    },
+  ]);
+  const read = store.read;
+  const transaction = store.transaction;
+  let reads = 0,
+    transactions = 0;
+  t.mock.method(store, "read", async function (...args) {
+    reads++;
+    return read.apply(this, args);
+  });
+  t.mock.method(store, "transaction", function (...args) {
+    transactions++;
+    return transaction.apply(this, args);
+  });
+  const batches = [
+    [
+      users.admin,
+      {
+        kind: "calendar",
+        id: "shared",
+        revision: 0,
+        value: {
+          "2026-01-02": { type: "company", label: "Holiday", fraction: 1 },
+        },
+      },
+    ],
+    [
+      users.normal,
+      {
+        kind: "personDay",
+        id: "r0|2026-01-05|leave",
+        revision: 0,
+        value: { type: "leave", label: "Leave", hours: 2 },
+      },
+    ],
+    [
+      users.normal,
+      {
+        kind: "personDay",
+        id: "r0|2026-01-06|training",
+        revision: 0,
+        value: { type: "training", label: "Training", hours: 3 },
+      },
+    ],
+    [
+      users.normal,
+      {
+        kind: "personDay",
+        id: "r0|2026-01-05|leave",
+        revision: 1,
+        operation: "delete",
+      },
+    ],
+    [
+      users.admin,
+      { kind: "project", id: "p", revision: 1, operation: "delete" },
+    ],
+  ];
+  for (const [user, change] of batches) {
+    reads = transactions = 0;
+    const result = await changeAndView(store, user, [change]);
+    assert.equal(reads, 2);
+    assert.equal(transactions, 1);
+    assert.deepEqual(result, await store.view(user));
+  }
+  const after = await store.view(users.admin);
+  assert.deepEqual(after.data.projects, []);
+  assert.deepEqual(after.data.actualAllocations, {});
+  assert.deepEqual(after.data.actualPercentEntries, {});
+  assert.deepEqual(after.data.allocations, {});
+  assert(after.data.revisions["actual:r0|p|2026-01"] > 2);
+});
+
+test("non-planning writes still enforce permission, revision and monthly limits atomically", async (t) => {
+  const { store, users } = await setup(t);
+  const before = await store.view(users.admin);
+  const audit = (await store.auditLog(users.admin)).total;
+  for (const [user, change, status] of [
+    [
+      users.normal,
+      { kind: "actual", id: "r1|p|2026-01", revision: 1, value: 0.1 },
+      403,
+    ],
+    [
+      users.manager,
+      { kind: "workedHours", id: "r1|2026-01", revision: 0, value: 230 },
+      403,
+    ],
+    [
+      users.normal,
+      { kind: "actual", id: "r0|p|2026-01", revision: 0, value: 0.1 },
+      409,
+    ],
+    [
+      users.normal,
+      { kind: "workedHours", id: "r0|2026-01", revision: 0, value: 1 },
+      400,
+    ],
+    [
+      { ...users.normal, version: 0 },
+      { kind: "actual", id: "r0|p|2026-01", revision: 1, value: 0.1 },
+      401,
+    ],
+  ]) {
+    await assert.rejects(
+      changeAndView(store, user, [change]),
+      (error) => error.status === status,
+    );
+    assert.deepEqual(await store.view(users.admin), before);
+    assert.equal((await store.auditLog(users.admin)).total, audit);
+  }
+});
+
+test("a non-planning response is withheld on disk failure and the committed data survives restart", async (t) => {
+  const { store, users, env } = await setup(t);
+  const before = await store.view(users.admin);
+  const audit = (await store.auditLog(users.admin)).total;
+  const originalFile = store.db.file;
+  const blocker = originalFile + "-blocked";
+  await fs.mkdir(blocker);
+  let projected = 0;
+  const projectView = store.projectView;
+  t.mock.method(store, "projectView", async function (...args) {
+    projected++;
+    return projectView.apply(this, args);
+  });
+  store.db.file = blocker;
+  try {
+    await assert.rejects(
+      changeAndView(store, users.normal, [
+        { kind: "actual", id: "r0|p|2026-01", revision: 1, value: 0.1 },
+      ]),
+      (error) => ["EISDIR", "ENOTDIR"].includes(error.code),
+    );
+  } finally {
+    store.db.file = originalFile;
+  }
+  assert.equal(projected, 1);
+  assert.deepEqual(await store.view(users.admin), before);
+  assert.equal((await store.auditLog(users.admin)).total, audit);
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    assert.deepEqual(await reopened.view(users.admin), before);
+    assert.equal((await reopened.auditLog(users.admin)).total, audit);
+  } finally {
+    await reopened.close();
+  }
+});
+
+test("planning deltas fall back for numeric changes and same-value non-planning revisions", async (t) => {
+  const { store, users, key } = await setup(t);
+  for (const change of [
+    { kind: "actual", id: "r0|p|2026-01", value: 0.1 },
+    { kind: "actual", id: "r0|p|2026-01", value: 0.1 },
+    { kind: "workedHours", id: "r0|2026-01", operation: "delete" },
+  ]) {
+    const before = await store.view(users.admin);
+    const result = await store.mutate(
+      users.admin,
+      (data, active) =>
+        applyChanges(data, active, [
+          {
+            kind: "allocation",
+            id: key,
+            revision: before.data.revisions["allocation:" + key] || 0,
+            value: 0.5,
+          },
+          {
+            ...change,
+            revision: before.data.revisions[change.kind + ":" + change.id] || 0,
+          },
+        ]),
+      {
+        returnView: true,
+        planningDelta: { baseGeneration: before.generation, ids: [key] },
+      },
+    );
+    assert.equal(result.responseMode, undefined);
+    assert.deepEqual(result, await store.view(users.admin));
+    assert.equal(
+      result.data.revisions[change.kind + ":" + change.id],
+      (before.data.revisions[change.kind + ":" + change.id] || 0) + 1,
+    );
+  }
+});

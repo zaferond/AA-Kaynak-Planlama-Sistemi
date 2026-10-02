@@ -18,12 +18,12 @@ import { hashPassword } from "../backend/auth.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|resources|actuals|percentages|calendar-days|audit-events|response|validation|snapshot-copy|output)=(.+)$/.exec(
+      /^--(sizes|samples|resources|actuals|percentages|calendar-days|audit-events|operation|response|validation|snapshot-copy|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --percentages=0 --calendar-days=1000 --audit-events=0 --response=separate|planning|delta --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --percentages=0 --calendar-days=1000 --audit-events=0 --operation=allocation|actual --response=separate|planning|full|delta --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -45,8 +45,13 @@ const percentages = integer(options.get("percentages") || "0", 0, actuals);
 const calendarDays = integer(options.get("calendar-days") || "1000", 0, 100000);
 const auditEvents = integer(options.get("audit-events") || "0", 0, 100000);
 const responseMode = options.get("response") || "separate";
-if (!["separate", "planning", "delta"].includes(responseMode))
-  throw Error("Expected --response=separate, planning or delta.");
+if (!["separate", "planning", "full", "delta"].includes(responseMode))
+  throw Error("Expected --response=separate, planning, full or delta.");
+const operation = options.get("operation") || "allocation";
+if (!["allocation", "actual"].includes(operation))
+  throw Error("Expected --operation=allocation or actual.");
+if (operation === "actual" && (!actuals || responseMode === "delta"))
+  throw Error("Actual edits require --actuals>0 and a full response.");
 const validationMode = options.get("validation") || "single";
 if (!["single", "double"].includes(validationMode))
   throw Error("Expected --validation=single or --validation=double.");
@@ -59,6 +64,18 @@ const percentile = (values, p) =>
     Math.max(0, Math.ceil(values.length * p) - 1)
   ];
 const round = (value) => Math.round(value * 100) / 100;
+// Compare complete models independently of SQL/object field insertion order.
+// Arrays keep their order. This runs outside all measured intervals.
+const canonicalSnapshot = (value) =>
+  Array.isArray(value)
+    ? value.map(canonicalSnapshot)
+    : value && typeof value === "object"
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((key) => [key, canonicalSnapshot(value[key])]),
+        )
+      : value;
 
 async function seed(store, size) {
   const { data } = await store.read();
@@ -395,7 +412,13 @@ for (const size of sizes) {
       version: 1,
     });
     const user = await store.findUser({ id: "bench-admin" });
-    const key = await seed(store, size);
+    const planningKey = await seed(store, size);
+    const key =
+      operation === "allocation"
+        ? planningKey
+        : Object.keys((await store.read()).data.actualAllocations)[0];
+    const amount = (high) =>
+      operation === "allocation" ? (high ? 0.5 : 0.25) : high ? 0.005 : 0.0025;
     let state = await store.view(user);
     // Warm up the same code paths, including SQL and file commit, outside measurements.
     await store.mutate(
@@ -403,14 +426,14 @@ for (const size of sizes) {
       (data, active) =>
         apply(data, active, [
           {
-            kind: "allocation",
+            kind: operation,
             id: key,
-            value: 0.5,
-            revision: data.revisions["allocation:" + key],
+            value: amount(true),
+            revision: data.revisions[operation + ":" + key],
           },
         ]),
       {
-        returnPlanningView: responseMode !== "separate",
+        returnView: responseMode !== "separate",
         planningDelta:
           responseMode === "delta"
             ? { baseGeneration: state.generation, ids: [key] }
@@ -431,16 +454,16 @@ for (const size of sizes) {
           const domainStart = performance.now();
           apply(data, active, [
             {
-              kind: "allocation",
+              kind: operation,
               id: key,
-              value: i % 2 ? 0.5 : 0.25,
-              revision: state.data.revisions["allocation:" + key],
+              value: amount(i % 2),
+              revision: state.data.revisions[operation + ":" + key],
             },
           ]);
           observation.domainMs += performance.now() - domainStart;
         },
         {
-          returnPlanningView: responseMode !== "separate",
+          returnView: responseMode !== "separate",
           planningDelta:
             responseMode === "delta"
               ? { baseGeneration: state.generation, ids: [key] }
@@ -474,7 +497,7 @@ for (const size of sizes) {
     assert.deepEqual(state, await store.view(user));
     assert.equal(state.generation, initialGeneration + samples);
     assert.equal((await store.auditLog(user)).total, initialAudit + samples);
-    assert.equal(state.data.revisions["allocation:" + key], 2 + samples);
+    assert.equal(state.data.revisions[operation + ":" + key], 2 + samples);
     const medians = Object.fromEntries(
       [
         "pipelineMs",
@@ -502,6 +525,7 @@ for (const size of sizes) {
     );
     const result = {
       allocations: size,
+      operation,
       responseMode,
       validationMode,
       snapshotCopy,
@@ -518,12 +542,16 @@ for (const size of sizes) {
           0.95,
         ),
       ),
+      snapshotSha256: createHash("sha256")
+        .update(JSON.stringify(canonicalSnapshot(state)))
+        .digest("hex"),
       observations,
     };
     results.push(result);
     console.log(
       JSON.stringify({
         allocations: size,
+        operation,
         responseMode,
         validationMode,
         snapshotCopy,

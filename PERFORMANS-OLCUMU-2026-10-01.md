@@ -426,3 +426,36 @@ Gerçek kullanıcı verisi, native MSSQL, ağ/tarayıcı/çok kullanıcı kapasi
 | backend/operations.mjs | `41b0cd408246881e04f4536fdbec90fdc14eef2ebe3b576c357966f0778f60e9` | `777c070923bcf4832f75a54fbbcf42b850197c50f144c43f8793834279f00508` |
 | scripts/benchmark-actual-months.mjs | `1001332a7f6d1da228f5791c54720e33cdcaaa7bfd9d481388bb39ca940fe4f6` | `1001332a7f6d1da228f5791c54720e33cdcaaa7bfd9d481388bb39ca940fe4f6` |
 | scripts/benchmark-store.mjs | `9c01f0b4ddc5cf7cb644a244f26cdac715d52f9d15a3882b5641dd943be7fd4d` | `9c01f0b4ddc5cf7cb644a244f26cdac715d52f9d15a3882b5641dd943be7fd4d` |
+
+
+## Günlük kayıt yanıtı — 2 Ekim 2026
+
+Başlangıç `0dba218`, Node 24.21.0. Aynı son betik ve hesap koduyla iki yanıt yolu sırayla çalıştırıldı: `separate`, önceki mutate + ayrı Store.view davranışını; `full`, yeni transaction içi tam yanıtı ölçer. Her koşuda bir ısınma + yedi örnek var; test/build eşzamanlı çalıştırılmadı. Ölçüm zamanları UTC: 2026-10-02T06:13:16.025Z / 2026-10-02T06:13:34.950Z.
+
+100.000 planlanan, 48.000 gerçekleşen ve başlangıçta 48.000 yüzde hücresi; 400 çalışan, 2.000 izin kaydı, 50.000 audit. Düzenlenen gerçekleşen hücre doğrudan FTE değerine çevrilir, o hücrenin yüzde kaydı ısınmada kaldırılır. Bütün kalan yüzde modeli tam doğrulamadan geçer. Admin kapsamı / yerel SQL.js dosyası kullanılıyor.
+
+| Medyan maliyet (ms) | Ayrı yanıt okuması | Transaction içi yanıt |
+| --- | ---: | ---: |
+| Kayıt + görüntü | 1335.43 | 1056.74 |
+| Tam SQL okuma toplamı | 683.83 | 344.07 |
+| Snapshot kopyası | 74.75 | 73.86 |
+| Fark + persistence | 89.34 | 88.06 |
+| Komut hazırlama / aylık sınır | 60.10 | 59.88 |
+| Dosya commit | 49.95 | 59.00 |
+| JSON yanıt üretimi | 76.29 | 77.10 |
+| JSON yanıt ayrıştırma | 99.96 | 99.02 |
+
+Kayıt + görüntü bu deneyde yaklaşık %20.9 azalıyor; iki tam okuma tek okumaya iniyor. Seçilen satır **689.823 → 344.912**, normal query satır nesnesi **1.825 → 913**. Snapshot kopyası bir; her iki yolda actual/revision/audit/settings için toplam dört yazma ve 348 bayt parametre aynı. Yanıt **12.580.420 bayt** olarak aynı; HTTP/ağ aktarımı veya ekran çizimi ölçümde yok. JSON üretimi/ayrıştırma tabloda ayrıca gösteriliyor, pipeline süresine dahil değil.
+
+Her koşunun son yanıtı yeni SQL görüntüsüyle derin karşılaştırıldı; generation/revision/audit sayıları denetlendi. Tam snapshot'ın nesne anahtar sırasından bağımsız SHA-256 değeri iki koşuda da `96c60ce53de7fc5874b92dbf0d5b7caaed9e95c1ab7f2aad694c9ba7a9fbdb5b`. Dizilerin sırası korunur; hash hesaplama ölçüm aralıkları dışındadır. İlk denemede sıraya duyarlı JSON hash'i farklı çıktı; her iki model kendi SQL görüntüsüyle eşitti. Karşılaştırma için betik canonical hash'e geçirildi ve iki yol aynı betikle tekrar ölçüldü. Raporda bu son koşular kullanılıyor.
+
+Tekrar üretme, aşağıdaki komutları sırayla çalıştırın:
+
+```sh
+node scripts/benchmark-store.mjs --sizes=100000 --samples=7 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --audit-events=50000 --operation=actual --response=separate --output=/tmp/benzersiz-full-view-before.json
+node scripts/benchmark-store.mjs --sizes=100000 --samples=7 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --audit-events=50000 --operation=actual --response=full --output=/tmp/benzersiz-full-view-after.json
+```
+
+Ham dosyalar `/tmp/aa-full-view-{before,after}-v2-20261002.json`; /tmp kalıcı arşiv değildir. Betik .env yüklemez ve gerçek DB/provider yolu kabul etmez, yalnız geçici SQL.js dosyaları oluşturup siler. Yeni `--operation` varsayılan allocation, actual için gerçekleşen veri gerekir ve allocation-only delta yasaktır. Önceki planning/delta profilleri çalışmaya devam eder.
+
+Bütün `/api/changes` komutlarının yanıtı artık kendi transaction'ında hazırlanır; metadata değişen işlemler yeniden okumayı korur. Bu sayılar tek gerçekleşen hücrenin admin yanıtına aittir; tüm komutlar veya kullanıcı kapsamları için aynı hızlanma varsayılmaz. Dosya/JSON süreleri de değişti; toplam fark tek bir fonksiyonun hızlanma oranı değildir. Native MSSQL, ilk yükleme, ağ, tarayıcı, bellek/RSS/GC ve çok kullanıcı kapasitesi ölçülmedi. Yedi örnek üretim p95/hız garantisi sağlamaz.

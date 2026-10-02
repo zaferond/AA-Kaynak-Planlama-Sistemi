@@ -7,11 +7,11 @@ export async function changeAndView(store, user, changes, response = {}) {
     Array.isArray(changes) &&
     changes.length > 0 &&
     changes.every((change) => change?.kind === "allocation");
-  const result = await store.mutate(
+  return store.mutate(
     user,
     (data, active) => stageChanges(data, active, changes),
     {
-      returnPlanningView: planningOnly,
+      returnView: true,
       planningDelta:
         planningOnly &&
         response.responseMode === "planning-delta-v1" &&
@@ -24,5 +24,4 @@ export async function changeAndView(store, user, changes, response = {}) {
           : undefined,
     },
   );
-  return planningOnly ? result : store.view(user);
 }
