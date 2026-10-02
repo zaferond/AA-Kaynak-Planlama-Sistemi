@@ -47,6 +47,8 @@ export function usePlannedGrid({
   setError,
 }: Props) {
   const cellSet = new Set(cells);
+  const selectionRef = useRef(cells);
+  selectionRef.current = cells;
   const isAdmin = user?.role === "admin";
   const readOnlyAllLeaders =
     !isAdmin && !(user?.role === "manager" && user.leaders.length);
@@ -106,7 +108,30 @@ export function usePlannedGrid({
     )
       delete document.activeElement.dataset.gridSelectionFocus;
     setCells([]);
+    setPlanMenu(null);
   }
+  function completePlanEntry() {
+    // A completed older save must not clear a newly selected range.
+    if (selectionRef.current === cells) clearPlanSelection();
+  }
+  useEffect(() => {
+    if (!active) return;
+    const outside = (event: PointerEvent) => {
+      if (!cells.length && !planMenu && planFocusFrame.current === null) return;
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      const cell =
+        target instanceof Element ? target.closest("td[data-plan-cell]") : null;
+      if (
+        (cell && planTableRef.current?.contains(cell)) ||
+        planMenuRef.current?.contains(target)
+      )
+        return;
+      clearPlanSelection();
+    };
+    document.addEventListener("pointerdown", outside, true);
+    return () => document.removeEventListener("pointerdown", outside, true);
+  });
   function planCellAvailable(key: string) {
     const [teamId, projectId, month] = key.split("|");
     const project = data?.projects.find((item) => item.id === projectId);
@@ -229,9 +254,11 @@ export function usePlannedGrid({
     );
     if (!changed.length) {
       setNotice("Seçili hücrelerde değer zaten aynı.");
+      completePlanEntry();
       return;
     }
     await batch(changed.map((key) => allocationChange(key, value)));
+    completePlanEntry();
     setNotice(changed.length + " seçili hücreye kaynak miktarı uygulandı.");
   }
   function openPlanMenu(
@@ -375,5 +402,6 @@ export function usePlannedGrid({
     pastePlanSelection,
     fillSelectedPlanCells,
     clearPlanSelection,
+    completePlanEntry,
   };
 }

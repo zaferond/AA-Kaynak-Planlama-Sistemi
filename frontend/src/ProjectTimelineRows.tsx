@@ -75,6 +75,9 @@ function positionPointerTooltip(
 }
 
 type Props = {
+  rowSelected: boolean;
+  onToggleRowSelection: (shift: boolean) => void;
+  onRowContextMenu: (event: MouseEvent<HTMLElement>) => void;
   project: Project;
   periods: TimelinePeriod[];
   density: "detail" | "compact" | "overview";
@@ -945,6 +948,9 @@ function MilestoneTrack({
 }
 
 export default function ProjectTimelineRows({
+  rowSelected,
+  onToggleRowSelection,
+  onRowContextMenu,
   project,
   periods,
   density,
@@ -1010,9 +1016,27 @@ export default function ProjectTimelineRows({
   const milestones = project.milestones || [];
   return (
     <>
-      <TableRow className="project-main-row">
-        <TableCell>
+      <TableRow
+        className={
+          "project-main-row" + (rowSelected ? " project-row-selected" : "")
+        }
+        aria-selected={rowSelected}
+      >
+        <TableCell onContextMenu={onRowContextMenu}>
           <div className="project-name-cell">
+            <input
+              className="project-row-select"
+              type="checkbox"
+              checked={rowSelected}
+              disabled={saving}
+              aria-label={project.name + " proje satırını seç"}
+              title="Satırı seç · Shift: aradaki proje satırlarını seç"
+              onChange={(event) =>
+                onToggleRowSelection(
+                  !!(event.nativeEvent as globalThis.MouseEvent).shiftKey,
+                )
+              }
+            />
             <button
               type="button"
               className="project-expand"

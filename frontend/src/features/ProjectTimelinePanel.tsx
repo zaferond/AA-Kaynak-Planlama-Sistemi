@@ -15,6 +15,16 @@ import Pager from "../Pager";
 import ProjectTimelineRows from "../ProjectTimelineRows";
 import type { Project, Milestone } from "../model";
 import { projectTimelinePeriods } from "../timeline-periods";
+import type { useProjectMenus } from "./useProjectMenus";
+type ProjectRowSelection = Pick<
+  ReturnType<typeof useProjectMenus>,
+  | "projectTableRef"
+  | "selectedProjectIds"
+  | "toggleProjectRow"
+  | "selectAllProjectRows"
+  | "clearProjectSelection"
+  | "openProjectRowMenu"
+>;
 
 type DragMode = "move" | "start" | "end";
 export type ProjectTimelineActions = {
@@ -57,6 +67,7 @@ export type ProjectTimelineActions = {
   ) => Promise<void>;
 };
 type Props = {
+  selection: ProjectRowSelection;
   projects: Project[];
   months: string[];
   weekly: boolean;
@@ -73,6 +84,7 @@ type Props = {
 };
 
 export default function ProjectTimelinePanel({
+  selection,
   projects,
   months,
   weekly,
@@ -104,7 +116,29 @@ export default function ProjectTimelinePanel({
         onChange={onPageChange}
         label="Proje"
       />
+      <div className="project-selection-hint">
+        <span>
+          {selection.selectedProjectIds.length ? (
+            <strong>
+              {selection.selectedProjectIds.length} proje satırı seçildi
+            </strong>
+          ) : (
+            "Çoklu kopyalamak için proje satırlarını seçin."
+          )}{" "}
+          · Sağ tık: metin / renk / metin + renk · Ctrl/⌘+C ve Ctrl/⌘+V
+        </span>
+        {selection.selectedProjectIds.length > 0 && (
+          <button
+            type="button"
+            className="textbutton"
+            onClick={selection.clearProjectSelection}
+          >
+            Seçimi kaldır
+          </button>
+        )}
+      </div>
       <Table
+        ref={selection.projectTableRef}
         todayDate={todayDate}
         todayMonthsKey={projectPeriods.map((period) => period.key).join("|")}
         className={
@@ -127,7 +161,29 @@ export default function ProjectTimelinePanel({
             years={projectPeriods.map((period) => period.year)}
           />
           <TableRow>
-            <TableHead>Proje</TableHead>
+            <TableHead>
+              <label className="project-selection-heading">
+                <input
+                  type="checkbox"
+                  aria-label="Bu sayfadaki proje satırlarını seç"
+                  disabled={saving || !projects.length}
+                  checked={
+                    selection.selectedProjectIds.length > 0 &&
+                    selection.selectedProjectIds.length ===
+                      projects.slice(page * 20, (page + 1) * 20).length
+                  }
+                  ref={(input) => {
+                    if (input)
+                      input.indeterminate =
+                        selection.selectedProjectIds.length > 0 &&
+                        selection.selectedProjectIds.length <
+                          projects.slice(page * 20, (page + 1) * 20).length;
+                  }}
+                  onChange={selection.selectAllProjectRows}
+                />
+                Proje
+              </label>
+            </TableHead>
             {projectPeriods.map((period) =>
               period.kind === "month" ? (
                 <TimelineMonthHead
@@ -158,6 +214,13 @@ export default function ProjectTimelinePanel({
             <ProjectTimelineRows
               key={p.id}
               project={p}
+              rowSelected={selection.selectedProjectIds.includes(p.id)}
+              onToggleRowSelection={(shift) =>
+                selection.toggleProjectRow(p.id, shift)
+              }
+              onRowContextMenu={(event) =>
+                selection.openProjectRowMenu(event, p)
+              }
               periods={projectPeriods}
               density={density}
               expandAllDetails={expandAllDetails}

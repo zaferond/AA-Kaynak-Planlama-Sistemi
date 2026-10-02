@@ -37,6 +37,7 @@ type PlanningGrid = Pick<
   | "openPlanMenu"
   | "firstSelectedPlanCell"
   | "fillSelectedPlanCells"
+  | "completePlanEntry"
 >;
 type Props = {
   data: Data;
@@ -112,6 +113,7 @@ export default function PlannedAllocationPanel({
     openPlanMenu,
     firstSelectedPlanCell,
     fillSelectedPlanCells,
+    completePlanEntry,
   } = grid;
   const cellSet = useMemo(() => new Set(cells), [cells]);
   function summary(ts: Team[], mths = months, selectedReport = false) {
@@ -332,6 +334,7 @@ export default function PlannedAllocationPanel({
                   label={t.name + " / " + p.name + " / " + monthLabel(m)}
                   disabled={disabled || !editable}
                   save={(v) => onSaveAllocation(k, v)}
+                  onCommit={completePlanEntry}
                   onFillSelection={
                     cells.length > 1 && firstSelectedPlanCell === k
                       ? fillSelectedPlanCells

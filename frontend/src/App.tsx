@@ -505,6 +505,21 @@ export default function Portal() {
   } = plannedGrid;
   const projectMenus = useProjectMenus({
     data,
+    visibleProjects: projects.slice(
+      effectiveProjectPage * 20,
+      (effectiveProjectPage + 1) * 20,
+    ),
+    active: tab === "projects" && !editor && !phaseDetail,
+    selectionKey: JSON.stringify([
+      effectiveProjectPage,
+      leads,
+      teamIds,
+      projectIds,
+      start,
+      count,
+      search,
+      projectWeekly,
+    ]),
     isAdmin: !!isAdmin,
     saving,
     batch,
@@ -1214,6 +1229,7 @@ export default function Portal() {
               {tab === "projects" && (
                 <TabsContent value="projects">
                   <ProjectTimelinePanel
+                    selection={projectMenus}
                     projects={projects}
                     months={months}
                     weekly={projectWeekly}

@@ -5,12 +5,14 @@ export default function Cell({
   label,
   disabled = false,
   onFillSelection,
+  onCommit,
 }: {
   value: number;
   save: (v: number) => Promise<void>;
   label: string;
   disabled?: boolean;
   onFillSelection?: (v: number) => Promise<void>;
+  onCommit?: () => void;
 }) {
   const [text, setText] = useState(
       value ? String(value).replace(".", ",") : "",
@@ -21,17 +23,22 @@ export default function Cell({
   useEffect(() => {
     setText(value ? String(value).replace(".", ",") : "");
   }, [value]);
-  async function commit() {
+  async function commit(complete = false) {
     const n = Number(text.replace(",", "."));
     if (!Number.isFinite(n) || n < 0) {
       setError("Pozitif sayı veya sıfır girin.");
       return;
     }
-    if (n === value) return;
+    if (n === value) {
+      setError("");
+      if (complete) onCommit?.();
+      return;
+    }
     setBusy(true);
     try {
       await save(n);
       setError("");
+      if (complete) onCommit?.();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -102,7 +109,12 @@ export default function Cell({
             void fillSelection();
             return;
           }
-          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Enter") {
+            e.preventDefault();
+            skipBlur.current = true;
+            e.currentTarget.blur();
+            void commit(true);
+          }
         }}
       />
       {error && <small role="alert">{error}</small>}

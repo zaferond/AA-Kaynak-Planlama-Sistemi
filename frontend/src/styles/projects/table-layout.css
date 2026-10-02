@@ -60,3 +60,40 @@
   font-weight: 550;
   line-height: 1.2;
 }
+
+.project-selection-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 5px 2px 9px;
+  color: #647b91;
+  font-size: 11px;
+}
+.project-selection-hint strong {
+  color: #245b87;
+}
+.project-selection-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.project-selection-heading input,
+.project-row-select {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  flex: none;
+  accent-color: #2876bd;
+  cursor: pointer;
+}
+.app .projectmatrix .project-main-row.project-row-selected > td {
+  background: #edf5fd;
+}
+.app
+  .projectmatrix
+  .project-main-row.project-row-selected
+  .phasebutton:not(:disabled) {
+  box-shadow: 0 0 0 2px #417dab;
+}

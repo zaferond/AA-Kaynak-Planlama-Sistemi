@@ -32,6 +32,8 @@ export default function ProjectContextMenus({
     pastePhaseBundle,
     copyMilestoneColor,
     pasteMilestoneColor,
+    canPastePhase,
+    copiedRowCounts,
   } = menus;
   return (
     <>
@@ -56,13 +58,23 @@ export default function ProjectContextMenus({
               style={{ left: phaseMenu.x, top: phaseMenu.y }}
             >
               <div className="phase-menu-title">
-                {data?.projects.find((p) => p.id === phaseMenu.projectId)?.name}{" "}
-                · {monthLabel(phaseMenu.month)}
+                {phaseMenu.projectIds.length ? (
+                  phaseMenu.projectIds.length + " proje satırı · Tüm aylar"
+                ) : (
+                  <>
+                    {
+                      data?.projects.find((p) => p.id === phaseMenu.projectId)
+                        ?.name
+                    }{" "}
+                    · {monthLabel(phaseMenu.month)}
+                  </>
+                )}
               </div>
               <button
                 type="button"
                 role="menuitem"
                 disabled={
+                  !phaseMenu.projectIds.length &&
                   !data?.projects.find((p) => p.id === phaseMenu.projectId)
                     ?.phases[phaseMenu.month]
                 }
@@ -75,11 +87,13 @@ export default function ProjectContextMenus({
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={copiedPhase === null || saving}
+                  disabled={!canPastePhase("text") || saving}
                   onClick={pastePhase}
                 >
                   <ClipboardPaste size={15} />
-                  Metni Yapıştır
+                  {copiedRowCounts.text
+                    ? "Satırları Yapıştır (Metin)"
+                    : "Metni Yapıştır"}
                 </button>
               )}
               <div className="phase-menu-divider" role="separator" />
@@ -91,11 +105,13 @@ export default function ProjectContextMenus({
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={copiedPhaseColor === null || saving}
+                  disabled={!canPastePhase("color") || saving}
                   onClick={pastePhaseColor}
                 >
                   <PaintBucket size={15} />
-                  Rengi Yapıştır
+                  {copiedRowCounts.color
+                    ? "Satırları Yapıştır (Renk)"
+                    : "Rengi Yapıştır"}
                   {copiedPhaseColor && (
                     <span
                       className="phase-color-swatch"
@@ -120,11 +136,13 @@ export default function ProjectContextMenus({
                 <button
                   type="button"
                   role="menuitem"
-                  disabled={copiedPhaseBundle === null || saving}
+                  disabled={!canPastePhase("bundle") || saving}
                   onClick={pastePhaseBundle}
                 >
                   <ClipboardPaste size={15} />
-                  Metin ve Rengi Yapıştır
+                  {copiedRowCounts.bundle
+                    ? "Satırları Yapıştır (Metin + Renk)"
+                    : "Metin ve Rengi Yapıştır"}
                   {copiedPhaseBundle && (
                     <span
                       className="phase-color-swatch"
@@ -139,6 +157,13 @@ export default function ProjectContextMenus({
                     />
                   )}
                 </button>
+              )}
+              {(phaseMenu.projectIds.length > 0 ||
+                Object.values(copiedRowCounts).some(Boolean)) && (
+                <p className="phase-row-copy-note">
+                  Aylar aynı takvim aylarına yapıştırılır. Tek kaynak satırı
+                  birden fazla projeye uygulanabilir.
+                </p>
               )}
             </div>
           </>
