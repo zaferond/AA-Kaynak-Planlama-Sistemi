@@ -1145,7 +1145,12 @@ export class Store {
   async mutate(
     u,
     fn,
-    { auditUsers = false, returnView = false, planningDelta } = {},
+    {
+      auditUsers = false,
+      returnView = false,
+      returnResult = false,
+      planningDelta,
+    } = {},
   ) {
     return this.transaction(async (c) => {
       const active = await this.findUser({ id: u._id }, c);
@@ -1193,6 +1198,7 @@ export class Store {
         values,
       );
       if (returnView) {
+        // The optional result envelope carries import counters with this commit.
         // Preserve the SQL read representation of unchanged entities. If
         // validation normalized metadata, re-read within the same transaction.
         const metadataKeys = new Set([
@@ -1240,7 +1246,7 @@ export class Store {
             ...planningDelta.ids,
             ...changeSet.allocation.map((change) => change.id),
           ]);
-          return {
+          const delta = {
             responseMode: "planning-delta-v1",
             baseGeneration: generation,
             generation: view.generation,
@@ -1257,8 +1263,9 @@ export class Store {
                 revision: view.data.revisions["allocation:" + id],
               })),
           };
+          return returnResult ? { view: delta, result } : delta;
         }
-        return view;
+        return returnResult ? { view, result } : view;
       }
       return result;
     });

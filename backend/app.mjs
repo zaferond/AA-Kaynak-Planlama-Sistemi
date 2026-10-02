@@ -162,9 +162,12 @@ export function createApp(
   const normalJson = express.json({ limit: "2mb" });
   const bulkJson = express.json({ limit: "20mb" });
   app.use("/api", (req, res, next) => {
-    const parser = ["/changes", "/resources/import", "/restore"].includes(
-      req.path,
-    )
+    const parser = [
+      "/changes",
+      "/resources/import",
+      "/restore",
+      "/allocations/reset",
+    ].includes(req.path)
       ? bulkJson
       : normalJson;
     parser(req, res, next);
@@ -187,22 +190,32 @@ export function createApp(
     res.json(await changeAndView(store, req.user, req.body.changes, req.body));
   });
   app.post("/api/leaders/change", async (req, res) => {
-    await store.mutate(
-      req.user,
-      (d, u, c, generation) => applyLeaderChange(d, u, req.body, c, generation),
-      { auditUsers: true },
+    admin(req.user);
+    res.json(
+      await store.mutate(
+        req.user,
+        (d, u, c, generation) =>
+          applyLeaderChange(d, u, req.body, c, generation),
+        { auditUsers: true, returnView: true },
+      ),
     );
-    res.json(await store.view(req.user));
   });
   app.post("/api/allocations/reset", async (req, res) => {
-    await store.mutate(req.user, (d, u) => reset(d, u, req.body.revisions));
-    res.json(await store.view(req.user));
+    admin(req.user);
+    res.json(
+      await store.mutate(req.user, (d, u) => reset(d, u, req.body.revisions), {
+        returnView: true,
+      }),
+    );
   });
   app.post("/api/resources/import", async (req, res) => {
-    const result = await store.mutate(req.user, (d, u) =>
-      importRows(d, u, req.body.rows),
+    admin(req.user);
+    const { view, result } = await store.mutate(
+      req.user,
+      (d, u) => importRows(d, u, req.body.rows),
+      { returnView: true, returnResult: true },
     );
-    res.json({ ...(await store.view(req.user)), ...result });
+    res.json({ ...view, ...result });
   });
   app.get("/api/audit", async (req, res) => {
     admin(req.user);
@@ -229,12 +242,17 @@ export function createApp(
   });
   app.post("/api/restore", async (req, res) => {
     admin(req.user);
-    await store.mutate(req.user, (d, u, _s, generation) => {
-      if (req.body.generation !== generation)
-        fail(409, "Veriler değişti. Yenileyip yedeği tekrar yükleyin.");
-      return restore(d, u, req.body.data);
-    });
-    res.json(await store.view(req.user));
+    res.json(
+      await store.mutate(
+        req.user,
+        (d, u, _s, generation) => {
+          if (req.body.generation !== generation)
+            fail(409, "Veriler değişti. Yenileyip yedeği tekrar yükleyin.");
+          return restore(d, u, req.body.data);
+        },
+        { returnView: true },
+      ),
+    );
   });
   const permissionInput = z
     .object({
@@ -251,7 +269,7 @@ export function createApp(
     const input = permissionInput.parse(req.body);
     if (input.id === "root-admin")
       fail(403, "Ana yönetici yetkileri değiştirilemez.");
-    await store.mutate(
+    const view = await store.mutate(
       req.user,
       async (d, u, session) => {
         admin(u);
@@ -297,9 +315,12 @@ export function createApp(
         );
         await store.revokeUser(input.id, session);
       },
-      { auditUsers: true },
+      { auditUsers: true, returnView: input.id !== req.user._id },
     );
-    res.json(await store.view(req.user));
+    // Editing your own permissions invalidates your session. Commit the change
+    // first, then return the existing reauthentication response without a snapshot.
+    if (input.id === req.user._id) fail(401, "Oturum yenilenmeli.");
+    res.json(view);
   });
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "API bulunamadı." }),

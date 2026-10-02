@@ -478,6 +478,12 @@ export function reset(d, u, expected) {
   admin(u);
   if (!expected || typeof expected !== "object")
     fail(400, "Sürüm bilgisi eksik.");
+  expected = z
+    .record(
+      z.string().startsWith("allocation:"),
+      z.number().int().nonnegative(),
+    )
+    .parse(expected);
   const actual = Object.fromEntries(
     Object.entries(d.revisions).filter(([k]) => k.startsWith("allocation:")),
   );

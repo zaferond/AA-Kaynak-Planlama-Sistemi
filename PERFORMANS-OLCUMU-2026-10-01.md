@@ -588,3 +588,31 @@ node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actu
 ```
 
 Önceki davranış `987ce76` sürümüyle aynı betik/profil kullanılarak ölçülebilir. Betik .env yüklemez ve gerçek DB/provider yolu kabul etmez; yalnız geçici sentetik SQL.js dosyaları oluşturup siler. Ham raporlar `/tmp/aa-revision-read-before-20261002.json` ve `/tmp/aa-revision-read-after-20261002.json`; kaynak hash'leri raporlarda yer alır. /tmp kalıcı arşiv değildir. Sonraki ana inceleme toplu yönetim/import/restore işlemleridir; ilk yüklemenin kalan actual/saat/yüzde/özel revision maliyetleri ayrıca açık tutulur.
+
+## Toplu dağılım sıfırlama ve yanıt maliyeti — 2 Ekim 2026
+
+Başlangıç `52795e8`; Node v24.21.0, şema 28. `scripts/benchmark-reset.mjs` yeni sentetik ölçüm betiği: .env yüklemez, gerçek DB/provider yolu kabul etmez; geçici SQL.js dosyalarını temizler. Her örnek aynı seed DB byte'larından açılır; bir ısınma + beş ölçüm. 10.000 planlanan, 1.000 gerçekleşen, 1.000 yüzde kaydı; 80 çalışan, 20 kişisel gün. Önce separate (mutate ardından view), sonra committed (returnView). İki süreç sırayla, test/build eşzamanlı olmadan çalıştı. Zamanlar UTC: `2026-10-02T11:19:29.071Z` / `2026-10-02T11:27:21.151Z`.
+
+| Metrik | Önce | Sonra |
+| --- | ---: | ---: |
+| Tam model okuma sayısı | 2 | 1 |
+| Store transaction sayısı | 2 | 1 |
+| SQL SELECT'in döndürdüğü satırlar | 36.457 | 23.229 |
+| SQL/model okuma medyanı (ms) | 37,51 | 21,29 |
+| Reset + snapshot + disk commit medyanı (ms) | 563,98 | 544,42 |
+| JSON yanıt baytı | 505.662 | 505.662 |
+
+Son JSON modelinin canonical SHA-256 değeri aynı. Her örnek güncel SQL view ile derin karşılaştırılır; generation +1, her allocation revision +1, planlanan haritanın boşluğu, actual haritasının korunması ve 10.000 audit olayı doğrulanır. Rastgele audit ID/timestamp nedeniyle fiziksel DB byte eşitliği iddia edilmez. Refill/restore maliyeti ölçüme gizlenmez; örnekler aynı seed dosyasından başlar.
+
+Okuma süresi bu koşuda azalırken toplam pipeline yaklaşık %3,5 azalıyor; bulk silme/yazma/audit maliyeti baskındır. Beş örnek üretim p95/hız garantisi değildir. HTTP/ağ/tarayıcı çizimi, peak memory/GC, native MSSQL ve eşzamanlı kapasite ölçülmedi. Dönen SELECT satır sayısı SQL motorunun taradığı satır veya fiziksel I/O değildir. Önce/sonra request revision doğrulaması da değişti; bütün fark tek bir fonksiyonun etkisi olarak sunulmaz.
+
+Bu ölçüm yalnız reset profilidir. Import, restore ve liderlik değişimi metadata değiştirdiğinden aynı transaction içinde ikinci model okumasını gerektirebilir. Milestone bulunan değişmemiş metadata da SQL/şema field sırası veya normalizasyon farkında konservatif reread'e düşebilir; gerçek HTTP testi bu davranışı ayrıca doğrular. Diğer kullanıcı yetkisi değişiminde uygun snapshot yeniden kullanılabilir. Beş endpoint'in yanıt/commit bütünlüğü ve disk/projection hatası ayrı HTTP regresyon testlerindedir.
+
+Tekrar üretme:
+
+```sh
+node scripts/benchmark-reset.mjs --mode=separate --size=10000 --samples=5 --output=/tmp/benzersiz-reset-before.json
+node scripts/benchmark-reset.mjs --mode=committed --size=10000 --samples=5 --output=/tmp/benzersiz-reset-after.json
+```
+
+İlk rapor `52795e8` davranışı ve yeni betikle, ikinci rapor bu paketin returnView yoluyla alınmıştır. Betiğin biçimlendirilmesi profil/döngüyü değiştirmez; kaynak hash'leri raporlarda bulunur. Ham raporlar `/tmp/aa-bulk-reset-before-20261002.json` ve `/tmp/aa-bulk-reset-after-20261002.json`; /tmp kalıcı arşiv değildir. Toplu import/restore iş kuralı maliyetinin ve MSSQL global kilidinin ayrıca ölçülmesi hâlâ gereklidir.
