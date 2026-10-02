@@ -41,6 +41,7 @@ const fields: Record<string, string> = {
   completed: "Tamamlandı",
   barColor: "Bar rengi",
   barStyle: "Bar görünümü",
+  diamondStyle: "Milestone görünümü",
   barText: "Not",
   hasCriticalTopics: "Detay konu var",
   responsibleName: "Proje sorumlusu",

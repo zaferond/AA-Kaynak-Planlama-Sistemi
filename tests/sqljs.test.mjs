@@ -105,7 +105,7 @@ test("sql.js: person allocations are folded into team allocations once", async (
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        27,
+        28,
       );
       await store.close();
       await store.connect();
@@ -152,7 +152,7 @@ test("sql.js: existing actual entries keep their hours when the baseline changes
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      27,
+      28,
     );
     await store.close();
     store = new Store({ env });

@@ -74,6 +74,7 @@ const milestone = z.object({
   start: day,
   end: day,
   displayKind: z.enum(["range", "milestone"]).optional(),
+  diamondStyle: z.enum(["solid", "outline"]).optional(),
   hasCriticalTopics: z.boolean().optional(),
   additionalRanges: z
     .array(
@@ -81,6 +82,7 @@ const milestone = z.object({
         start: day,
         end: day,
         displayKind: z.enum(["range", "milestone"]).optional(),
+        diamondStyle: z.enum(["solid", "outline"]).optional(),
         description: z.string().trim().optional(),
         notes: z.array(milestoneNote).max(10).optional(),
         color: z

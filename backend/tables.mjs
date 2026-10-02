@@ -71,6 +71,7 @@ export const tables = {
       bar_color: "varchar(20)",
       bar_style: "varchar(20)",
       display_kind: "varchar(20)",
+      diamond_style: "varchar(20)",
       has_critical_topics: "bit",
       bar_text: "nvarchar(max)",
       bar_notes: "nvarchar(max)",

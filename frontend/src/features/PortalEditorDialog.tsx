@@ -15,6 +15,7 @@ import {
   visibleMilestoneBarStyle,
 } from "../milestone-ranges";
 import MilestoneDateEditor from "../MilestoneDateEditor";
+import MilestoneDiamond from "../MilestoneDiamond";
 import {
   phasePalette,
   phaseStyle,
@@ -81,8 +82,8 @@ export default function PortalEditorDialog({
                 ? "Aşamayı Düzenle"
                 : editor?.kind === "milestone"
                   ? editor.isNew
-                    ? "Kritik Konu Ekle"
-                    : "Kritik Konu Düzenle"
+                    ? "Başlık Ekle"
+                    : "Başlık Düzenle"
                   : editor?.kind === "resource"
                     ? editor.isNew
                       ? "Kaynak Ekle"
@@ -272,7 +273,7 @@ export default function PortalEditorDialog({
                   </span>
                 </div>
                 <label>
-                  Kritik Konu
+                  Başlık
                   <input
                     maxLength={200}
                     autoFocus
@@ -337,7 +338,7 @@ export default function PortalEditorDialog({
                   <div className="milestone-preview-list">
                     {editor.draftEmpty && (
                       <p className="milestone-preview-empty">
-                        Kritik detay konu eklenmedi. Kritik konuyu bu haliyle
+                        Kritik detay konu eklenmedi. Başlığı bu haliyle
                         kaydedebilirsiniz.
                       </p>
                     )}
@@ -358,9 +359,9 @@ export default function PortalEditorDialog({
                           </small>
                           {range.displayKind === "milestone" ? (
                             <div className="milestone-point-preview">
-                              <span
-                                className="milestone-diamond"
-                                style={{ background: color.border }}
+                              <MilestoneDiamond
+                                color={color.border}
+                                style={range.diamondStyle}
                               />
                               <strong>
                                 {rangeNotes(range)[0]?.text ||

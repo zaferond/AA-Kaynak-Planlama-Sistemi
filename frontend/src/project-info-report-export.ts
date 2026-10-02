@@ -16,7 +16,7 @@ function cell(row: number, index: number, value: string, style: number) {
 export function projectInfoReportSheet(projects: ReportProject[]): string {
   const headers = [
     "Proje",
-    "Kritik Konu",
+    "Başlık",
     "Detay Açıklamalar",
     "İlk Başlangıç",
     "Son Bitiş",

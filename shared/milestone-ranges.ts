@@ -204,6 +204,9 @@ export function milestoneRanges(milestone: Milestone): MilestoneRange[] {
       start: milestone.start,
       end: milestone.end,
       color,
+      ...(milestone.diamondStyle
+        ? { diamondStyle: milestone.diamondStyle }
+        : {}),
       ...(milestone.displayKind === "milestone"
         ? { displayKind: "milestone" as const }
         : {}),
@@ -245,6 +248,7 @@ export function withMilestoneRanges(
     barColor: ____,
     hasCriticalTopics: _____,
     displayKind: ______,
+    diamondStyle: _______,
     ...rest
   } = milestone;
   const [first, ...additionalRanges] = ranges;
@@ -254,6 +258,7 @@ export function withMilestoneRanges(
     ...(first.displayKind === "milestone"
       ? { displayKind: "milestone" as const }
       : {}),
+    ...(first.diamondStyle ? { diamondStyle: first.diamondStyle } : {}),
     start: first.start,
     end: first.end,
     barColor: first.color || milestone.barColor || "red",
@@ -276,6 +281,7 @@ export function withoutCriticalTopics(milestone: Milestone): Milestone {
     barText: __,
     barNotes: ___,
     displayKind: ____,
+    diamondStyle: _____,
     ...rest
   } = milestone;
   return { ...rest, hasCriticalTopics: false, barText: "", barNotes: [] };

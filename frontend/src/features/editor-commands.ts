@@ -46,9 +46,8 @@ function milestoneChanges(
     name: String(editor.value.name).trim(),
     barText: String(editor.value.barText || "").trim(),
   };
-  if (!draft.name) throw Error("Kritik konu adı girin.");
-  if (draft.name.length > 200)
-    throw Error("Kritik konu adı 200 karakteri geçemez.");
+  if (!draft.name) throw Error("Başlık girin.");
+  if (draft.name.length > 200) throw Error("Başlık 200 karakteri geçemez.");
   let milestone: Milestone;
   if (editor.draftEmpty) milestone = withoutCriticalTopics(draft);
   else {

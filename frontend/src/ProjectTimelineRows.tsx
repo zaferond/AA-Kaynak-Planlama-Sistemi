@@ -29,6 +29,7 @@ import {
 } from "./milestone-bars";
 import { daysForWeekDrag, weeklyNoteLayout } from "./weekly-note-bars";
 import { timelineItemLayout, type TimelineItem } from "./timeline-item-layout";
+import MilestoneDiamond from "./MilestoneDiamond";
 import type { WeeklyNoteBar } from "./weekly-note-bars";
 
 const monthFormat = new Intl.DateTimeFormat("tr-TR", {
@@ -763,12 +764,10 @@ function MilestoneTrack({
                 onMilestoneContextMenu(event, milestone, rangeIndex);
               }}
             >
-              <span
-                className={
-                  "milestone-diamond" +
-                  (rangeNotes(bar.range)[0]?.completed ? " completed" : "")
-                }
-                style={{ background: barColor.border }}
+              <MilestoneDiamond
+                color={barColor.border}
+                style={bar.range.diamondStyle}
+                completed={!!rangeNotes(bar.range)[0]?.completed}
               />
             </button>
           );
@@ -1289,7 +1288,7 @@ export default function ProjectTimelineRows({
                     onClick={onAddMilestone}
                   >
                     <Plus size={14} />
-                    Kritik Konu Ekle
+                    Başlık Ekle
                   </button>
                 </div>
               </TableCell>
@@ -1448,7 +1447,7 @@ export default function ProjectTimelineRows({
                       <div className="milestone-actions">
                         <button
                           type="button"
-                          title="Kritik Konu Düzenle"
+                          title="Başlık Düzenle"
                           aria-label={milestone.name + " düzenle"}
                           disabled={saving}
                           onClick={() => onEditMilestone(milestone)}

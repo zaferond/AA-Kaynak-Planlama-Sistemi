@@ -749,6 +749,21 @@ export class Store {
             ),
           );
         }
+        if (!versions.includes(28)) {
+          if (!auto)
+            throw Error(
+              "Milestone baklava görünümü için IT npm run db:migrate çalıştırmalı.",
+            );
+          await c.batch(
+            await fs.readFile(
+              new URL(
+                "./migrations/028_" + this.provider + ".sql",
+                import.meta.url,
+              ),
+              "utf8",
+            ),
+          );
+        }
         if (
           !(await c.query("SELECT id FROM kp_settings WHERE id=1")).rows.length
         ) {
@@ -981,6 +996,7 @@ export class Store {
         barColor: r.bar_color || "red",
         barStyle: r.bar_style || "solid",
         ...(r.display_kind === "milestone" ? { displayKind: "milestone" } : {}),
+        ...(r.diamond_style === "outline" ? { diamondStyle: "outline" } : {}),
         ...(Number(r.has_critical_topics) === 0
           ? { hasCriticalTopics: false }
           : {}),
@@ -1380,6 +1396,7 @@ export class Store {
             bar_color: milestone.barColor || "red",
             bar_style: milestone.barStyle || "solid",
             display_kind: milestone.displayKind || "range",
+            diamond_style: milestone.diamondStyle || "solid",
             has_critical_topics: milestone.hasCriticalTopics === false ? 0 : 1,
             bar_text: milestone.barText || "",
             bar_notes: JSON.stringify(milestone.barNotes || []),

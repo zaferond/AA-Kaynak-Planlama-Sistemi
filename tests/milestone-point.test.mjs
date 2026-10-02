@@ -140,7 +140,7 @@ test("editor appends point, color paste preserves kind/date, empty or range-shap
     ),
   );
 });
-test("version 27 defaults existing bars to range, preserves data, persists points and survives reopen", async () => {
+test("versions 27/28 preserve existing bars, default filled diamonds and persist point styles across reopen", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-point-"));
   const env = {
     NODE_ENV: "test",
@@ -174,7 +174,10 @@ test("version 27 defaults existing bars to range, preserves data, persists point
       await c.query(
         "ALTER TABLE kp_project_milestones DROP COLUMN display_kind",
       );
-      await c.query("DELETE FROM kp_schema_migrations WHERE version=27");
+      await c.query(
+        "ALTER TABLE kp_project_milestones DROP COLUMN diamond_style",
+      );
+      await c.query("DELETE FROM kp_schema_migrations WHERE version>=27");
     });
     await adapter.close();
     store = new Store({ env });
@@ -185,9 +188,15 @@ test("version 27 defaults existing bars to range, preserves data, persists point
         .rows[0].display_kind,
       "range",
     );
+    assert.equal(
+      (await store.db.query("SELECT diamond_style FROM kp_project_milestones"))
+        .rows[0].diamond_style,
+      "solid",
+    );
     await store.mutate(user, (data) => {
       data.projects[0].milestones.push({
         ...point(),
+        diamondStyle: "outline",
         id: "new",
         additionalRanges: [
           {
@@ -195,6 +204,7 @@ test("version 27 defaults existing bars to range, preserves data, persists point
             start: "2026-05-01",
             end: "2026-05-01",
             color: "purple",
+            diamondStyle: "solid",
             notes: [
               {
                 text: "Independent approval",
@@ -212,6 +222,8 @@ test("version 27 defaults existing bars to range, preserves data, persists point
     await store.connect();
     const saved = (await store.read()).data.projects[0].milestones[1];
     assert.equal(saved.displayKind, "milestone");
+    assert.equal(saved.diamondStyle, "outline");
+    assert.equal(saved.additionalRanges[0].diamondStyle, "solid");
     assert.equal(saved.start, saved.end);
     assert.equal(saved.barColor, "green");
     assert.equal(saved.additionalRanges[0].displayKind, "milestone");
@@ -226,7 +238,7 @@ test("version 27 defaults existing bars to range, preserves data, persists point
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      27,
+      28,
     );
   } finally {
     await store.close();

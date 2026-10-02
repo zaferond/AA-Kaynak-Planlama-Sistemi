@@ -22,6 +22,7 @@ const ranges = () => [
     start: "2026-01-05",
     end: "2026-01-05",
     color: "purple",
+    diamondStyle: "outline",
     notes: [
       {
         text: "Review",
@@ -49,6 +50,7 @@ const ranges = () => [
     start: "2026-01-25",
     end: "2026-01-25",
     color: "red",
+    diamondStyle: "solid",
     notes: [
       {
         text: "Approval",
@@ -123,6 +125,7 @@ test("dragging a first point past a range preserves each kind/name/color and mov
   });
   const m = c.value.milestones[0];
   assert.equal(m.displayKind, undefined);
+  assert.equal(m.diamondStyle, undefined);
   const details = milestoneRanges(m);
   assert.equal(details[0].notes[0].text, "Design");
   assert.equal(details[1].notes[0].text, "Approval");
@@ -131,6 +134,8 @@ test("dragging a first point past a range preserves each kind/name/color and mov
   assert.equal(details[2].end, details[2].start);
   assert.equal(details[2].notes[0].start, details[2].start);
   assert.equal(details[2].color, "purple");
+  assert.equal(details[2].diamondStyle, "outline");
+  assert.equal(details[1].diamondStyle, "solid");
   assert.equal(c.revision, 4);
   validate({ ...data, projects: [c.value] });
 });
@@ -203,4 +208,21 @@ test("range kind conversion preserves name/flags/color; point dates synchronize;
   const removed = removeDraftMilestoneRange(m, 0);
   assert.equal(removed.value.displayKind, undefined);
   assert.equal(milestoneRanges(removed.value)[1].displayKind, "milestone");
+});
+
+test("invalid diamond styles are rejected for first and additional details; deletion keeps sibling appearance", () => {
+  for (const index of [0, 2]) {
+    const data = fixture();
+    const m = data.projects[0].milestones[0];
+    if (index === 0) m.diamondStyle = "striped";
+    else m.additionalRanges[1].diamondStyle = "striped";
+    assert.throws(() => validate(data));
+  }
+  const m = fixture().projects[0].milestones[0];
+  const removed = removeDraftMilestoneRange(m, 0).value;
+  assert.equal(removed.diamondStyle, undefined);
+  assert.equal(milestoneRanges(removed)[1].diamondStyle, "solid");
+  const last = removeDraftMilestoneRange(removed, 0).value;
+  assert.equal(last.diamondStyle, "solid");
+  assert.equal(last.displayKind, "milestone");
 });

@@ -23,6 +23,7 @@ export type MilestoneNote = {
 };
 export type MilestoneRange = {
   displayKind?: "range" | "milestone";
+  diamondStyle?: "solid" | "outline";
   start: string;
   end: string;
   description?: string;
@@ -36,6 +37,7 @@ export type Milestone = {
   end: string;
   /** Kind of the first detail; further detail kinds are stored in additionalRanges. */
   displayKind?: "range" | "milestone";
+  diamondStyle?: "solid" | "outline";
   hasCriticalTopics?: boolean;
   additionalRanges?: MilestoneRange[];
   barColor?: string;

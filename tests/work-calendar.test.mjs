@@ -398,7 +398,7 @@ test("migration recalculates old training percentages without changing project h
           "SELECT MAX(version) AS version FROM kp_schema_migrations",
         )
       ).rows[0].version,
-      27,
+      28,
     );
   } finally {
     await store.close();

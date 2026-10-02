@@ -143,7 +143,7 @@ export default function ProjectInfoReport({
                       onClick={() => onAddInfo(source)}
                     >
                       <Plus size={14} />
-                      Kritik Konu Ekle
+                      Başlık Ekle
                     </button>
                   )}
                 </header>
@@ -167,7 +167,7 @@ export default function ProjectInfoReport({
                           onClick={() => onEditInfo(source, info.id)}
                         >
                           <Pencil size={13} />
-                          Kritik Konu Düzenle
+                          Başlık Düzenle
                         </button>
                       )}
                     </div>

@@ -1,4 +1,5 @@
 import { ArrowRight, Plus, Trash2 } from "lucide-react";
+import MilestoneDiamond from "./MilestoneDiamond";
 import type { CSSProperties } from "react";
 import { phasePalette } from "./model";
 import type { Milestone, MilestoneNote, MilestoneRange } from "./model";
@@ -236,6 +237,43 @@ export default function MilestoneDateEditor({
                       }
                     />
                   </label>
+                  <fieldset className="milestone-diamond-options">
+                    <legend>Milestone Görünümü</legend>
+                    <div className="milestone-bar-options">
+                      {(
+                        [
+                          ["solid", "Dolu"],
+                          ["outline", "İçi Boş"],
+                        ] as const
+                      ).map(([id, label]) => (
+                        <button
+                          type="button"
+                          key={id}
+                          className={
+                            (range.diamondStyle || "solid") === id
+                              ? "selected"
+                              : ""
+                          }
+                          aria-pressed={(range.diamondStyle || "solid") === id}
+                          onClick={() =>
+                            updateRange(index, { diamondStyle: id })
+                          }
+                        >
+                          <MilestoneDiamond
+                            color={
+                              (
+                                phasePalette.find(
+                                  (color) => color.id === range.color,
+                                ) || phasePalette[3]
+                              ).border
+                            }
+                            style={id}
+                          />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
                   <div className="milestone-note-flags milestone-point-flags">
                     <label>
                       <input
