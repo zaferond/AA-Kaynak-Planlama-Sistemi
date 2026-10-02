@@ -459,3 +459,35 @@ node scripts/benchmark-store.mjs --sizes=100000 --samples=7 --resources=400 --ac
 Ham dosyalar `/tmp/aa-full-view-{before,after}-v2-20261002.json`; /tmp kalıcı arşiv değildir. Betik .env yüklemez ve gerçek DB/provider yolu kabul etmez, yalnız geçici SQL.js dosyaları oluşturup siler. Yeni `--operation` varsayılan allocation, actual için gerçekleşen veri gerekir ve allocation-only delta yasaktır. Önceki planning/delta profilleri çalışmaya devam eder.
 
 Bütün `/api/changes` komutlarının yanıtı artık kendi transaction'ında hazırlanır; metadata değişen işlemler yeniden okumayı korur. Bu sayılar tek gerçekleşen hücrenin admin yanıtına aittir; tüm komutlar veya kullanıcı kapsamları için aynı hızlanma varsayılmaz. Dosya/JSON süreleri de değişti; toplam fark tek bir fonksiyonun hızlanma oranı değildir. Native MSSQL, ilk yükleme, ağ, tarayıcı, bellek/RSS/GC ve çok kullanıcı kapasitesi ölçülmedi. Yedi örnek üretim p95/hız garantisi sağlamaz.
+
+
+## İlk yükleme HTTP gövdesinin sıkıştırılması — 2 Ekim 2026
+
+Başlangıç `cae26ba`; Node v24.21.0. Sentetik geçici SQL.js: 100.000 planlanan, 48.000 gerçekleşen, 48.000 yüzde hücresi / 400 çalışan / 2.000 izin / 49 proje. Audit başlangıç kaydı 0; bu route audit tablosunu okumuyor. Login ölçüm dışında; data isteğinin mevcut oturum ve kullanıcı sorguları ölçüm içinde. Her encoding için bir ısınma + yedi örnek; identity/gzip sırası örnekler arasında dönüşümlü. Önce/sonra ayrı süreçlerde sırayla çalıştırıldı; test/build eşzamanlı değildi. Zamanlar UTC: 2026-10-02T06:26:28.595Z / 2026-10-02T06:36:48.041Z.
+
+| Gzip isteyen istemci | Önce | Sonra |
+| --- | ---: | ---: |
+| HTTP gövdesi (bayt) | 12580465 | 983621 |
+| Açılmış JSON (bayt) | 12580465 | 12580465 |
+| Yerel HTTP tamamlanma medyanı (ms) | 463.71 | 460.02 |
+| İlk response başlıklarına kadar (ms) | 457.34 | 459.33 |
+| Store.view / SQL + kapsam (ms) | 348.46 | 341.19 |
+| Tam SQL okuma (ms) | 348.27 | 341.01 |
+| İstemci gzip açma (ms) | 0.00 | 12.24 |
+| JSON ayrıştırma (ms) | 112.02 | 108.79 |
+
+Ana kazanım ağda taşınacak gövdenin **%92.2** azalmasıdır. SQL okuma sayısı bir, veri modeli ve açılmış JSON boyutu aynı. Decode ve parse yerel Node istemcisinde ayrıca ölçülür; HTTP süresine dahil değildir. Tarayıcı JSON parsing/çizim belleği bu paketle azalmaz. Sıkıştırmanın ayrıca sunucu CPU/threadpool maliyeti vardır; üstteki Store.view dışında kalan süre tek başına sıkıştırma süresi değildir (auth, JSON, socket de içerir). Gözlenen yerel süre farkı WAN/tarayıcı hız garantisi veya genel uygulama hızlanma oranı değildir.
+
+Son sürümde identity kontrol profili: HTTP 464.28 ms, view 344.16 ms, 12580465 bayt. Gzip açılmış gövde her örnekte ham identity gövdesi ve beklenen SQL görüntüsünün JSON'u ile byte/hash ve derin karşılaştırıldı. Son model/generation değişmedi. Bütün örneklerin JSON SHA-256 değeri `e259fb2ab71c3e1565dc44be22182ca5ec6bda9ead66952c45049ea5ede4adfe`. Bu ölçüm bir admin kapsamına aittir; diğer kapsamların doğruluğu HTTP regresyon testlerinde denetlendi, onlar için aynı hız/boyut oranı varsayılmaz.
+
+Tekrar üretme:
+
+```sh
+node scripts/benchmark-load.mjs --samples=7 --size=100000 --resources=400 --actuals=48000 --percentages=48000 --calendar-days=2000 --output=/tmp/benzersiz-load.json
+```
+
+Betik gzip/identity'yi raw node:http ile ister; fetch'in otomatik açması wire ölçümünü gizlemez. Son rapor her source için SHA-256 içerir. Önceki davranış için `cae26ba` checkout'una yeni benchmark-load ve benchmark-fixture dosyalarını ekleyin; source hash listesinden o sürümde mevcut olmayan backend/data-response.mjs girdisini kaldırın. Profil ve ölçüm döngüsünü değiştirmeyin. Ham önce dosyası `/tmp/aa-load-before-20261002.json`, son kodla ölçülen sonra dosyası `/tmp/aa-load-after-v2-20261002.json`; /tmp kalıcı arşiv değildir. İlk sonra koşusundan ardından erken bağlantı-kopma kontrolü ve sender kaynak hash'i eklendi; rapor son koşunun verilerini kullanır.
+
+Ortak seed fixture'ına taşıma sonrası mevcut write/delta betiği ayrı 1.000 planlanan / 200 gerçekleşen / 200 yüzde / 20 çalışan / 20 izin profiliyle smoke kontrolünden geçti; 277 bayt delta ve final SQL snapshot/revision/audit eşitliği doğrulandı. Bu smoke sonucu yeni hız oranı olarak kullanılmaz.
+
+Betikler .env yüklemez ve gerçek DB/provider yolu kabul etmez; yalnız os.tmpdir içindeki sentetik SQL.js dosyalarını oluşturup siler. Şema/bağımlılıklar değişmedi. Native MSSQL, gerçek tarayıcı, WAN, bellek/RSS/GC ve çok kullanıcı yükü ölçülmedi. Yedi örnek üretim p95 veya kapasite garantisi sağlamaz.

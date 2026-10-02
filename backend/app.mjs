@@ -18,6 +18,7 @@ import {
   restore,
 } from "./operations.mjs";
 import { changeAndView } from "./change-service.mjs";
+import { sendDataSnapshot } from "./data-response.mjs";
 export function createApp(
   store,
   {
@@ -177,7 +178,7 @@ export function createApp(
     res.json({ ok: true });
   });
   app.get("/api/data", async (req, res) =>
-    res.json(await store.view(req.user)),
+    sendDataSnapshot(req, res, await store.view(req.user)),
   );
   app.get("/api/version", async (req, res) => {
     res.json({ generation: await store.generation() });
