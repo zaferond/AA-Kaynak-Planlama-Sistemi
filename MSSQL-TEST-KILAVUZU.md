@@ -24,7 +24,7 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 
 ## Native senaryolar
 
-1. Eski v2 kişi dağılımlarının şema 28'e taşınması, Türkçe veri ve toplamların korunması, yeniden bağlantıda dönüşümün tekrarlanmaması.
+1. Eski v2 kişi dağılımlarının şema 29'a taşınması, Türkçe veri ve toplamların korunması, yeniden bağlantıda dönüşümün tekrarlanmaması.
 2. Ortak HTTP suite: CRUD, yetki/CSRF/oturum iptali, FK/CHECK, toplu geri alma, içe aktarma sayaçları, generation/revision, restore ve liderlik işlemleri.
 3. Ortak eşzamanlılık suite: aynı hücrede tek kazanan, 24 bağımsız kayıt, çakışan batch, aylık sınır/takvim/izin/eğitim ve tutarlı okuyucular.
 4. **İki bağımsız native bağlantı havuzu:** aynı revision yarışı; ortak okuma kilitlerinin birlikte çalışması; yazmanın okuyucuya yarım veri göstermemesi; kilitlerin sıfır timeout ile doğrudan sınanması.
@@ -32,6 +32,7 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 6. OPENJSON üzerinden uzun Türkçe not, tamamlandı bilgisi, karma aralık/Milestone ve içi boş baklavanın korunması; yanlış display/diamond değerlerinin native CHECK tarafından reddedilmesi.
 7. BIN2 karşılaştırmalı revision kapsamı: büyük/küçük harf, Türkçe, wildcard karakterleri, özel/tombstone sürümler, 900 parametre ve 901/legacy fallback.
 8. Rol bazlı filtreli snapshot'ın bağımsız tam okuma referansıyla eşitliği; 24 bağımsız yazmanın kendi commit yanıtı; bağlantı yeniden açıldığında veri/şema eşitliği.
+9. İki bağımsız MSSQL havuzunda 40 eşzamanlı sayaç rezervasyonundan yalnız 15'inin kabulü; yeni hizmette kotanın korunması; iki HTTP hizmetinde ortak IP/kullanıcı adı sınırı. Kaynak verilerinin genel kilidi tutulurken sayaç kilidinin bağımsız çalışması. Bu testler eklenmiştir, henüz native ortamda koşulmamıştır.
 
 ## Ölçüm ve rapor
 

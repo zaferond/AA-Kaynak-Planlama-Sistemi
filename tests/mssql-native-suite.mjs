@@ -6,6 +6,7 @@ import { applyChanges, reset } from "../backend/operations.mjs";
 import { readCompositeMap, readRevisionMap } from "../backend/read-records.mjs";
 import { tables } from "../backend/tables.mjs";
 import { seedBenchmarkStore } from "../scripts/benchmark-fixture.mjs";
+import { createAttemptLimiter } from "../backend/rate-limits.mjs";
 
 function deferred() {
   let resolve;
@@ -81,7 +82,7 @@ export async function nativeUpgradeSuite(store) {
         )
       ).rows[0].n,
     ),
-    28,
+    29,
   );
   await store.close();
   await store.connect();
@@ -92,6 +93,34 @@ export async function nativeUpgradeSuite(store) {
 export async function nativePoolSuite(stores, t) {
   const [first, second] = stores;
   assert.notEqual(first.db.pool, second.db.pool);
+  await t.test(
+    "native authentication counters do not wait for the business-data lock",
+    async () => {
+      const holding = new sql.Transaction(first.db.pool);
+      await holding.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+      let timer;
+      try {
+        const lock = await first.db.request(holding, lockProbe, ["Exclusive"]);
+        assert(Number(lock.rows[0].result) >= 0);
+        await Promise.race([
+          createAttemptLimiter(second).reserve(
+            "native-lock-probe",
+            "independent",
+            15,
+          ),
+          new Promise((_resolve, reject) => {
+            timer = setTimeout(
+              () => reject(Error("Counter waited for business-data lock")),
+              5000,
+            );
+          }),
+        ]);
+      } finally {
+        clearTimeout(timer);
+        await holding.rollback();
+      }
+    },
+  );
   const metadata = await first.db.query(
     "SELECT t.name AS table_name,c.name AS column_name FROM sys.tables t JOIN sys.columns c ON c.object_id=t.object_id WHERE SCHEMA_NAME(t.schema_id)='dbo'",
   );
@@ -113,7 +142,7 @@ export async function nativePoolSuite(stores, t) {
         )
       ).rows[0].version,
     ),
-    28,
+    29,
   );
 
   await seedBenchmarkStore(first, 1000, {

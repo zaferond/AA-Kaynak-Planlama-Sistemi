@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { Store } from "../backend/store.mjs";
 import { concurrencySuite } from "./concurrency-suite.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
+import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
 import {
   nativePoolSuite,
   nativeLoadProfile,
@@ -31,7 +32,7 @@ test(
       const stores = Array.from({ length: 2 }, () => new Store({ env }));
       try {
         await checked.test(
-          "native legacy v2 upgrade to schema 28 preserves data and runs once",
+          "native legacy v2 upgrade to schema 29 preserves data and runs once",
           () => nativeUpgradeSuite(stores[0]),
         );
         await cleanupTestTables(stores[0].db);
@@ -44,6 +45,10 @@ test(
         await cleanupTestTables(stores[0].db);
         await stores[0].connect();
         await stores[1].connect();
+        await checked.test(
+          "shared login budgets across independent native pools and HTTP services",
+          (sub) => sharedRateLimitSuite(stores, sub),
+        );
         await nativePoolSuite(stores, checked);
         await cleanupTestTables(stores[0].db);
         await stores[0].connect();
@@ -65,6 +70,9 @@ test(
         const sourceFiles = [
           "backend/store.mjs",
           "backend/adapters/mssql.mjs",
+          "backend/rate-limits.mjs",
+          "tests/rate-limit-suite.mjs",
+          "tests/login-test-fixture.mjs",
           "backend/read-records.mjs",
           "backend/operations.mjs",
           "tests/mssql-native-suite.mjs",
@@ -89,7 +97,7 @@ test(
         return {
           checkedAt: new Date().toISOString(),
           node: process.version,
-          schema: 28,
+          schema: 29,
           server,
           load,
           sourceHashes,

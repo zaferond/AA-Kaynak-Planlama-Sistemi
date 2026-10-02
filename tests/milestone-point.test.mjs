@@ -177,7 +177,9 @@ test("versions 27/28 preserve existing bars, default filled diamonds and persist
       await c.query(
         "ALTER TABLE kp_project_milestones DROP COLUMN diamond_style",
       );
-      await c.query("DELETE FROM kp_schema_migrations WHERE version>=27");
+      await c.query(
+        "DELETE FROM kp_schema_migrations WHERE version IN (27,28)",
+      );
     });
     await adapter.close();
     store = new Store({ env });
@@ -238,7 +240,7 @@ test("versions 27/28 preserve existing bars, default filled diamonds and persist
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      28,
+      29,
     );
   } finally {
     await store.close();

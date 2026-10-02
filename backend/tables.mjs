@@ -2,6 +2,15 @@ import { ownValue } from "../shared/records.ts";
 
 // Fixed identifiers only. Never accept table/column names from an API request.
 export const tables = {
+  rate_limits: {
+    key: ["bucket_hash"],
+    columns: {
+      bucket_hash: "varchar(64)",
+      window_id: "varchar(36)",
+      attempts: "int",
+      expires_at: "bigint",
+    },
+  },
   audit_events: {
     key: ["id"],
     columns: {

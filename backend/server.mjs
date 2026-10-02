@@ -5,12 +5,17 @@ import { hashPassword } from "./auth.mjs";
 const env = process.env,
   origin = env.APP_ORIGIN || "http://localhost:3000";
 const secure = origin.startsWith("https://");
+const trustedProxies = trustedProxyAddresses(env.TRUST_PROXY);
 if (env.NODE_ENV === "production" && !secure)
   throw Error("Production için HTTPS APP_ORIGIN gerekir.");
 const store = new Store();
 try {
   await store.connect();
   console.log("Veritabanı modu:", store.provider);
+  console.log(
+    "Giriş sayacı:",
+    store.provider === "mssql" ? "ortak MSSQL deposu" : "yerel süreç belleği",
+  );
   if (!(await store.findUser({ id: "root-admin" }))) {
     const username = (env.ADMIN_USERNAME || "").trim().toLowerCase();
     if (!/^[a-z0-9._@+-]{3,100}$/.test(username))
@@ -30,7 +35,7 @@ try {
   const app = createApp(store, {
     origin,
     secure,
-    trustedProxies: trustedProxyAddresses(env.TRUST_PROXY),
+    trustedProxies,
   });
   const server = app.listen(
     Number(env.PORT || 3000),

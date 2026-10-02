@@ -760,6 +760,21 @@ export class Store {
             ),
           );
         }
+        if (!versions.includes(29)) {
+          if (!auto)
+            throw Error(
+              "Ortak giriş koruması için IT npm run db:migrate çalıştırmalı.",
+            );
+          await c.batch(
+            await fs.readFile(
+              new URL(
+                "./migrations/029_" + this.provider + ".sql",
+                import.meta.url,
+              ),
+              "utf8",
+            ),
+          );
+        }
         if (
           !(await c.query("SELECT id FROM kp_settings WHERE id=1")).rows.length
         ) {

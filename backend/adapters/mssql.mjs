@@ -85,6 +85,25 @@ export class MssqlAdapter {
     };
   }
   async transaction(fn, readOnly = false) {
+    return this.lockedTransaction(
+      fn,
+      "aa_kaynak_data",
+      readOnly ? "Shared" : "Exclusive",
+      15000,
+    );
+  }
+  rateLimitTransaction(key, fn) {
+    if (typeof key !== "string" || !/^[a-f0-9]{64}$/.test(key))
+      throw Error("Geçersiz giriş sayacı anahtarı.");
+    // Authentication counters do not acquire the global business-data lock.
+    return this.lockedTransaction(
+      fn,
+      "aa_kaynak_rate:" + key,
+      "Exclusive",
+      2000,
+    );
+  }
+  async lockedTransaction(fn, resource, mode, timeout) {
     const tx = new sql.Transaction(this.pool);
     let aborted = false;
     tx.on("rollback", () => (aborted = true));
@@ -93,8 +112,8 @@ export class MssqlAdapter {
       // Shared read lock / exclusive write lock, always acquired before touching application rows.
       await this.request(
         tx,
-        "DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=N'aa_kaynak_data', @LockMode=@p0, @LockOwner=N'Transaction', @LockTimeout=15000; IF @r<0 THROW 50001, 'Application lock timeout',1;",
-        [readOnly ? "Shared" : "Exclusive"],
+        "DECLARE @r int; EXEC @r=sys.sp_getapplock @Resource=@p0, @LockMode=@p1, @LockOwner=N'Transaction', @LockTimeout=@p2; IF @r<0 THROW 50001, 'Application lock timeout',1;",
+        [resource, mode, timeout],
       );
       const c = {
         query: (q, v) => this.request(tx, q, v),

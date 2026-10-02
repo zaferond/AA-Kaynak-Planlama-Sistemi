@@ -19,12 +19,18 @@ import {
 } from "./operations.mjs";
 import { changeAndView } from "./change-service.mjs";
 import { sendDataSnapshot } from "./data-response.mjs";
+import {
+  createAttemptLimiter,
+  clientAddressKey,
+  ATTEMPT_LIMITS,
+} from "./rate-limits.mjs";
 export function createApp(
   store,
   {
     origin = "http://localhost:3000",
     secure = false,
     trustedProxies = [],
+    attemptLimiter = createAttemptLimiter(store),
   } = {},
 ) {
   const app = express();
@@ -55,11 +61,10 @@ export function createApp(
       return res.status(403).json({ error: "İstek kaynağı doğrulanamadı." });
     next();
   });
-  // In-process rate limiting: single server distribution. A cluster needs a shared limiter.
-  const attempts = new Map();
   const timer = setInterval(() => {
-    const now = Date.now();
-    for (const [k, v] of attempts) if (now > v.until) attempts.delete(k);
+    attemptLimiter
+      .cleanup()
+      .catch(() => console.error("Giriş sayacı temizliği tamamlanamadı."));
   }, 60000);
   timer.unref();
   const cleanup = setInterval(
@@ -74,22 +79,6 @@ export function createApp(
     clearInterval(timer);
     clearInterval(cleanup);
   };
-  function rate(key, max) {
-    const now = Date.now();
-    let entry = attempts.get(key);
-    if (!entry || now > entry.until) {
-      entry = { n: 0, until: now + 15 * 60000 };
-      attempts.set(key, entry);
-    }
-    if (entry.n >= max)
-      fail(429, "Çok fazla deneme. 15 dakika sonra tekrar deneyin.");
-    entry.n++;
-    // Reserve attempts while password checks run, but do not charge successful
-    // logins against the shared IP budget or erase earlier failed attempts.
-    return () => {
-      entry.n = Math.max(0, entry.n - 1);
-    };
-  }
   const cookieOptions = {
     httpOnly: true,
     sameSite: "strict",
@@ -105,26 +94,37 @@ export function createApp(
   const dummy = hashPassword(token());
   app.post(
     "/api/auth/login",
+    async (req, _res, next) => {
+      req.releaseIpAttempt = await attemptLimiter.reserve(
+        "ip",
+        clientAddressKey(req.ip),
+        ATTEMPT_LIMITS.ip,
+      );
+      next();
+    },
     express.json({ limit: "4kb" }),
     async (req, res) => {
-      const releaseIp = rate("ip:" + req.ip, 60);
       const body = z
         .object({
-          username: z.string().min(3).max(100),
+          username: z.string().trim().toLowerCase().min(3).max(100),
           password: z.string().max(256),
           remember: z.boolean().default(false),
         })
         .parse(req.body);
-      const username = body.username.trim().toLowerCase();
-      const releaseName = rate("name:" + username, 15);
+      const username = body.username;
+      const releaseName = await attemptLimiter.reserve(
+        "account",
+        username,
+        ATTEMPT_LIMITS.account,
+      );
       const u = await store.findUser({ username });
       if (
         !(await verifyPassword(body.password, u?.password || (await dummy))) ||
         !u?.active
       )
         fail(401, "Kullanıcı adı veya şifre hatalı ya da hesap pasif.");
-      releaseIp();
-      releaseName();
+      await req.releaseIpAttempt();
+      await releaseName();
       const raw = token(),
         csrf = token(),
         age = (body.remember ? 30 * 24 : 12) * 3600000;
@@ -265,7 +265,11 @@ export function createApp(
     .strict();
   app.post("/api/users", async (req, res) => {
     admin(req.user);
-    rate("user-edit:" + req.user._id, 60);
+    await attemptLimiter.reserve(
+      "user-edit",
+      req.user._id,
+      ATTEMPT_LIMITS.userEdit,
+    );
     const input = permissionInput.parse(req.body);
     if (input.id === "root-admin")
       fail(403, "Ana yönetici yetkileri değiştirilemez.");
@@ -354,6 +358,7 @@ export function createApp(
           : 500);
     if (status === 500)
       console.error("Request failed", req.method, req.path, err.name);
+    if (err.retryAfter) res.set("Retry-After", String(err.retryAfter));
     res.status(status).json({
       error:
         err instanceof z.ZodError

@@ -154,7 +154,9 @@ Resmî kaynaklar:
 
 HTTPS proxy aynı sunucuda çalışıyorsa `.env` içinde `TRUST_PROXY=loopback` tanımlayın. Ayrı sunucudaysa yalnızca o proxy'nin IP adresini veya dar CIDR aralığını yazın; birden fazla adres virgülle ayrılır. Doğrudan yerel kullanımda boş bırakın. `true`, hop sayısı veya tüm ağı kapsayan `/0` kullanılamaz. Node portuna yalnızca güvenilen proxy'nin erişebilmesini sağlayın. Proxy, dışarıdan gelen `X-Forwarded-For` başlığını güvenli biçimde yeniden oluşturmalı/istemci adresini eklemelidir.
 
-Giriş limiti proxy arkasında doğrulanan istemci IP adresinden hesaplanır. Başarılı girişler deneme kotasını tüketmez; başarısız denemeler için IP ve kullanıcı adı sınırları korunur. Sayaç tek süreç içindedir; birden fazla uygulama örneğine geçmeden önce ortak sayaç deposu gerekir.
+Giriş limiti proxy arkasında doğrulanan istemci IP adresinden hesaplanır. Başarılı girişler deneme kotasını tüketmez; başarısız denemeler için IP ve kullanıcı adı sınırları korunur. **Şema 29:** MSSQL'de `kp_rate_limits` ortak sayaç deposu otomatik kullanılır; aynı DB'ye bağlı uygulama örnekleri kotayı paylaşır. Yerel SQL.js sayacı süreç belleğinde kalır. IPv4-mapped adresler normalize edilir, IPv6 `/64` grubu ortak kota kullanır; bozuk/büyük login gövdeleri de sayılır. Depo erişimi kesilirse 503 döner, yerel sayaca geri dönülmez.
+
+MSSQL güncellemesinde tüm uygulama örneklerini durdurun, tam yedek alın, IT migration hesabıyla `npm run db:migrate` çalıştırıp çalışma zamanı hesabına dönün. Sayaç tablosu için SELECT/INSERT/UPDATE/DELETE erişimi gerekir. Ayrı sayaç kilidi kaynak verilerinin genel kilidini değiştirmez. Kurulum, header/firewall ve iki sunuculu test ayrıntıları [giriş koruması kılavuzunda](GIRIS-KORUMASI-VE-PROXY.md). Native koşu ve kurumun gerçek proxy adreslerinin doğrulaması bekliyor.
 
 ### 1 Ekim 2026 mimari iyileştirme paketi — şema 25
 
