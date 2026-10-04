@@ -4,6 +4,8 @@
 
 Windows başlatma kontrolünün ardından proxy/TLS için kaynak çağrı zinciri ve sentetik HTTP/HTTPS davranışı incelendi. Başlangıç commit'i `d1419680ca0fe280ce3a6d0e063588263e5b862a`; Git çalışma ağacı temizdi. Bu turun değişiklikleri adres/port ön kontrolü, HTTPS istek koruması, ilgili testler ve kılavuzlarla sınırlıdır. Şema, migration, DB adaptörleri, kaynak iş kuralları veya frontend değiştirilmedi.
 
+Kod/test/CI/kılavuz düzeltmesi `d17a0d9b20180f65cf646ae254ba54ba6c500238` ile main'e gönderildi. [37195873933 kalite koşusu](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37195873933) Ubuntu ve Windows'ta başarılıdır. Job loglarında **426/426 genel test, 77/77 Windows sentetik test ve 69 başarılı tarayıcı kontrol grubu**, sıfır başarısız/atlanan test doğrulandı. Format/domain/TypeScript/site build ve iki npm audit kapısı da geçti; audit çıktıları o koşuda sıfır bilinen bağımlılık açığı bildirir. Bu, yeni veya uygulama mantığına ait açık bulunmadığının kanıtı değildir.
+
 İki kök neden giderildi; biri yapılandırma kaynaklı kullanılabilirlik sorunu, diğeri HTTPS dağıtımında savunma derinliğidir. Yetkisiz veri erişimi veya gerçek ortamda istismar gösterilmedi. Bu çalışma kurum TLS/ağ kabulünün veya uygulamanın bütünüyle güvenli olduğunun kanıtı değildir.
 
 ## Bulgular, kanıt ve düzeltme
@@ -25,7 +27,7 @@ P1/P2 önceki B1–B6 bulgularının tekrar açılması olarak değerlendirilmed
 | Gerçek HTTPS proxy testi | Teste ait bir günlük self-signed sertifika ve yalnız sentetik SQL.js tempfile. Güvenilmeyen CA ve yanlış hostname reddi, root slash ile başarılı giriş, client'ın sahte protokolünün proxy tarafından değiştirilmesi, Secure/HttpOnly/SameSite cookie, HSTS, no-store, oturum kimliği, Host/Origin/CSRF, logout ve ortak bağlantı IP kotası kontrol edildi. Genel TLS doğrulaması kapatılmadı; gerçek hesap kullanılmadı. |
 | Değişen MJS dosyalarında Prettier; `git diff --check` | Geçti. Formatter yalnız seçili dosyaları geçici kaynak kopyasında düzenledi; ilgisiz kaynaklar topluca değiştirilmedi. |
 
-Yeni **4 yapılandırma + 3 transport testi** Ubuntu genel testlerine ve Windows sentetik işine eklendi. Sertifika üreten `proxy-tls.test.mjs` Ubuntu genel testlerinde kalır; Windows işi için OpenSSL bulunduğu varsayılmaz. Bu turun GitHub kalite koşusu sonucu aşağıda ayrıca kaydedilecektir.
+Yeni **4 yapılandırma + 3 transport testi** Ubuntu genel testlerine ve Windows sentetik işine eklendi ve yukarıdaki kalite koşusunda geçti. Sertifika üreten `proxy-tls.test.mjs` Ubuntu genel testlerinde kalır; Windows işi için OpenSSL bulunduğu varsayılmaz.
 
 ## Kontrol edilen alanlar
 
@@ -46,6 +48,8 @@ Teknik dayanak: [Express güvenilen proxy ve header davranışı](https://expres
 5. Gerçek kurum yükü/NAT dağılımı ve proxy limitleri/timeoutları; gerçek yedekleme ve geri dönüş tatbikatı.
 
 Bu doğrulamalar ayrı sentetik kurum ortamında yapılmalıdır. Bu tur gerçek servis/proxy/firewall/sertifika ayarı, hesap açma, migration/restore veya üretim verisi işlemi yapmadı. Mevcut localhost uygulaması yeniden başlatılmadı.
+
+Git deposundaki bu turun 10 kaynak/test/CI/kılavuz dosyası üstteki çalışan kaynak kopyasına da yansıtıldı. Başlatıcı ve ilk kullanım belgesinin önceki turda kaydedilen üst kopya farkları korunur; ilgisiz kullanıcı çalışması ezilmedi. Çalışan sayfanın yalnız kimliksiz statik `/` GET kontrolü 200 döndü; mevcut süreç yeni backend kodunu bir sonraki açılışında yükleyecek. Gerçek verilerle yeni sürüm kabulü yapılmış sayılmaz.
 
 ## Sonraki iş ve kapsam sınırı
 
