@@ -36,13 +36,19 @@ MSSQL için uygulama örneklerini durdurun, güncel tam yedek alın, migration h
 
 `true`, hop sayısı, DNS adı ve `/0` reddedilir. Adres ayarı veritabanı bağlantısı/bootstrap başlamadan doğrulanır. `loopback` yalnız gerçekten aynı makinedeki proxy için kullanılmalıdır.
 
+`APP_ORIGIN` de veritabanı açılmadan doğrulanır: yalnız `http://` veya `https://` şeması, sunucu adı ve isteğe bağlı port kabul edilir. Sondaki tek `/`, dış boşluklar, şema/alan adı büyük harfleri ve varsayılan port tarayıcının Origin biçimine normalize edilir. Alt dizin, sorgu, fragment ve kullanıcı/parola içeren adresler reddedilir; hata mesajında girilen değer yazılmaz. Uygulama alt dizine kurulacak şekilde tasarlanmamıştır. `PORT` 1–65535 arasında tam sayı olmalıdır; production için HTTPS şarttır.
+
+HTTPS adresinde gelen isteğin TLS üzerinden veya güvenilen proxy'nin `X-Forwarded-Proto: https` bilgisiyle gelmesi gerekir. Eksik, HTTP veya güvenilmeyen bağlantının gönderdiği sahte HTTPS bilgisi **403** ile giriş sayacı, JSON ayrıştırma ve oturum/veri erişiminden önce reddedilir. Cookie'nin `Secure` bayrağı ve HSTS, doğrulanan adresin şemasından türetilir; bağımsız bir seçenekle kapatılmaz. Yerel HTTP adresinin mevcut davranışı korunur.
+
+Bu kontrol proxy–Node bağlantısını şifrelemez ve ağ erişim kuralının yerine geçmez. Güvenilen IP'den bağlanabilen bir süreç HTTPS başlığını taklit edebilir. `loopback` aynı bilgisayardaki süreçleri birbirinden ayırmaz. Farklı sunucular arasındaki proxy–Node trafiğinin korunması ve portun yalnız proxy'ye açılması kurumun sorumluluğundadır.
+
 Express zinciri sağdan sola inceler ve en yakın güvenilmeyen adresi istemci sayar. Bu nedenle dışarıdan uydurulan soldaki bir IP, güvenilmeyen aracı üzerinden yeni kota açamaz. Bunun güvenilir olması kurumun ağ topolojisine bağlıdır. [Express proxy açıklaması](https://expressjs.com/en/guide/behind-proxies/) bu davranışı ve header kontrolünü açıklar.
 
 Kurum kurulumunda:
 
 1. İnternet/kurum sınırındaki proxy dışarıdan gelen `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto` başlıklarını silip doğrulanmış bağlantı bilgisiyle oluşturur. Ek iç proxy varsa yalnız bu doğrulanmış zincire gerçek önceki adresi ekler.
 2. Node portuna sadece belirlenen proxy'ler erişebilir; doğrudan erişim ağ kuralıyla kapatılır. Aynı makinedeki proxy için `HOST=127.0.0.1` korunur. Ayrı proxy varsa dinleme adresi ve firewall IT tarafından birlikte ayarlanır.
-3. Proxy `Host` ve tarayıcının `Origin` başlığını `APP_ORIGIN` ile tutarlı geçirir; production `APP_ORIGIN=https://...` kullanır. Host/Origin koruması forwarded-host üzerinden gevşetilmez.
+3. Proxy `Host` ve tarayıcının `Origin` başlığını normalize edilen `APP_ORIGIN` ile tutarlı geçirir; HTTPS bağlantısından ürettiği `X-Forwarded-Proto: https` başlığını Node'a gönderir. Production `APP_ORIGIN=https://...` kullanır. Host/Origin koruması forwarded-host üzerinden gevşetilmez. Bu protokol başlığı eksikse HTTPS kurulumunun sağlık kontrolü de 403 alır; kontrol doğru proxy yolu üzerinden yapılmalıdır.
 4. Aynı ve farklı istemci IP'leri, sahte soldaki IP, iki proxy zinciri ve tüm uygulama örneklerine dönüşümlü başarısız giriş ayrı test hesabıyla doğrulanır. Gerçek kullanıcı hesapları bloke edilmez.
 
 Transaction kilidi aynı veritabanı/principal/resource kapsamında ortaktır ve commit/rollback sonunda bırakılır. [Microsoft `sp_getapplock` belgesi](https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/sp-getapplock-transact-sql) bu kapsamı tanımlar. Aynı DB'ye bağlı farklı sunucular tek pencereyi kullanacak şekilde uygulanmıştır; farklı DB'ler veya farklı uygulama sürümleri ortak sayaç kurulumu sayılmaz.
@@ -51,4 +57,6 @@ Transaction kilidi aynı veritabanı/principal/resource kapsamında ortaktır ve
 
 Yerel testler: bellek sınırı/temizliği, pencere bitişi, eşzamanlı ve geç iade, SQL.js kalıcılığı/migration, iki HTTP hizmetinin aynı depoyu kullanması, kullanıcı/IP kotası, bozuk/büyük gövde, IPv4/IPv6 ve proxy zinciri, depo hatasında girişin durması.
 
-`npm run test:db` paketine **iki bağımsız native MSSQL havuzunda** eşzamanlı kota ve iki HTTP hizmeti testi, genel kaynak kilidi tutulurken bağımsız sayaç testi eklendi. Native MSSQL bağlantısı, Windows/NTLM/TLS ve kurum proxy'si bu makinede çalıştırılarak doğrulanmadı. Yerel ortak SQL.js testi bu doğrulamanın yerine geçmez; [native test kılavuzundaki](MSSQL-TEST-KILAVUZU.md) ayrı ortam koşusu 31. adımda bekliyor.
+`npm run test:db` paketindeki **iki bağımsız native MSSQL havuzunda** eşzamanlı kota ve iki HTTP hizmeti testleri, genel kaynak kilidi tutulurken bağımsız sayaç testi dahil, geçici GitHub CI SQL Server ortamında 4 Ekim 2026'da geçti. Kanıt ve kaynak sürümü [native CI raporunda](MSSQL-CI-DOGRULAMA-2026-10-04.md) bulunur. Bu önceki koşu kurum proxy'sinin veya bu belgedeki sonraki HTTP değişikliklerinin native kabul testi değildir.
+
+Adres/port ön kontrolü ve güvenilmeyen protokol başlığı testleri hem Ubuntu hem Windows kalite kapısına dahildir. Gerçek TLS sertifikası doğrulaması, Secure cookie, giriş/çıkış, Host/Origin/CSRF ve proxy üzerinden IP kotası geçici sertifika ve sentetik SQL.js verisiyle Ubuntu/yerel testte kontrol edilir. Kurum sertifika zinciri, Windows/NTLM, gerçek proxy adresleri, firewall, çoklu proxy topolojisi ve yük bu testlerle doğrulanmaz. Güncel kapsam [proxy/TLS doğrulama raporunda](PROXY-TLS-DOGRULAMA-2026-10-04.md) listelenmiştir.

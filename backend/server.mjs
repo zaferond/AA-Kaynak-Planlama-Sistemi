@@ -1,14 +1,11 @@
 import { ROOT_ADMIN_ID } from "../shared/access.ts";
-import { trustedProxyAddresses } from "./trusted-proxies.mjs";
+import { httpConfig } from "./http-config.mjs";
 import { Store } from "./store.mjs";
 import { createApp } from "./app.mjs";
 import { hashPassword } from "./auth.mjs";
-const env = process.env,
-  origin = env.APP_ORIGIN || "http://localhost:3000";
-const secure = origin.startsWith("https://");
-const trustedProxies = trustedProxyAddresses(env.TRUST_PROXY);
-if (env.NODE_ENV === "production" && !secure)
-  throw Error("Production için HTTPS APP_ORIGIN gerekir.");
+const env = process.env;
+// Validate public HTTP settings before opening or bootstrapping any database.
+const { origin, port, host, trustedProxies } = httpConfig(env);
 const store = new Store();
 try {
   await store.connect();
@@ -35,23 +32,19 @@ try {
   }
   const app = createApp(store, {
     origin,
-    secure,
     trustedProxies,
   });
-  const server = app.listen(
-    Number(env.PORT || 3000),
-    env.HOST || "127.0.0.1",
-    () =>
-      console.log(
-        "\nSistem hazır: " +
-          origin +
-          "\nBu pencere açık kalmalı. Durdurmak için Control+C.",
-      ),
+  const server = app.listen(port, host, () =>
+    console.log(
+      "\nSistem hazır: " +
+        origin +
+        "\nBu pencere açık kalmalı. Durdurmak için Control+C.",
+    ),
   );
   server.on("error", async (e) => {
     console.error(
       e.code === "EADDRINUSE"
-        ? "3000 portu kullanımda. Önce açık olan eski portalı durdurun."
+        ? port + " portu kullanımda. Önce açık olan eski portalı durdurun."
         : "Sunucu başlatılamadı: " + e.code,
     );
     app.locals.close();

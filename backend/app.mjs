@@ -20,6 +20,7 @@ import {
 } from "./operations.mjs";
 import { changeAndView } from "./change-service.mjs";
 import { sendDataSnapshot } from "./data-response.mjs";
+import { applicationAddress } from "./http-config.mjs";
 import {
   createAttemptLimiter,
   clientAddressKey,
@@ -29,11 +30,13 @@ export function createApp(
   store,
   {
     origin = "http://localhost:3000",
-    secure = false,
     trustedProxies = [],
     attemptLimiter = createAttemptLimiter(store),
   } = {},
 ) {
+  const address = applicationAddress(origin);
+  origin = address.origin;
+  const secure = address.secure;
   const app = express();
   app.disable("x-powered-by");
   app.set("trust proxy", trustedProxies);
@@ -45,7 +48,13 @@ export function createApp(
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
     });
     if (secure) res.set("Strict-Transport-Security", "max-age=31536000");
-    if (req.headers.host !== new URL(origin).host)
+    // req.secure consults forwarding headers only for a trusted socket peer.
+    // Network restrictions and the proxy's header overwrite are still required.
+    if (secure && !req.secure)
+      return res.set("Cache-Control", "no-store").status(403).json({
+        error: "HTTPS bağlantısı doğrulanamadı. Proxy ayarlarını kontrol edin.",
+      });
+    if (req.headers.host !== address.authority)
       return res.status(403).json({ error: "APP_ORIGIN adresini kullanın." });
     next();
   });

@@ -97,8 +97,7 @@ test("isolated TLS proxy preserves secure sessions, source checks and the connec
   await new Promise((resolve) => proxy.listen(0, "127.0.0.1", resolve));
   const origin = "https://127.0.0.1:" + proxy.address().port;
   app = createApp(store, {
-    origin,
-    secure: true,
+    origin: origin + "/",
     trustedProxies: ["127.0.0.1/32"],
   });
   backend.on("request", app);
@@ -151,6 +150,7 @@ test("isolated TLS proxy preserves secure sessions, source checks and the connec
   );
   const login = await request("/api/auth/login", {
     body: { username: "synthetic.proxy", password },
+    headers: { "X-Forwarded-Proto": "http" },
   });
   assert.equal(login.status, 200);
   assert.equal(login.headers["strict-transport-security"], "max-age=31536000");
