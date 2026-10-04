@@ -12,3 +12,5 @@ tests/local-test-*/
 aa-backup-*/
 aa-audit-*/
 .aa-pending-*/
+deployment-manifest.json
+.deployment-manifest-*.tmp

@@ -5,8 +5,14 @@ import path from "node:path";
 import crypto from "node:crypto";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
+import {
+  deploymentSources,
+  writeDeploymentManifest,
+} from "../scripts/deployment-manifest.mjs";
 const root = path.dirname(fileURLToPath(import.meta.url)),
   site = path.resolve(root, "../site");
+const packageRoot = path.resolve(root, "..");
+const sourceHashes = await deploymentSources(packageRoot);
 await fs.mkdir(path.join(site, "assets"), { recursive: true });
 await fs.copyFile(
   path.join(root, "assets/otokar-logo.svg"),
@@ -64,4 +70,5 @@ const cssName = await asset("app", "css", Buffer.from(css));
 const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Askeri Araçlar Kaynak Yönetimi Sistemi</title><link rel="stylesheet" href="/assets/${cssName}"><script defer src="/assets/${jsName}"></script></head><body><div id="root"></div><noscript>JavaScript etkin olmalıdır.</noscript></body></html>`;
 await fs.writeFile(path.join(site, "index.html"), html);
 await fs.writeFile(path.join(site, "index.html.gz"), gzipSync(html));
+await writeDeploymentManifest(packageRoot, sourceHashes);
 console.log("Local web site built:", site);
