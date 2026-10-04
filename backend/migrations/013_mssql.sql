@@ -11,6 +11,6 @@ END;
 ALTER TABLE [dbo].[kp_users] ADD CONSTRAINT [ck_kp_users_role] CHECK ([role] IN ('admin','manager','normal'));
 ALTER TABLE [dbo].[kp_users] ADD [resource_id] nvarchar(120) COLLATE Latin1_General_100_BIN2 NULL;
 ALTER TABLE [dbo].[kp_users] ADD CONSTRAINT [fk_kp_users_resource] FOREIGN KEY ([resource_id]) REFERENCES [dbo].[kp_resources]([id]) ON DELETE SET NULL;
-CREATE UNIQUE INDEX [ux_kp_users_resource_id] ON [dbo].[kp_users]([resource_id]) WHERE [resource_id] IS NOT NULL;
+EXEC(N'CREATE UNIQUE INDEX [ux_kp_users_resource_id] ON [dbo].[kp_users]([resource_id]) WHERE [resource_id] IS NOT NULL;');
 DELETE FROM [dbo].[kp_sessions];
 INSERT INTO [dbo].[kp_schema_migrations]([version]) VALUES(13);
