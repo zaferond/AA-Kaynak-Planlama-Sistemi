@@ -8,13 +8,15 @@ Bu arşiv belirli commit'lerin sentetik CI sonuçlarını saklar. Daha sonraki c
 |---|---|---|---|
 | Ubuntu kalite | `9c5a378d0cba3d99f26c3669d0dcc3d062450092` | 433/433 test, 69 başarılı Chromium kontrolü; TypeScript/build/dağıtım doğrulama ve iki audit adımı başarılı | [37212096003](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37212096003) |
 | Windows kalite | `9c5a378d0cba3d99f26c3669d0dcc3d062450092` | 84/84 sentetik test; TypeScript/build/dağıtım doğrulama başarılı | Aynı kalite koşusu |
+| Windows test temizliği sonrası Ubuntu/Windows kalite | `fdce36ec0f440e3a5452ce2d315e79ef7c5274fa` | 433/433 genel ve 84/84 Windows testi, 69 başarılı Chromium kontrolü; TypeScript/build/dağıtım doğrulama/audit adımları başarılı | [37213183916](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37213183916) |
 | Native MSSQL | `63780fc4538829c16c7b14739f882a9851629f59` | 19/19 test; SQL Server 2022 Developer, şema 30, iki havuz, temizlik doğrulandı | [37186385433](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37186385433) |
 
-Her üç test toplamında fail/skipped/cancelled sayısı sıfırdır. Ubuntu'nun backend/frontend audit adımları bu koşuda bilinen açık bildirmedi; bu sonuç güvenlik garantisi değildir. Windows başlatıcı testindeki npm/build/start stub'ları gerçek kurum servisi veya DB başlatmaz. Chromium kontrolleri geçici SQL.js ve sentetik hesaplar kullanır.
+Tablodaki başarılı koşuların test toplamlarında fail/skipped/cancelled sayısı sıfırdır. Ubuntu'nun backend/frontend audit adımları bu koşularda bilinen açık bildirmedi; bu sonuç güvenlik garantisi değildir. Aşağıdaki başarısız ara koşu ayrıca korunmuştur. Windows başlatıcı testindeki npm/build/start stub'ları gerçek kurum servisi veya DB başlatmaz. Chromium kontrolleri geçici SQL.js ve sentetik hesaplar kullanır.
 
 ## Saklanan dosyalar ve kaynak doğrulaması
 
 - [Kalite CI kaydı](ci-evidence/quality-9c5a378-receipt.json): GitHub API'den alınan commit/koşu/iş/adım durumları, loglardan çıkarılan test toplamları ve indirilen logların SHA-256 değerleri. Ham loglar, geçici dosya yolları, bağlantı bilgileri veya hesap verileri arşivlenmez.
+- [Windows temizliği düzeltmesi sonrası kalite kaydı](ci-evidence/quality-fdce36e-receipt.json): aynı metadata/test toplamları ve başarısız önceki koşuyla ilişkisi.
 - [Native CI kaydı](ci-evidence/native-mssql-63780fc-receipt.json): aynı metadata ve test toplamları, artifact kimliği/süresi, sonuç JSON'unun SHA-256 değeri ve 48 kaynak dosyasının karşılaştırması.
 - [Native sonuç JSON'u](ci-evidence/native-mssql-63780fc.json): CI artifact'indeki JSON **byte olarak korunmuştur**. Sentetik rol ölçümleri, Node/SQL sürümleri, şema ve kaynak hash'lerini içerir; gerçek kullanıcı verisi veya bağlantı bilgisi içermez.
 
@@ -40,7 +42,9 @@ Bu dosyalar imzalı bağımsız sertifika değildir. Depoyu değiştirebilen bir
 
 Dokümantasyon/arşiv commit'i `d9619779019ad1a68dd47bcaeef13edc2a7013da` için [37212740025 koşusunda](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37212740025) Ubuntu başarılı, Windows başarısızdır. Windows'ta geçersiz `.env` senaryosunun geçici fixture'ı silinirken kopyalanmış `bin/node.exe` için `EBUSY` oluştu. Önceki başarılı kalite koşusunun üzerine yazılmadı; bu başarısız koşu başarılı kanıt olarak kullanılmaz.
 
-`tests/startup-fixture.mjs` temizliği, yalnız sahip olunan geçici dizinde desteklenen geçici dosya sistemi hatalarını en fazla 5 defa, artan bekleme ile tekrar dener. Başlangıç gecikmesi 100 ms, toplam ek bekleme en çok 1.500 ms'dir; kalıcı hata yine testi başarısız yapar. Uygulama/başlatıcı davranışı, gerçek ayarlar, DB veya servis değiştirilmedi. Düzeltmenin Windows kabulü sonraki commit'in kalite koşusuyla ayrıca değerlendirilir.
+`tests/startup-fixture.mjs` temizliği, yalnız sahip olunan geçici dizinde desteklenen geçici dosya sistemi hatalarını en fazla 5 defa, artan bekleme ile tekrar dener. Başlangıç gecikmesi 100 ms, toplam ek bekleme en çok 1.500 ms'dir; kalıcı hata yine testi başarısız yapar. Uygulama/başlatıcı davranışı, gerçek ayarlar, DB veya servis değiştirilmedi.
+
+Düzeltme `fdce36e` commit'inde uygulanıp [37213183916 koşusunda](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37213183916) Ubuntu ve Windows başarılarıyla doğrulandı: 433/433 genel, 84/84 Windows ve 69 Chromium kontrolü. Yerelde gerçek ayarlar aktarılmayan geçici kopyada `node --test --test-reporter=tap tests/startup-tools.test.mjs` 5/5 geçti; seçili fixture'ın Prettier kontrolü de exit 0 döndü. Yerel Mac testi Windows sonucu yerine kullanılmadı. Bu başarı, olası tüm Windows dosya kilidi koşullarının ortadan kalktığının garantisi değildir.
 
 ## Bu kanıtlarla kapanmayan kurum kabul işleri
 
