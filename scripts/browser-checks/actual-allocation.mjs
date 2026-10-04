@@ -65,13 +65,11 @@ export async function checkActualAllocation(f) {
         );
         assert.equal(await page.locator(".actual-context-selected").count(), 0);
         await page.locator("#actual-entry-unit").selectOption("days");
-        assert.equal(
-          await page
-            .getByRole("textbox", {
-              name: "Browser Employee / Browser Project A / 2026-01 / gün",
-              exact: true,
-            })
-            .inputValue(),
+        await waitText(
+          page.getByRole("textbox", {
+            name: "Browser Employee / Browser Project A / 2026-01 / gün",
+            exact: true,
+          }),
           "2",
         );
         await page.locator("#actual-entry-unit").selectOption("percent");
