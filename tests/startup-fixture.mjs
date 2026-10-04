@@ -7,7 +7,16 @@ import { spawn } from "node:child_process";
 // application database, registry or server is used by these subprocesses.
 export async function startupFixture(t, { launcher = false } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-startup-test-"));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  // Windows can briefly retain the copied node.exe handle after cmd closes.
+  // Retry only supported transient filesystem errors; persistent errors fail.
+  t.after(() =>
+    fs.rm(dir, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 100,
+    }),
+  );
   const root = path.join(dir, "AA Deneme Türkçe & (1) !");
   const bin = path.join(dir, "bin");
   for (const relative of ["backend", "frontend", "data"])

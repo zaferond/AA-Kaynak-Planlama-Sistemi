@@ -36,6 +36,12 @@ JSON dosyasının bütünlüğü PowerShell'de veri tabanına bağlanmadan kontr
 
 Bu dosyalar imzalı bağımsız sertifika değildir. Depoyu değiştirebilen biri kayıtları da değiştirebilir; kurumun kabul kanıtları erişimi sınırlı ayrı bir konumda korunmalıdır. İlerideki kayıtlar eski koşunun üzerine yazılmadan yeni commit/koşu adıyla eklenir; loglar gizli bilgi/kişisel veri açısından gözden geçirilmeden arşivlenmez.
 
+## Sonraki Windows CI temizliği bulgusu
+
+Dokümantasyon/arşiv commit'i `d9619779019ad1a68dd47bcaeef13edc2a7013da` için [37212740025 koşusunda](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37212740025) Ubuntu başarılı, Windows başarısızdır. Windows'ta geçersiz `.env` senaryosunun geçici fixture'ı silinirken kopyalanmış `bin/node.exe` için `EBUSY` oluştu. Önceki başarılı kalite koşusunun üzerine yazılmadı; bu başarısız koşu başarılı kanıt olarak kullanılmaz.
+
+`tests/startup-fixture.mjs` temizliği, yalnız sahip olunan geçici dizinde desteklenen geçici dosya sistemi hatalarını en fazla 5 defa, artan bekleme ile tekrar dener. Başlangıç gecikmesi 100 ms, toplam ek bekleme en çok 1.500 ms'dir; kalıcı hata yine testi başarısız yapar. Uygulama/başlatıcı davranışı, gerçek ayarlar, DB veya servis değiştirilmedi. Düzeltmenin Windows kabulü sonraki commit'in kalite koşusuyla ayrıca değerlendirilir.
+
 ## Bu kanıtlarla kapanmayan kurum kabul işleri
 
 1. Sentetik kopyada kurum yedek/restore/migration geri dönüşü, hesap/oturum temizliği, RPO/RTO ve geri kazanılan verinin doğrulanması.
