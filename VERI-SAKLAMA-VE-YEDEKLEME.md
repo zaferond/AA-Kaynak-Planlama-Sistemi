@@ -73,6 +73,18 @@ npm run db:prepare-recovery -- --backup="TAM_YEDEK_PAKETININ_YOLU" --output="../
 
 Bu komut doğrulanmış yedekten **yeni bir tam paket** üretir; yalnız eski oturum kayıtlarını kaldırır. Canlı DB'yi değiştirmez. Canlı geri dönüşte yönetici sunucuyu durdurur, o anki DB'nin de tam yedeğini alır, hazırlanmış `database.sqlite` dosyasını `data/planlama.sqlite` yerine koyar ve dosya izinlerini korur. Çalışan sunucunun dosyasını değiştirmek bellekteki veri ile diski ayırır; önce durdurma zorunludur. `.lock` dosyasını çalışan süreç varken silmeyin. Uygulamayı uygun sürüm/yapılandırmayla başlatıp yeniden giriş, proje/risk, dağılım, takvim, yetki ve geçmiş kontrollerini yapın. Ayrı ortamda geri dönüş denemesi yapılmadan üretim geri dönüşü planlanmamalıdır.
 
+### Sentetik kurtarma kabul kontrolü
+
+`tests/recovery-acceptance.test.mjs`, gerçek bakım CLI'sini ve uygulama HTTP API'sini yalnız geçici SQL.js dosyaları, sentetik hesaplar ve `127.0.0.1` üzerinde kullanır. `.env` yüklemez; çalışan veritabanına veya uygulama servisine bağlanmaz. Kurtarma paketi korunur; uygulama paketten alınan ayrı bir çalışma kopyasında başlatılır.
+
+```sh
+node --test tests/recovery-acceptance.test.mjs
+```
+
+Kontrol; yedek anındaki proje/not/kilometre taşı, risk, dağılım, takvim, hesap yetkileri, revizyon ve geçmişin korunmasını; yedekten sonraki değişikliklerin kurtarmaya taşınmamasını; eski oturumların reddini ve parola ile yeni girişi kapsar. Kurtarma sonrası admin/yönetici/normal kullanıcı erişimi, kayıt güncelleme, eski revizyonun reddi ve yeniden açılışta kalıcılık da sınanır. İkinci senaryo, v2 verinin v30'a dönüşümünde son DDL'den sonra hata oluşturarak kaynak baytlarının korunmasını, kilidin bırakılmasını ve yeniden denemede tahsisin tekrar eklenmemesini doğrular.
+
+Bu kontrol Ubuntu ve Windows kalite iş akışlarına dahildir. Yerel başarı, Windows CI koşusunun veya kurumun MSSQL/NTFS/yedek hizmetinin kabulü anlamına gelmez. Kurum kabulünde uygun uygulama sürümü ve korunan yapılandırma, ayrı kurtarma veritabanı, yeniden giriş/yetki/veri kontrolü, yedek deposu erişim izinleri ve ölçülen RPO/RTO ayrıca doğrulanır. Sentetik testin çalışma süresi kurumun RTO ölçümü değildir. [4 Ekim kapsam ve sonuç kaydı](KURTARMA-KABUL-KONTROLLERI-2026-10-04.md).
+
 ## Yedek operasyonu
 
 Günlük tam yedek; sürüm/migration, toplu içe aktarma, JSON restore ve geçmiş temizliği öncesinde ek tam yedek alınması önerilir. Günlük yedekler tek başına bir günlük veri kaybı hedefini ancak koşular gerçekten başarıyla çalışıp izleniyorsa destekler; saatlik ihtiyaç varsa sıklık ayrıca ayarlanmalıdır. Bu adım işletim sistemi zamanlayıcısı kurmadı. Yönetici komutu cron/Task Scheduler veya kurum yedek hizmetine bağlayıp başarısız çıkış kodunu izlemelidir.

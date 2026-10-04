@@ -43,5 +43,5 @@ jobs:
       - name: Shared domain, TypeScript and site build on Windows
         run: npm run check:domain && npm run build && npm run deploy:verify
         shell: cmd
-      - name: Synthetic sessions, file locks, rollback, restart and concurrency
-        run: node --test tests/config.test.mjs tests/http-config.test.mjs tests/proxy-transport.test.mjs tests/sqljs.test.mjs tests/concurrency.test.mjs tests/restore.test.mjs tests/storage-order.test.mjs tests/data-response.test.mjs tests/login-security.test.mjs tests/xlsx-workbook.test.mjs tests/startup-tools.test.mjs tests/deployment-manifest.test.mjs tests/windows-launcher.integration.mjs
+      - name: Synthetic sessions, file locks, recovery, rollback, restart and concurrency
+        run: node --test tests/config.test.mjs tests/http-config.test.mjs tests/proxy-transport.test.mjs tests/sqljs.test.mjs tests/concurrency.test.mjs tests/restore.test.mjs tests/recovery-acceptance.test.mjs tests/storage-order.test.mjs tests/data-response.test.mjs tests/login-security.test.mjs tests/xlsx-workbook.test.mjs tests/startup-tools.test.mjs tests/deployment-manifest.test.mjs tests/windows-launcher.integration.mjs
