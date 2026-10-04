@@ -36,14 +36,17 @@ DB_ENCRYPT=true
 DB_TRUST_SERVER_CERTIFICATE=false
 DB_AUTO_MIGRATE=false
 APP_ORIGIN=https://planlama.sirketiniz.com
+TRUST_PROXY=loopback
 HOST=127.0.0.1
 PORT=3000
 NODE_ENV=production
-ADMIN_USERNAME=mehmetzaferonder@gmail.com
+ADMIN_USERNAME=portal.admin
 ADMIN_PASSWORD='yalnizca-ilk-kurulumda-gereken-portal-sifresi'
 ```
 
 DB_USER/DB_PASSWORD SQL Server servis hesabıdır; ADMIN_USERNAME/ADMIN_PASSWORD portalın ilk yönetici hesabıdır. İkisi farklıdır. İlk yönetici yalnızca hesap yoksa oluşturulur; sonraki açılışta ADMIN_PASSWORD değiştirmek var olan şifreyi değiştirmez. İlk kurulumdan sonra ADMIN_PASSWORD satırını kaldırabilirsiniz.
+
+Bu örnek, HTTPS proxy'nin **Node ile aynı sunucuda** olduğu kurulum içindir. Ayrı sunucudaki proxy için `loopback` kullanmayın; `TRUST_PROXY` yalnız IT'nin belirlediği proxy IP'lerini/dar CIDR aralıklarını içermelidir. Dinleme adresi ve firewall birlikte ayarlanır; Node portu yalnız bu proxy'lere açılır. Aşağıdaki HTTPS koşulları sağlanmadan servis başlatma kabulü tamamlanmış sayılmaz.
 
 Named instance için `DB_INSTANCE=INSTANCE_ADI` tanımlayın; bu durumda DB_PORT kullanılmaz. SQL Browser ve ilgili ağ erişimi gerekir; IT sabit TCP portu sağlıyorsa port üzerinden bağlantı daha nettir. DB_SERVER alanına `sunucu\\instance` yerine yalnızca sunucu adı girin.
 
@@ -80,7 +83,18 @@ Production modunda otomatik DDL kapalıdır. `DB_AUTO_MIGRATE=false` korunsun; a
 npm.cmd start
 ```
 
-HTTPS proxy gelen Host başlığını korumalı ve Node.js portuna yönlendirmelidir. `APP_ORIGIN` kullanıcının tarayıcıdan açtığı tam origin ile eşleşmelidir. Şirket ortamında Node.js'i servis olarak çalıştırın, yedekleme ve izleme tanımlayın.
+Önce dağıtım yöneticisi bağımlılıkları ve `site/` derlemesini hazırlamalı, hedefte `npm.cmd run deploy:verify` başarılı olmalıdır. Komut yalnız paket dosyalarını okur; çalışan sürecin sürümünü veya SQL bağlantısını doğrulamaz. Hazırlama ve sınırlar [dağıtım doğrulama kılavuzunda](DAGITIM-DOGRULAMA-KILAVUZU.md), servis hesabı/çalışma dizini/ACL kabulü [Windows servis kılavuzunda](WINDOWS-BASLATMA-VE-SERVIS-KILAVUZU.md) bulunur. Servis açılışında paket kurulumu, build veya etkileşimli ilk kurulum çalıştırılmaz.
+
+### HTTPS proxy koşulları
+
+1. `APP_ORIGIN`, tarayıcıdan açılan HTTPS origin'i olmalıdır; yol, sorgu, fragment veya kullanıcı/parola içeremez. Production modunda HTTP origin reddedilir.
+2. Node'a bağlanan gerçek proxy adresi `TRUST_PROXY` kapsamında olmalıdır. Aynı sunucuda `HOST=127.0.0.1` korunur; farklı sunucuda Node portuna erişim yalnız belirlenen proxy'lere verilir. Proxy–Node trafiğinin korunması ayrıca IT tarafından sağlanır.
+3. Sınırdaki proxy, istemcinin gönderdiği `X-Forwarded-For`, `X-Forwarded-Host`, `X-Forwarded-Proto` başlıklarını silip doğruladığı bağlantı bilgisiyle yeniden oluşturur. HTTPS bağlantısı için Node'a `X-Forwarded-Proto: https` gönderir. Ek proxy'ler yalnız doğrulanmış zinciri sürdürür.
+4. Proxy gerçek `Host` başlığını ve tarayıcının `Origin` başlığını normalize edilen `APP_ORIGIN` ile tutarlı geçirir. `X-Forwarded-Host`, Host denetiminin yerine kullanılmaz.
+
+HTTPS origin'de eksik/HTTP protokol bilgisi veya güvenilmeyen bağlantının sahte HTTPS başlığı **403** ile, JSON ayrıştırma, giriş sayacı ve oturum/veri erişiminden önce reddedilir. Sağlık kontrolü de doğru proxy yolu üzerinden yapılmalıdır. Güvenilen IP'den erişen bir süreç başlığı taklit edebilir; `loopback` aynı makinedeki süreçleri ayırmaz. Header kontrolü ağ izolasyonu değildir. Tam kurallar ve sentetik/kurumsal test ayrımı [giriş koruması kılavuzunda](GIRIS-KORUMASI-VE-PROXY.md) bulunur.
+
+Şirket ortamında Node.js'i servis olarak çalıştırın; kontrollü restart, yedekleme ve izleme için IT kabul kaydı oluşturun.
 
 Yerel sql.js verilerini taşımak için:
 
@@ -109,7 +123,7 @@ SQL girdileri parametrelerle gönderilir. Toplu MSSQL yazmaları parametreli OPE
 
 sql.js yerel dosyayı geçici dosya + atomik yeniden adlandırma ile kaydeder. Kaydetme başarısızsa bellek içi durum da önceki haline döner. Tek süreç dosya kilidi ikinci kopyanın aynı dosyayı bozmasını önler. Çökmeden sonra kalan `.lock` dosyası, başka süreç olmadığı doğrulandıktan sonra elle kaldırılır. Diskteki dosya şifrelenmez; kişisel bilgisayarda test içindir. Production ortamında sqljs modu reddedilir.
 
-Arayüz performans optimizasyonları, sayfalama, 60 aylık takvim ve filtreleme korunur. Backend hâlâ kapsam görünümünü toplu okur; yüksek kayıt hacmi/çok yoğun yazma için ayrıca yük testi ve sunucu sayfalaması gerekir. Giriş denemesi sınırlayıcısı tek uygulama süreci içindir; birden fazla Node sunucusunda ortak rate-limit deposu gerekir.
+Arayüz performans optimizasyonları, sayfalama, 60 aylık takvim ve filtreleme korunur. Backend kapsam görünümünü toplu okur; yüksek kayıt hacmi/çok yoğun yazma için ayrıca yük testi gerekir. MSSQL'de giriş denemesi sayacı veritabanında ortaktır; aynı DB ve aynı uygulama sürümündeki süreçler kotayı paylaşır. Yerel SQL.js sayacı süreç belleğindedir ve yerel dosya yalnız tek uygulama süreciyle kullanılabilir.
 
 ## 6. Testler ve teslim sınırı
 
@@ -117,9 +131,9 @@ Arayüz performans optimizasyonları, sayfalama, 60 aylık takvim ve filtreleme 
 npm.cmd test
 ```
 
-Altı otomatik test grubu: parola, yetki, revizyon, iş kuralları, ortam yapılandırması, sql.js üzerinde HTTP/SQL uçtan uca testler. Ekleme/silme, FK/check kısıtları, toplu rollback, eşzamanlı istek, import, yedek, oturum iptali, diskten yeniden açma, çift süreç kilidi ve disk yazma hatası doğrulanır. Arayüz build ve TypeScript kontrolü de geçti.
+Otomatik testler parola, yetki, revizyon, iş kuralları, ortam yapılandırması ve sentetik SQL.js üzerinde HTTP/SQL akışlarını kapsar. Ekleme/silme, FK/CHECK, toplu rollback, eşzamanlı istek, import, yedek, oturum iptali, diskten yeniden açma, çift süreç kilidi ve disk yazma hatası senaryoları vardır. Kalite CI ayrıca TypeScript, frontend build, dağıtım doğrulama ve tarayıcı regresyonlarını çalıştırır. Test sayıları ve başarı iddiası belirli bir commit/koşuya aittir; [CI kanıt arşivine](CI-KANIT-ARSIVI.md) bakın.
 
-Gerçek SQL Server erişimi olmadığından native MSSQL testi bu teslim ortamında çalıştırılamadı. Yerel SQLite testleri MSSQL'in T-SQL, kimlik doğrulama, sertifika ve çok bağlantılı kilit davranışlarını kanıtlamaz. Canlıya geçmeden önce IT'nin test SQL Server'ında aşağıdaki testi çalıştırın.
+**4 Ekim 2026 durumu:** geçici GitHub CI SQL Server 2022 ortamındaki `63780fc` commit koşusu 19/19 native testi geçti; şema 30 ve test temizliği doğrulandı. Rapor ve kaynak hash'leri [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) saklanır. Bu, bu bilgisayarda veya kurum SQL Server'ında çalıştırılmış bir test değildir; sonraki commit'lerin tamamını da kapsamaz. Yerel SQLite testleri native T-SQL davranışını kanıtlamaz; CI'nin test hesabı/self-signed sertifikası kurum kimliği/CA/Windows/proxy kabulü değildir. Canlıya geçmeden önce aşağıdaki kontrolleri IT'nin ayrı test SQL Server'ında uygulayın.
 
 IT'nin **boş, ayrı ve adı `_test` ile biten** veritabanı için `.env.mssql.test.example` dosyasını `.env.mssql.test` olarak kopyalayıp `TEST_DB_*` bağlantı alanlarını doldurun. Test komutu uygulamanın `.env` dosyasını okumaz ve `DB_*` alanlarına geri dönmez. Bağlantı hesabının varsayılan şeması `dbo`; yetkileri veritabanında `VIEW DEFINITION`, `CREATE TABLE` ve `dbo` üzerinde `ALTER`, `SELECT`, `INSERT`, `UPDATE`, `DELETE` olmalıdır. Sonra:
 
@@ -127,7 +141,7 @@ IT'nin **boş, ayrı ve adı `_test` ile biten** veritabanı için `.env.mssql.t
 npm.cmd run test:db -- --env-file .env.mssql.test --report native-mssql-report.json
 ```
 
-Test, veritabanında herhangi bir kullanıcı tablosu/görünüm/yordam gibi nesne varsa çalışmayı reddeder. Ayrı test kilidi ikinci çalıştırıcının aynı ortamı kullanmasını engeller. Yalnızca boşluğu doğrulanan test veritabanında sabit uygulama tablolarını oluşturur ve temizler; beklenmeyen nesne oluşursa otomatik temizlik durur. Native şema geçişi, HTTP, iki bağımsız havuzda paralel yazma/okuma kilidi ve sentetik rol bazlı ölçüm senaryoları hazırdır. **Gerçek MSSQL koşusu bu bilgisayarda hâlâ yapılmadı.** Komutlar, ölçüm sınırları ve elle çalıştırılabilen GitHub test ortamı [MSSQL test kılavuzunda](MSSQL-TEST-KILAVUZU.md) açıklanır.
+Test, veritabanında herhangi bir kullanıcı tablosu/görünüm/yordam gibi nesne varsa çalışmayı reddeder. Ayrı test kilidi ikinci çalıştırıcının aynı ortamı kullanmasını engeller. Yalnızca boşluğu doğrulanan test veritabanında sabit uygulama tablolarını oluşturur ve temizler; beklenmeyen nesne oluşursa otomatik temizlik durur. Native şema geçişi, HTTP, iki bağımsız havuzda paralel yazma/okuma kilidi ve sentetik rol bazlı ölçüm senaryolarının belirtilen CI koşusu başarılıdır; **kurum ortamı kabulü henüz yapılmadı**. Komutlar, ölçüm sınırları ve elle çalıştırılabilen GitHub test ortamı [MSSQL test kılavuzunda](MSSQL-TEST-KILAVUZU.md) açıklanır.
 
 ## 7. Kod dosyaları
 
@@ -140,7 +154,7 @@ Test, veritabanında herhangi bir kullanıcı tablosu/görünüm/yordam gibi nes
 - `backend/migrate.mjs`, `backend/check-db.mjs`: IT şema ve bağlantı komutları.
 - `frontend/src/storage.ts`: mevcut arayüzün API bağlantısı.
 
-Frontend değişirse `npm --prefix frontend install`, `npm run build` ve `npm --prefix frontend run typecheck` kullanılır. Pakette site/ hazır derlenmiştir; normal kullanım için yeniden build gerekmez.
+Kaynak paketten dağıtım hazırlarken `npm ci --omit=dev`, `npm --prefix frontend ci --include=dev`, `npm --prefix frontend run typecheck`, `npm run build` ve `npm run deploy:verify` kullanılır; PowerShell'de `npm.cmd` yazılabilir. Frontend derleme paketleri production ortamında da gereklidir. Hazır `site/` ile kaynak/manifest birlikte taşınır. Terminal başlatıcıları arayüzü derler; headless servis ise dağıtım sırasında hazırlanıp doğrulanan paketi çalıştırır. Kaynak değiştiğinde eski `site/` kullanılmaz.
 
 Resmî kaynaklar:
 
@@ -152,13 +166,15 @@ Resmî kaynaklar:
 
 ### Giriş sınırı ve güvenilen proxy
 
-HTTPS proxy aynı sunucuda çalışıyorsa `.env` içinde `TRUST_PROXY=loopback` tanımlayın. Ayrı sunucudaysa yalnızca o proxy'nin IP adresini veya dar CIDR aralığını yazın; birden fazla adres virgülle ayrılır. Doğrudan yerel kullanımda boş bırakın. `true`, hop sayısı veya tüm ağı kapsayan `/0` kullanılamaz. Node portuna yalnızca güvenilen proxy'nin erişebilmesini sağlayın. Proxy, dışarıdan gelen `X-Forwarded-For` başlığını güvenli biçimde yeniden oluşturmalı/istemci adresini eklemelidir.
+Yukarıdaki **HTTPS proxy koşulları** birlikte uygulanır: güvenilen gerçek proxy adresi, yalnız proxy'ye açık Node portu, yeniden oluşturulan forwarded başlıkları, `X-Forwarded-Proto: https` ve doğru Host/Origin. Doğrudan yerel HTTP kullanımında `TRUST_PROXY` boş bırakılır; `true`, hop sayısı, DNS adı veya tüm ağı kapsayan `/0` kullanılamaz.
 
 Giriş limiti proxy arkasında doğrulanan istemci IP adresinden hesaplanır. Başarılı girişler deneme kotasını tüketmez; başarısız denemeler için IP ve kullanıcı adı sınırları korunur. **Şema 29:** MSSQL'de `kp_rate_limits` ortak sayaç deposu otomatik kullanılır; aynı DB'ye bağlı uygulama örnekleri kotayı paylaşır. Yerel SQL.js sayacı süreç belleğinde kalır. IPv4-mapped adresler normalize edilir, IPv6 `/64` grubu ortak kota kullanır; bozuk/büyük login gövdeleri de sayılır. Depo erişimi kesilirse 503 döner, yerel sayaca geri dönülmez.
 
-MSSQL güncellemesinde tüm uygulama örneklerini durdurun, tam yedek alın, IT migration hesabıyla `npm run db:migrate` çalıştırıp çalışma zamanı hesabına dönün. Sayaç tablosu için SELECT/INSERT/UPDATE/DELETE erişimi gerekir. Ayrı sayaç kilidi kaynak verilerinin genel kilidini değiştirmez. Kurulum, header/firewall ve iki sunuculu test ayrıntıları [giriş koruması kılavuzunda](GIRIS-KORUMASI-VE-PROXY.md). Native koşu ve kurumun gerçek proxy adreslerinin doğrulaması bekliyor.
+MSSQL güncellemesinde tüm uygulama örneklerini durdurun, tam yedek alın, IT migration hesabıyla `npm run db:migrate` çalıştırıp çalışma zamanı hesabına dönün. Sayaç tablosu için SELECT/INSERT/UPDATE/DELETE erişimi gerekir. Ayrı sayaç kilidi kaynak verilerinin genel kilidini değiştirmez. Kurulum, header/firewall ve iki sunuculu test ayrıntıları [giriş koruması kılavuzunda](GIRIS-KORUMASI-VE-PROXY.md). İki native havuz/HTTP hizmetinde ortak sayaç belirtilen CI koşusunda doğrulandı; kurum proxy adresleri, ağ topolojisi, asgari yetkili SQL hesabı ve CA kabulü bekliyor.
 
 ### 1 Ekim 2026 mimari iyileştirme paketi — şema 25
+
+Aşağıdaki notlar tarihsel değişiklik kaydıdır; 4 Ekim'deki CI durumu ve kurum kabul sınırları yukarıda açıklanmıştır. Bakım/yedek/geri dönüşün gerçek kurum koşusu, native uygulama CI'sinden ayrı kabul işidir.
 
 - Bu sürüm Node.js 24 veya üzerini gerektirir. Sunucu ve arayüz, `shared/` içindeki aynı TypeScript iş kurallarını kullanır; dağıtıma bu klasör de dahil edilmelidir.
 - Güncellemeden önce veritabanının yedeğini alın. MSSQL ortamında migration hesabıyla `npm run db:migrate` çalıştırın; ardından çalışma zamanı hesabına dönün. Şema 25, `kp_audit_events` tablosunu ve zaman indeksini ekler. Yerel SQL.js modunda migration başlangıçta otomatik uygulanır.

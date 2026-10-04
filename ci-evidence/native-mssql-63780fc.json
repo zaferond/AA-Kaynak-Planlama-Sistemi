@@ -1,0 +1,97 @@
+{
+  "checkedAt": "2026-10-04T07:39:00.416Z",
+  "node": "v24.21.0",
+  "schema": 30,
+  "server": {
+    "compatibilityLevel": 160,
+    "productVersion": "16.0.4295.3",
+    "edition": "Developer Edition (64-bit)"
+  },
+  "load": {
+    "size": 1000,
+    "samples": 3,
+    "pools": 2,
+    "measurements": [
+      {
+        "role": "admin",
+        "medianMs": 31.621299999998882,
+        "maxMs": 56.236627000002045,
+        "allocationRows": 1000,
+        "revisionRows": 1200,
+        "jsonBytes": 116719
+      },
+      {
+        "role": "manager",
+        "medianMs": 26.482206000000588,
+        "maxMs": 51.93577599999844,
+        "allocationRows": 186,
+        "revisionRows": 386,
+        "jsonBytes": 20279
+      },
+      {
+        "role": "normal",
+        "medianMs": 24.62533700000131,
+        "maxMs": 25.423236000002362,
+        "allocationRows": 186,
+        "revisionRows": 200,
+        "jsonBytes": 10551
+      }
+    ],
+    "parallelWrites": {
+      "requests": 24,
+      "elapsedMs": 1738.8808370000006
+    },
+    "scope": "Synthetic native SQL Store pipeline, including global application lock. No HTTP/browser or production p95/capacity claim."
+  },
+  "sourceHashes": {
+    "backend/store.mjs": "7838feb4f7acadebfb28b5a407d625ce81de95aad6924477580339237e08c661",
+    "backend/identity-repository.mjs": "a77fd23a459ef78293ad6824d7749477cf9024b36ccfa04de0c991fdfdd8856f",
+    "backend/planning-reader.mjs": "4ecb8319bd5671c5d8fbc4d6688c97503f690dbcfb33962a54e54016cd2f7b82",
+    "backend/planning-writer.mjs": "bbdb2201a76e11dfcca601308280b73113d4bb24fe1c7abc2579fc3cb5fc993f",
+    "backend/schema-migrations.mjs": "112ce0cf203fc37da9afb37f35ce8f3e2044c8b4605ef57e22cce7c9f9bbbab3",
+    "backend/migration-catalog.mjs": "7f8bcda2fc782c183113ba68573f1995bf46007ca77794cc12d270b58e689680",
+    "backend/adapters/mssql.mjs": "3456c6b2837156788477b2cc1ebb738cd54f12dd96ff6b04c6aa789c300a49e9",
+    "backend/rate-limits.mjs": "86f3f4797815ae83c3579ea8c515cf51e9f2bce07e7b4d64329cc1c6952ed9b4",
+    "tests/rate-limit-suite.mjs": "834b6fd773c2ed4632088bf3232e4867e5b2bdacfd78ed2b2bac38d2d3580b60",
+    "tests/login-test-fixture.mjs": "3c5f97ed5d2e415761bc9b1561abd633eacbe86730895280541f68e41d055602",
+    "backend/read-records.mjs": "a16b47091fdd8cf93fc69d5db5443bb322e2945ddc0708eb24a6d79ed807ae17",
+    "backend/operations.mjs": "4d1d35a5de40e556c3218f4d422c2664c54f4a8db7428f60824ee0df0cfee6e6",
+    "tests/mssql-native-suite.mjs": "30b1ec452970c19742cef9fd77960568760db6b5f677f3886c3c5e043af6efdc",
+    "scripts/mssql-test-environment.mjs": "0a28e6123747ccbe4d65cadcb8008a1486476fbfa50c8f0a9dbe566cd59b8cb1",
+    "scripts/run-mssql-tests.mjs": "7622c9a62fa075af55b85308ac6115ddab323df3a5137b9a9b8d7f4d59a01d37",
+    "scripts/benchmark-fixture.mjs": "1be0b033283b91a0223a5c5c68c544defb44d95554fe6ab163fd5428c19d3582",
+    "tests/mssql.integration.mjs": "39665742dbea840ceebdf60355f77613d72359ad91047a8b49c24af47781b501",
+    "tests/integration-suite.mjs": "7b8ce58a6b98fd2bd0e073d0f28bad5592ba5cb3d64e6ea1a7a4b84ed21c4118",
+    "tests/concurrency-suite.mjs": "b870807f6dadb8fb9f681127a642db6f38af41a08f5d9d8ee49489ee4b239b04",
+    "shared/server-domain.ts": "a1bce79185aa744b2323022d20236cdaeb78cfcb29c36792499005cc0098a678",
+    "backend/migrations/001_mssql.sql": "ec5452c3ffe47831146135a977bfafa163be5b3169b759486065fd6f1dc77ded",
+    "backend/migrations/002_mssql.sql": "5938fe978211ef88ab0c80cd439d2b25ce2a93efafd8ba669f4a6e3ced448d45",
+    "backend/migrations/004_mssql.sql": "85f4186d53aa38f334f3a72cf472cd21a142fdc18af08b3a41dd9dac98af7def",
+    "backend/migrations/005_mssql.sql": "969a66de03d2922b51b756278b228c98ba4f06873ea28167a39a0c80cb4dca15",
+    "backend/migrations/006_mssql.sql": "b0fabe554ce47999e73f829526a3665d4fac7e67b6bfbe0861a4cb6bec67b72e",
+    "backend/migrations/007_mssql.sql": "8b8015faf67730a76de8caa95ffd832cd844956e72c5eb46d9fd8aa351e4220d",
+    "backend/migrations/008_mssql.sql": "9e25088aa7e3b9bf58a6b2a7ef49813f613b4f3e3db7b4f8f5d8eae3ccfb0fd2",
+    "backend/migrations/009_mssql.sql": "3c30c1e3a87cbc858ead609a79a142016ca50f1b96313767778344f9cad47c97",
+    "backend/migrations/010_mssql.sql": "4a1f3cd0cf3748389f87bfcc8ead735a5eb17226d2515753f5c695a2b28a7067",
+    "backend/migrations/011_mssql.sql": "34dc634781e4764688f53d5df3158e44f9cc9760043ba65f761ce4e2abbbda76",
+    "backend/migrations/013_mssql.sql": "75883903ffaeba931053fa1d51a09c64f723b325f849d8078f2e12f0e62a7439",
+    "backend/migrations/014_mssql.sql": "3af40e61c12c79881a50eff1e73a5f728881bfe7ad785b0e6b178a2c9e13fa7b",
+    "backend/migrations/015_mssql.sql": "75ee7149977408475d65f43a5430499da29eaa5b4c70b00d01f5ebebef969545",
+    "backend/migrations/016_mssql.sql": "9ddc9e6583c41c855a0c16d4af16cc2a48d40d57210647ca940b520189ac082b",
+    "backend/migrations/017_mssql.sql": "ee3d7e6ae9af2947c7222c6c42b7c063e3cc7e554069633eba5eda3341fd9c83",
+    "backend/migrations/018_mssql.sql": "47ad6ac9c88a2e5bf29d9a4bc05883e89a4e4fa38219356baf7bb0114a032278",
+    "backend/migrations/019_mssql.sql": "3d39a8e7479a1f7a3d7115a491ecfe03ae4d39733c20c563c35abdab9279e9de",
+    "backend/migrations/020_mssql.sql": "d840f8431b4843ed1fa899c8e01a0632e0d6414ddcc9321e1616b2ec967173c2",
+    "backend/migrations/021_mssql.sql": "dd2e49c012e3e6a1c0dadf1eaae9ccee7550efe7677698a6ce7e2cb2d9dd0bd4",
+    "backend/migrations/022_mssql.sql": "9e121421d37226c284d99c64d725a686c9e02ab358d1fa50242c97d62eabfc4f",
+    "backend/migrations/023_mssql.sql": "791e03a0aba94e46d2b7b0789139f4e8a35262fd7dbbce353f8e802b558afe63",
+    "backend/migrations/024_mssql.sql": "7e4c51a01638bbff456f10b04bb7f2452046d49308ea5a73efc8549b54b21269",
+    "backend/migrations/025_mssql.sql": "e4dc1e70e03e5e2bf44ae8c523ab32eea479897e55120c3cf7bf0e8cdb90c85f",
+    "backend/migrations/026_mssql.sql": "263af83aafcca1285250574c5c602d660fa4ee1c21e4769cd4ca4807b14bf716",
+    "backend/migrations/027_mssql.sql": "010a8b8f827cdacac7d814f72055d28827c301438cb5992fc64030e855978a17",
+    "backend/migrations/028_mssql.sql": "ffe027ded5d7c129252de181f506d3f529df4bf007867f55dbc4fe325fff2280",
+    "backend/migrations/029_mssql.sql": "e90cf19e01cd98eacd9f9d45293ccc3e0d5ba9ebf83a79723a9e13bbf7ee9da0",
+    "backend/migrations/030_mssql.sql": "c062937400d6aea29f661b0ad0b83f1564c98ae56c1ebc5e694a78b11c62c4d4"
+  },
+  "cleanupVerified": true
+}

@@ -1,6 +1,8 @@
 # Native MSSQL doğrulaması — 31. adım
 
-Bu paket gerçek SQL Server üzerinde çalışacak kontrolleri hazırlar. 2 Ekim 2026'da bu bilgisayarda SQL Server/Docker veya ayrılmış test bağlantısı bulunmadığından **native test ve native performans sonucu henüz yoktur**. Yerel güvenlik testleri gerçek MSSQL çalıştırması değildir.
+**Güncel durum — 4 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `63780fc4538829c16c7b14739f882a9851629f59` commit'i 19/19 native testi geçti; şema 30 ve temizlik doğrulandı. Sonuç JSON'u, kaynak hash'leri ve koşu kimliği [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) saklanır. Bu koşu sonraki commit'lerin tamamını veya kurum SQL/TLS/Windows/proxy ortamını doğrulamaz.
+
+**Tarihsel durum — 2 Ekim 2026:** bu bilgisayarda SQL Server/Docker veya ayrılmış test bağlantısı olmadığı için o tarihte native sonuç yoktu. Bu sınırlama 4 Ekim'de GitHub'ın geçici test ortamıyla giderildi; bu bilgisayarda veya kurumda native test yapılmış sayılmaz. Yerel güvenlik testleri gerçek MSSQL çalıştırması değildir.
 
 ## Ayrı test sunucusunda çalıştırma
 
@@ -32,7 +34,7 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 6. OPENJSON üzerinden uzun Türkçe not, tamamlandı bilgisi, karma aralık/Milestone ve içi boş baklavanın korunması; yanlış display/diamond değerlerinin native CHECK tarafından reddedilmesi.
 7. BIN2 karşılaştırmalı revision kapsamı: büyük/küçük harf, Türkçe, wildcard karakterleri, özel/tombstone sürümler, 900 parametre ve 901/legacy fallback.
 8. Rol bazlı filtreli snapshot'ın bağımsız tam okuma referansıyla eşitliği; 24 bağımsız yazmanın kendi commit yanıtı; bağlantı yeniden açıldığında veri/şema eşitliği.
-9. İki bağımsız MSSQL havuzunda 40 eşzamanlı sayaç rezervasyonundan yalnız 15'inin kabulü; yeni hizmette kotanın korunması; iki HTTP hizmetinde ortak IP/kullanıcı adı sınırı. Kaynak verilerinin genel kilidi tutulurken sayaç kilidinin bağımsız çalışması. Bu testler eklenmiştir, henüz native ortamda koşulmamıştır.
+9. İki bağımsız MSSQL havuzunda 40 eşzamanlı sayaç rezervasyonundan yalnız 15'inin kabulü; yeni hizmette kotanın korunması; iki HTTP hizmetinde ortak IP/kullanıcı adı sınırı. Kaynak verilerinin genel kilidi tutulurken sayaç kilidinin bağımsız çalışması. Bu senaryolar belirtilen 4 Ekim CI koşusunda geçti; kurum proxy topolojisi veya giriş kapasitesi ölçümü değildir.
 
 ## Ölçüm ve rapor
 
@@ -52,4 +54,4 @@ Global uygulama kilidi bu pakette korunur. Kaldırılması veya repository kapsa
 
 Bu workflow'un container'ında şifreleme açık, self-signed sertifika için trust açıktır. Bu koşu kurumun CA/hostname doğrulamasını, NTLM/domain bağlantısını, şirket proxy'sini veya Windows servis kurulumunu doğrulamaz. Kurum bağlantısı bunlar için ayrı test gerektirir. [Microsoft container desteği](https://learn.microsoft.com/en-us/sql/linux/sql-server-linux-docker-container-deployment) x86-64 Linux içindir; bu bilgisayar ARM64 olduğundan yerel bir koşu yapılmış sayılmaz.
 
-Bu yerel turda workflow çalıştırılmadı; başarılı runner sonucu doğrulanmadı. Gerçek koşu başarılı olmadan 31. adımın native doğrulaması tamamlandı olarak işaretlenmemelidir.
+4 Ekim'deki [başarılı native koşu](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37186385433), 31. adımın belirtilen commit ve sentetik CI ortamı için native kanıtıdır. Kaynak hash'leri yalnız raporun kapsadığı dosyalarla karşılaştırılır; hash eşitliği bütün uygulamanın veya yeni HTTP/başlatıcı değişikliklerinin native testi sayılmaz. Kurumun asgari yetkili SQL hesabı, CA/hostname/NTLM, Windows servis/ACL, backup/restore kabulü ve gerçek yük ayrıca doğrulanmalıdır. Güncel kalite CI'si ve bu önceki native koşu ayrı kayıtlardır.
