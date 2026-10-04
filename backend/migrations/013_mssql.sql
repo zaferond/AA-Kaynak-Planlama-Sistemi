@@ -3,7 +3,11 @@ SELECT TOP 1 @old_role_constraint=[name]
 FROM sys.check_constraints
 WHERE [parent_object_id]=OBJECT_ID(N'dbo.kp_users') AND [definition] LIKE N'%role%';
 IF @old_role_constraint IS NOT NULL
-  EXEC(N'ALTER TABLE [dbo].[kp_users] DROP CONSTRAINT '+QUOTENAME(@old_role_constraint));
+BEGIN
+  DECLARE @drop_role_sql nvarchar(max);
+  SET @drop_role_sql=N'ALTER TABLE [dbo].[kp_users] DROP CONSTRAINT '+QUOTENAME(@old_role_constraint);
+  EXEC(@drop_role_sql);
+END;
 ALTER TABLE [dbo].[kp_users] ADD CONSTRAINT [ck_kp_users_role] CHECK ([role] IN ('admin','manager','normal'));
 ALTER TABLE [dbo].[kp_users] ADD [resource_id] nvarchar(120) COLLATE Latin1_General_100_BIN2 NULL;
 ALTER TABLE [dbo].[kp_users] ADD CONSTRAINT [fk_kp_users_resource] FOREIGN KEY ([resource_id]) REFERENCES [dbo].[kp_resources]([id]) ON DELETE SET NULL;
