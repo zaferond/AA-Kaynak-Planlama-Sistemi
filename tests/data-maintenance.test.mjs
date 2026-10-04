@@ -27,6 +27,10 @@ import {
   openSnapshot,
   sha256,
 } from "../scripts/maintenance-snapshot.mjs";
+import {
+  validateMigrationCatalog,
+  migrationSql,
+} from "../backend/migration-catalog.mjs";
 
 const fixedNow = new Date("2026-10-02T09:00:00.000Z");
 const exec = promisify(execFile);
@@ -125,6 +129,283 @@ async function editManifest(dir, change) {
   change(manifest);
   await fs.writeFile(file, JSON.stringify(manifest));
 }
+async function corruptSnapshot(bytes, schema, change) {
+  const { db } = openSnapshot(bytes, schema);
+  try {
+    db.exec("PRAGMA query_only=OFF");
+    await change(db);
+    return Buffer.from(db.export());
+  } finally {
+    db.close();
+  }
+}
+async function replaceBundleImage(directory, bytes, change = () => {}) {
+  await fs.writeFile(path.join(directory, "database.sqlite"), bytes);
+  await editManifest(directory, (manifest) => {
+    manifest.sourceSha256 = sha256(bytes);
+    manifest.files["database.sqlite"] = {
+      sha256: sha256(bytes),
+      bytes: bytes.length,
+    };
+    change(manifest);
+  });
+}
+async function outputEntries(directory) {
+  return fs.readdir(directory).catch((error) => {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  });
+}
+
+test("backup catalog includes inline migrations; missing 3/12 fail creation and verification even with recomputed legacy checksums", async (t) => {
+  const f = await fixture(t),
+    schema = await currentSchema();
+  assert(
+    schema.requiredVersions.includes(3) && schema.requiredVersions.includes(12),
+  );
+  assert(!schema.requiredVersions.includes(2));
+  assert.notEqual(schema.migrationsSha256, schema.legacyMigrationsSha256);
+  await validateMigrationCatalog("sqljs");
+  await validateMigrationCatalog("mssql");
+  const good = await f.backup();
+  for (const version of [3, 12]) {
+    const bytes = await corruptSnapshot(f.before, schema, (db) =>
+      db.exec("DELETE FROM kp_schema_migrations WHERE version=" + version),
+    );
+    const output = path.join(f.dir, "rejected-" + version);
+    await assert.rejects(
+      writeBundle({ bytes, output }),
+      /migration geçmişi eksik/,
+    );
+    assert.deepEqual(await outputEntries(output), []);
+    const forged = path.join(f.dir, "forged-" + version);
+    await fs.cp(good.directory, forged, { recursive: true });
+    await replaceBundleImage(forged, bytes, (m) => {
+      m.migrationsSha256 = schema.legacyMigrationsSha256;
+      m.tableCounts.kp_schema_migrations--;
+    });
+    await assert.rejects(verifyBundle(forged), /migration geçmişi eksik/);
+  }
+  assert.deepEqual(await fs.readFile(f.source), f.before);
+});
+
+test("backups reject missing credential columns and altered types, nullability, defaults, keys and constraints", async (t) => {
+  const f = await fixture(t),
+    schema = await currentSchema(),
+    good = await f.backup();
+  const missing = await corruptSnapshot(f.before, schema, (db) =>
+    db.exec("ALTER TABLE kp_users DROP COLUMN password_hash"),
+  );
+  await assert.rejects(
+    writeBundle({ bytes: missing, output: f.output }),
+    /sütun/,
+  );
+  const forged = path.join(f.dir, "missing-column");
+  await fs.cp(good.directory, forged, { recursive: true });
+  await replaceBundleImage(forged, missing);
+  await assert.rejects(verifyBundle(forged), /sütun/);
+  const variants = [
+    [
+      "kp_users",
+      (sql) => sql.replace("[name] TEXT NOT NULL", "[name] TEXT NULL"),
+    ],
+    [
+      "kp_users",
+      (sql) => sql.replace("[password_hash] TEXT", "[password_hash] BLOB"),
+    ],
+    [
+      "kp_projects",
+      (sql) =>
+        sql.replace(
+          "[sort_order] INTEGER CHECK",
+          "[sort_order] INTEGER DEFAULT 1 CHECK",
+        ),
+    ],
+    [
+      "kp_allocations",
+      (sql) =>
+        sql.replace(
+          "PRIMARY KEY ([team_id],[project_id],[month])",
+          "PRIMARY KEY ([month],[project_id],[team_id])",
+        ),
+    ],
+    ["kp_users", (sql) => sql.replace("UNIQUE ([username]),", "")],
+    ["kp_project_risks", (sql) => sql.replace(/,\s*FOREIGN KEY[^\n]+/, "")],
+    [
+      "kp_users",
+      (sql) =>
+        sql.replace(
+          "CHECK ([role] IN ('admin','manager','normal'))",
+          "CHECK (1=1)",
+        ),
+    ],
+  ];
+  for (const [table, change] of variants) {
+    const bytes = await corruptSnapshot(f.before, schema, (db) => {
+      const sql = db.exec(
+          `SELECT sql FROM sqlite_master WHERE name='${table}'`,
+        )[0].values[0][0],
+        altered = change(sql);
+      assert.notEqual(altered, sql, "Fixture must really change " + table);
+      // Build a valid, weaker schema; deleting sqlite_master text alone would
+      // leave an orphan UNIQUE index and test integrity rather than the contract.
+      db.exec("PRAGMA foreign_keys=OFF");
+      db.exec(
+        altered.replace(
+          /^CREATE TABLE\s+(?:\[[^\]]+\]|"[^"]+"|\S+)\s*/,
+          "CREATE TABLE [schema_test_table] ",
+        ),
+      );
+      db.exec(
+        `INSERT INTO schema_test_table SELECT * FROM ${table}; DROP TABLE ${table}; ALTER TABLE schema_test_table RENAME TO ${table};`,
+      );
+      assert.equal(db.exec("PRAGMA integrity_check")[0].values[0][0], "ok");
+    });
+    await assert.rejects(
+      writeBundle({ bytes, output: f.output }),
+      /şeması eşleşmiyor/,
+    );
+  }
+  assert.deepEqual(await fs.readFile(f.source), f.before);
+});
+
+test("full backup creation, verification and recovery reject unusable password records without changing source bytes", async (t) => {
+  const f = await fixture(t),
+    schema = await currentSchema(),
+    good = await f.backup();
+  for (const [index, salt, hash] of [
+    [0, "", ""],
+    [1, "a".repeat(32), "b".repeat(127)],
+    [2, "g".repeat(32), "b".repeat(128)],
+    [3, "a".repeat(32), "z".repeat(128)],
+  ]) {
+    const bytes = await corruptSnapshot(f.before, schema, (db) => {
+      const statement = db.prepare(
+        "UPDATE kp_users SET password_salt=?,password_hash=?",
+      );
+      try {
+        statement.run([salt, hash]);
+      } finally {
+        statement.free();
+      }
+    });
+    const output = path.join(f.dir, "invalid-credentials-" + index);
+    await assert.rejects(writeBundle({ bytes, output }), /parola kayıt biçimi/);
+    assert.deepEqual(await outputEntries(output), []);
+    const forged = path.join(f.dir, "forged-credentials-" + index);
+    await fs.cp(good.directory, forged, { recursive: true });
+    await replaceBundleImage(forged, bytes);
+    await assert.rejects(verifyBundle(forged), /parola kayıt biçimi/);
+    await assert.rejects(
+      prepareRecovery({ backup: forged, output }),
+      /parola kayıt biçimi/,
+    );
+  }
+  assert.deepEqual(await fs.readFile(f.source), f.before);
+});
+
+test("the previous schema-30 catalog fingerprint is explicitly compatible but arbitrary fingerprints are rejected", async (t) => {
+  const f = await fixture(t),
+    schema = await currentSchema(),
+    good = await f.backup();
+  assert.equal(schema.compatibleMigrationsSha256.length, 1);
+  await replaceBundleImage(good.directory, f.before, (manifest) => {
+    manifest.migrationsSha256 = schema.compatibleMigrationsSha256[0];
+  });
+  await verifyBundle(good.directory);
+  await prepareRecovery({
+    backup: good.directory,
+    output: path.join(f.dir, "compatible-recovery"),
+  });
+  await replaceBundleImage(good.directory, f.before, (manifest) => {
+    manifest.migrationsSha256 = "0".repeat(64);
+  });
+  await assert.rejects(verifyBundle(good.directory), /şema kaynakları farklı/);
+  assert.deepEqual(await fs.readFile(f.source), f.before);
+});
+
+test("valid legacy fingerprint backups remain recoverable while new backups fingerprint migration code", async (t) => {
+  const f = await fixture(t),
+    schema = await currentSchema(),
+    bundle = await f.backup();
+  const manifest = JSON.parse(
+    await fs.readFile(path.join(bundle.directory, "manifest.json"), "utf8"),
+  );
+  assert.equal(manifest.migrationsSha256, schema.migrationsSha256);
+  await editManifest(bundle.directory, (m) => {
+    m.migrationsSha256 = schema.legacyMigrationsSha256;
+  });
+  const verified = await verifyBundle(bundle.directory);
+  assert.deepEqual(verified.contents["database.sqlite"], f.before);
+  const recovery = await prepareRecovery({
+    backup: bundle.directory,
+    output: f.output,
+  });
+  const reopened = new Store({
+    env: {
+      DB_PROVIDER: "sqljs",
+      SQLJS_FILE: path.join(recovery.directory, "database.sqlite"),
+    },
+  });
+  try {
+    await reopened.connect();
+    const user = await reopened.findUser({ id: "root-admin" });
+    assert(
+      await verifyPassword("Maintenance-fixture-only-782!", user.password),
+    );
+    assert.deepEqual((await reopened.read()).data, (await f.store.read()).data);
+  } finally {
+    await reopened.close();
+  }
+  assert.deepEqual(await fs.readFile(f.source), f.before);
+});
+
+test("a complete but unreadable application model is rejected without modifying the source", async (t) => {
+  const f = await fixture(t),
+    schema = await currentSchema();
+  const bytes = await corruptSnapshot(f.before, schema, (db) =>
+    db.exec("UPDATE kp_settings SET calendar_days='not JSON' WHERE id=1"),
+  );
+  // SQLite, columns and constraints are valid; the real Store projection must fail.
+  const { db } = openSnapshot(bytes, schema);
+  db.close();
+  await assert.rejects(
+    writeBundle({ bytes, output: f.output }),
+    /uygulama modeli/,
+  );
+  assert.deepEqual(await outputEntries(f.output), []);
+  assert.deepEqual(await fs.readFile(f.source), f.before);
+});
+
+test("a real v2 upgrade with the optional legacy table passes backup and restore validation", async (t) => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-backup-v2-")),
+    source = path.join(dir, "legacy.sqlite");
+  const adapter = new SqlJsAdapter(source);
+  const store = new Store({
+    env: { DB_PROVIDER: "sqljs", SQLJS_FILE: source },
+  });
+  t.after(async () => {
+    await store.close();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+  await adapter.open();
+  try {
+    await adapter.transaction(async (c) => {
+      await c.batch(await migrationSql("sqljs", 1));
+      await c.batch(await migrationSql("sqljs", 2));
+    });
+  } finally {
+    await adapter.close();
+  }
+  await store.connect();
+  const before = await fs.readFile(source),
+    output = path.join(dir, "private");
+  const bundle = await writeBundle({ bytes: before, output });
+  const { contents, manifest } = await verifyBundle(bundle.directory);
+  assert.equal(manifest.tableCounts.kp_person_allocations, 0);
+  assert.deepEqual(contents["database.sqlite"], before);
+  assert.deepEqual(await fs.readFile(source), before);
+});
 function tableRows(bytes, schema) {
   const { db, summary } = openSnapshot(bytes, schema);
   try {

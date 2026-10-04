@@ -371,7 +371,7 @@ test("invalid inclusion and departure dates are rejected", () => {
       version("Aktif İlan", "2026-09", { included: true, start: "" }),
     ),
   ];
-  assert.throws(() => validate(d), /başlangıç ayı zorunludur/);
+  assert.throws(() => validate(d), /İşbaşı Tarihi/);
   d.resources = [
     resource(
       "former",

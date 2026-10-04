@@ -4,11 +4,14 @@ import type { Data } from "./model";
 import type { Principal } from "./access";
 import type { ImportRow } from "./resource-import";
 import { mergePlanningDelta } from "../../shared/planning-response.ts";
+import { publishSessionChange, watchSessionChanges } from "./session-events.ts";
 let principal: Principal | null = null,
   csrf = "",
   generation = -1;
 let writeTail: Promise<unknown> = Promise.resolve();
 let sessionEpoch = 0;
+let sessionContext = 0;
+let sessionIdentity = "";
 let latestView: { data: Data; generation: number; user?: Principal } | null =
   null;
 export class StaleSessionError extends Error {
@@ -17,19 +20,51 @@ export class StaleSessionError extends Error {
     this.name = "StaleSessionError";
   }
 }
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
 function clearSession() {
   sessionEpoch++;
+  sessionContext++;
   principal = null;
   csrf = "";
+  sessionIdentity = "";
   generation = -1;
   latestView = null;
+  writeTail = Promise.resolve();
 }
 function expireSession() {
+  const hadSession = !!principal || !!sessionIdentity;
   clearSession();
+  if (hadSession) publishSessionChange();
   window.dispatchEvent(new Event("session-expired"));
+}
+function sessionChanged() {
+  clearSession();
+  window.dispatchEvent(new Event("session-changed"));
+}
+export const observeSessionChanges = () => watchSessionChanges(sessionChanged);
+function acceptSessionIdentity(identity: string | null | undefined) {
+  if (!identity) return; // Compatibility with an older server during rollout.
+  if (sessionIdentity && identity !== sessionIdentity) {
+    sessionChanged();
+    throw new StaleSessionError();
+  }
+  sessionIdentity = identity;
 }
 export const currentUser = () =>
   principal ? structuredClone(principal) : null;
+export function captureSessionGuard() {
+  const context = sessionContext;
+  return () => {
+    if (context !== sessionContext) throw new StaleSessionError();
+  };
+}
 async function api(path: string, body?: unknown) {
   const epoch = sessionEpoch;
   const response = await fetch("/api" + path, {
@@ -45,14 +80,24 @@ async function api(path: string, body?: unknown) {
           },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (epoch !== sessionEpoch) throw new StaleSessionError();
+  if (epoch !== sessionEpoch) {
+    void response.body?.cancel().catch(() => {});
+    throw new StaleSessionError();
+  }
+  try {
+    acceptSessionIdentity(response.headers?.get("X-Session-Identity"));
+  } catch (error) {
+    void response.body?.cancel().catch(() => {});
+    throw error;
+  }
   let result = await response.json();
   if (epoch !== sessionEpoch) throw new StaleSessionError();
+  acceptSessionIdentity(result.sessionIdentity);
   if (!response.ok) {
-    if (response.status === 401) {
+    if (response.status === 401 && path !== "/auth/login") {
       expireSession();
     }
-    throw Error(result.error || "Sunucu hatası.");
+    throw new ApiError(result.error || "Sunucu hatası.", response.status);
   }
   if (result.responseMode === "planning-delta-v1") {
     if (latestView && result.generation <= latestView.generation)
@@ -94,13 +139,19 @@ export async function login(
     password,
     remember,
   });
+  publishSessionChange();
 }
 export async function resumeRemembered() {
   try {
     await api("/auth/me");
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    if (
+      error instanceof StaleSessionError ||
+      (error instanceof ApiError && error.status === 401)
+    )
+      return false;
+    throw error;
   }
 }
 export async function logout() {
@@ -109,6 +160,7 @@ export async function logout() {
   generation = -1;
   await api("/auth/logout", {});
   clearSession();
+  publishSessionChange();
 }
 export async function readLocal(): Promise<Data> {
   return (await api("/data")).data;
@@ -116,13 +168,32 @@ export async function readLocal(): Promise<Data> {
 export async function checkUpdates() {
   const epoch = sessionEpoch;
   const response = await fetch("/api/version", { credentials: "same-origin" });
-  if (epoch !== sessionEpoch) return false;
+  if (epoch !== sessionEpoch) {
+    void response.body?.cancel().catch(() => {});
+    return false;
+  }
+  try {
+    acceptSessionIdentity(response.headers?.get("X-Session-Identity"));
+  } catch (error) {
+    if (error instanceof StaleSessionError) {
+      void response.body?.cancel().catch(() => {});
+      return false;
+    }
+    throw error;
+  }
   if (response.status === 401) {
     expireSession();
     return false;
   }
   if (!response.ok) return false;
   const r = await response.json();
+  if (epoch !== sessionEpoch) return false;
+  try {
+    acceptSessionIdentity(r.sessionIdentity);
+  } catch (error) {
+    if (error instanceof StaleSessionError) return false;
+    throw error;
+  }
   return epoch === sessionEpoch && r.generation > generation;
 }
 export async function writeBatch(changes: Change[]): Promise<Data> {
@@ -205,9 +276,11 @@ export async function exportBackup() {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 export async function restoreBackup(file: File, _includeUsers = false) {
+  const assertSession = captureSessionGuard();
   if (file.size > 20 * 1024 * 1024)
     throw Error("Yedek en fazla 20 MB olabilir.");
   const input = JSON.parse(await file.text());
+  assertSession();
   if (input.format === "kaynak-planlama-encrypted-v1")
     throw Error(
       "Eski şifreli yedeği önce kılavuzdaki convert-legacy komutuyla dönüştürün.",

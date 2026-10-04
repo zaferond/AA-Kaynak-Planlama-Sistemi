@@ -1,3 +1,4 @@
+import { ROOT_ADMIN_ID } from "../shared/access.ts";
 import { trustedProxyAddresses } from "./trusted-proxies.mjs";
 import { Store } from "./store.mjs";
 import { createApp } from "./app.mjs";
@@ -16,12 +17,12 @@ try {
     "Giriş sayacı:",
     store.provider === "mssql" ? "ortak MSSQL deposu" : "yerel süreç belleği",
   );
-  if (!(await store.findUser({ id: "root-admin" }))) {
+  if (!(await store.findUser({ id: ROOT_ADMIN_ID }))) {
     const username = (env.ADMIN_USERNAME || "").trim().toLowerCase();
     if (!/^[a-z0-9._@+-]{3,100}$/.test(username))
       throw Error("Önce npm run setup komutunu çalıştırın.");
     await store.bootstrapUser({
-      _id: "root-admin",
+      _id: ROOT_ADMIN_ID,
       username,
       name: "Sistem Yöneticisi",
       role: "admin",

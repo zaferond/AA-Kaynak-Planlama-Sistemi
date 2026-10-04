@@ -1,6 +1,12 @@
-import { escapeXml, columnName as column } from "./xlsx-cells.ts";
+import {
+  excelCellText,
+  excelTextLines,
+  splitExcelText,
+  EXCEL_MAX_ROWS,
+  columnName as column,
+} from "./xlsx-cells.ts";
 import type { ReportProject } from "./project-info-report";
-import { zipFiles } from "./xlsx-zip.ts";
+import { createWorkbook, downloadWorkbook } from "./xlsx-workbook.ts";
 
 const sheetNamespace =
   "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -10,7 +16,7 @@ const dateLabel = (value: string) =>
     : value;
 
 function cell(row: number, index: number, value: string, style: number) {
-  return `<c r="${column(index)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
+  return `<c r="${column(index)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${excelCellText(value)}</t></is></c>`;
 }
 
 export function projectInfoReportSheet(projects: ReportProject[]): string {
@@ -43,24 +49,24 @@ export function projectInfoReportSheet(projects: ReportProject[]): string {
         .join("\n");
       const starts = info.topics.map((topic) => topic.start).sort();
       const ends = info.topics.map((topic) => topic.end).sort();
-      const values = [
-        project.name,
-        info.name,
-        detail,
-        dateLabel(starts[0]),
-        dateLabel(ends.at(-1)!),
-      ];
-      const lines = detail
-        .split(/\r?\n/)
-        .reduce(
-          (total, line) => total + Math.max(1, Math.ceil(line.length / 65)),
-          0,
+      for (const continuation of splitExcelText(detail)) {
+        if (rowNumber > EXCEL_MAX_ROWS)
+          throw Error(
+            "Excel satır sınırı aşıldı. Daha az proje seçerek tekrar aktarın.",
+          );
+        const values = [
+          project.name,
+          info.name,
+          continuation,
+          dateLabel(starts[0]),
+          dateLabel(ends.at(-1)!),
+        ];
+        const height = Math.max(32, excelTextLines(continuation) * 15 + 12);
+        rows.push(
+          `<row r="${rowNumber}" ht="${height}" customHeight="1">${values.map((value, index) => cell(rowNumber, index, value, rowNumber % 2 ? 0 : 4)).join("")}</row>`,
         );
-      const height = Math.min(409, Math.max(32, lines * 15 + 12));
-      rows.push(
-        `<row r="${rowNumber}" ht="${height}" customHeight="1">${values.map((value, index) => cell(rowNumber, index, value, rowNumber % 2 ? 0 : 4)).join("")}</row>`,
-      );
-      rowNumber++;
+        rowNumber++;
+      }
     }
   }
   return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${sheetNamespace}"><dimension ref="A1:E${Math.max(3, rowNumber - 1)}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A4" sqref="A4"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="20"/><cols><col min="1" max="1" width="30" customWidth="1"/><col min="2" max="2" width="30" customWidth="1"/><col min="3" max="3" width="70" customWidth="1"/><col min="4" max="5" width="18" customWidth="1"/></cols><sheetData>${rows.join("")}</sheetData><autoFilter ref="A3:E${Math.max(3, rowNumber - 1)}"/><mergeCells count="2"><mergeCell ref="A1:E1"/><mergeCell ref="A2:E2"/></mergeCells><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/></worksheet>`;
@@ -77,29 +83,18 @@ export function projectInfoReportWorkbook(
     )
   )
     throw Error("Rapora eklenecek açıklama bulunamadı.");
-  return zipFiles({
-    "[Content_Types].xml":
-      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
-    "_rels/.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${sheetNamespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Kritik Proje Konuları" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-    "xl/_rels/workbook.xml.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
-    "xl/styles.xml": styles,
-    "xl/worksheets/sheet1.xml": projectInfoReportSheet(projects),
+  return createWorkbook({
+    sheets: [
+      { name: "Kritik Proje Konuları", xml: projectInfoReportSheet(projects) },
+    ],
+    styles,
   });
 }
 
 export function downloadProjectInfoReport(projects: ReportProject[]) {
   const bytes = projectInfoReportWorkbook(projects);
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }),
+  downloadWorkbook(
+    bytes,
+    `AA-Kritik-Proje-Konulari-${new Date().toISOString().slice(0, 10)}.xlsx`,
   );
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `AA-Kritik-Proje-Konulari-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

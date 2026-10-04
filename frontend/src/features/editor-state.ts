@@ -1,5 +1,6 @@
 import type { Project, Milestone, Resource, Version } from "../model";
-export type PortalEditor =
+export type EditorRevisions = Readonly<Record<string, number>>;
+export type PortalEditor = (
   | { kind: "project"; value: Project; isNew: boolean }
   | { kind: "projectPhase"; value: Project; phaseMonth: string }
   | {
@@ -17,4 +18,5 @@ export type PortalEditor =
       lead: string;
       status: string;
       included: "keep" | "yes" | "no";
-    };
+    }
+) & { baseRevisions: EditorRevisions };

@@ -47,6 +47,7 @@ const fields: Record<string, string> = {
   barText: "Not",
   hasCriticalTopics: "Detay konu var",
   responsibleName: "Proje sorumlusu",
+  sortOrder: "Proje sırası",
   versions: "Kaynak dönemleri",
   effective: "Geçerlilik ayı",
   status: "Statü",

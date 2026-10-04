@@ -1,3 +1,4 @@
+import { requiresResourceStart } from "./resource-policy.ts";
 import { ownValue } from "./records.ts";
 import { validPlanningMonth, validPlanningDate } from "./planning-dates.ts";
 import { fold, statuses, isWorkingStatus } from "./model.ts";
@@ -227,8 +228,7 @@ export function prepareImport(d: Data, rows: ImportRow[]): PreviewRow[] {
       amount > 100
     )
       errors.push("Kişi Eşdeğeri: 0–100 arasında bir sayı girin.");
-    const requiresStart =
-      status === "İşten Ayrıldı" || (included && status === "Aktif İlan");
+    const requiresStart = requiresResourceStart(status, included);
     const startInput = clean(v.start)
       ? v.start
       : isWorkingStatus(status)

@@ -8,6 +8,16 @@ import { promisify } from "node:util";
 const scrypt = promisify(cb);
 export const token = () => randomBytes(32).toString("base64url");
 export const digest = (x) => createHash("sha256").update(x).digest("hex");
+/** Current credentials use a 16-byte hex salt and a 64-byte scrypt digest. */
+export function validPasswordRecord(stored) {
+  return (
+    !!stored &&
+    typeof stored.salt === "string" &&
+    /^[a-f0-9]{32}$/i.test(stored.salt) &&
+    typeof stored.hash === "string" &&
+    /^[a-f0-9]{128}$/i.test(stored.hash)
+  );
+}
 export async function hashPassword(password) {
   if (
     typeof password !== "string" ||
@@ -29,7 +39,11 @@ export async function hashPassword(password) {
   };
 }
 export async function verifyPassword(password, stored) {
-  if (typeof password !== "string" || password.length > 256 || !stored)
+  if (
+    typeof password !== "string" ||
+    password.length > 256 ||
+    !validPasswordRecord(stored)
+  )
     return false;
   const actual = await scrypt(password, stored.salt, 64, {
     N: 32768,

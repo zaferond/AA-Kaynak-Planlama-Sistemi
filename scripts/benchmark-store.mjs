@@ -505,6 +505,22 @@ const report = {
   storeSha256: createHash("sha256")
     .update(await fs.readFile(new URL("../backend/store.mjs", import.meta.url)))
     .digest("hex"),
+  repositorySha256: Object.fromEntries(
+    await Promise.all(
+      [
+        "backend/identity-repository.mjs",
+        "backend/planning-reader.mjs",
+        "backend/planning-writer.mjs",
+        "backend/schema-migrations.mjs",
+        "backend/migration-catalog.mjs",
+      ].map(async (name) => [
+        name,
+        createHash("sha256")
+          .update(await fs.readFile(new URL("../" + name, import.meta.url)))
+          .digest("hex"),
+      ]),
+    ),
+  ),
   operationsSha256: createHash("sha256")
     .update(
       await fs.readFile(new URL("../backend/operations.mjs", import.meta.url)),

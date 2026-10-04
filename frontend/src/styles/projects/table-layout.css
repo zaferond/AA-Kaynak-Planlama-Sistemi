@@ -21,14 +21,14 @@
 .app.tab-projects .projectmatrix .yearrow th {
   position: sticky;
   top: 0;
-  height: 24px;
+  height: var(--table-project-year-height);
   z-index: 11;
 }
 .app.tab-projects .projectmatrix thead tr:not(.yearrow) > th {
   position: sticky;
-  top: 24px;
+  top: var(--table-project-year-height);
   z-index: 10;
-  background: #f2f6fb;
+  background: var(--table-header-background);
   box-shadow: 0 2px 3px #1b3d5b1c;
 }
 .app.tab-projects .projectmatrix thead .yearrow th:first-child {

@@ -37,6 +37,10 @@ npm run db:verify-backup -- --backup="TAM_YEDEK_PAKETININ_YOLU"
 
 Doğrulama: dosya boyutu/SHA-256, beklenen dosyalar, şema kaynak hash'i, SQLite integrity/foreign key kontrolü, bütün tablo sayıları, generation ve DB'deki geçmiş ile NDJSON'ın birebir eşleşmesi. Eksik, symlink veya değiştirilmiş payload reddedilir. Şema kaynakları farklıysa yedeğe uygun Git sürümünü ayrı klasörde kullanın.
 
+**3 Ekim 2026 şema kontrolleri:** Kodla çalışan 3/12 dahil bütün zorunlu migration kayıtları, gerekli sütun/tip/nullability/default/anahtarlar, FK/UNIQUE/CHECK ve uygulamanın model/hesap okuması doğrulanır. Karşılaştırma şeması ortak katalogdaki DDL'den, ayrı boş bellek içi DB'de üretilir. Kaynak dosyada migration veya otomatik tamamlama çalıştırılmaz. Eksik geçmiş ya da şema için kaynak korunan ayrı bir kurtarma incelemesi gerekir.
+
+Yeni paketlerin kaynak hash'i migration kodunu da kapsar. Aynı şema sürümündeki, aynı SQL kaynaklarının eski hash'ini taşıyan geçerli v1 paketler yeni kontrollerden geçerse kullanılabilir. Farklı sürüm paketleri için uygun uygulama kaynaklarıyla çalışılır. Gerçek uygulamada geri dönüş ve parola ile giriş kontrolleri ayrı kurtarma ortamında tamamlanmalıdır.
+
 ### Geçmiş arşivi
 
 ```sh

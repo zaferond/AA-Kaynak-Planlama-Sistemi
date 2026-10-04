@@ -1,5 +1,7 @@
 name: Native MSSQL verification
 on:
+  schedule:
+    - cron: "20 2 * * 1"
   workflow_dispatch:
     inputs:
       size:
@@ -54,7 +56,7 @@ jobs:
           TEST_DB_USER: sa
           TEST_DB_ENCRYPT: "true"
           TEST_DB_TRUST_SERVER_CERTIFICATE: "true"
-          TEST_SIZE: ${{ inputs.size }}
+          TEST_SIZE: ${{ inputs.size || '1000' }}
         shell: bash
         run: |
           export TEST_DB_PASSWORD="$MSSQL_SA_PASSWORD"

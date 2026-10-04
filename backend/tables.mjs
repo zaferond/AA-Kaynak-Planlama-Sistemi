@@ -45,6 +45,7 @@ export const tables = {
     columns: {
       id: "nvarchar(120)",
       name: "nvarchar(200)",
+      sort_order: "int",
       responsible_name: "nvarchar(200)",
       start_month: "varchar(7)",
       end_month: "varchar(7)",

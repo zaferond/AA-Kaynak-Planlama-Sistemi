@@ -646,6 +646,12 @@
   font-size: 12px;
   font-weight: 650;
 }
+.risk-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
 .risk-empty-row td {
   padding: 35px 18px !important;
   color: #748a9c;

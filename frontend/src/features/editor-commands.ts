@@ -4,7 +4,6 @@ import type {
   ChangeValues,
 } from "../../../shared/commands.ts";
 import {
-  isWorkingStatus,
   withVersion,
   type Data,
   type Milestone,
@@ -20,17 +19,20 @@ import {
   resourceVersionForEdit,
   resourceVersionForSave,
 } from "../../../shared/resource-version-edit.ts";
+import { assertResourceDates } from "../../../shared/resource-policy.ts";
 import type { PortalEditor } from "./editor-state.ts";
+import type { EditorRevisions } from "./editor-state.ts";
+import { editorRevision } from "./editor-revisions.ts";
 
 type EditorContext = { start: string; resourceIds: readonly string[] };
 
 function command<K extends ChangeKind>(
-  data: Data,
+  base: EditorRevisions,
   kind: K,
   id: string,
   value: ChangeValues[K],
 ): Change<K> {
-  return { kind, id, value, revision: data.revisions[kind + ":" + id] || 0 };
+  return { kind, id, value, revision: editorRevision(base, kind, id) };
 }
 
 function milestoneChanges(
@@ -64,14 +66,16 @@ function milestoneChanges(
     ? existing.map((m) => (m.id === milestone.id ? milestone : m))
     : [...existing, milestone];
   changes.push(
-    command(data, "project", project.id, { ...project, milestones }),
+    command(editor.baseRevisions, "project", project.id, {
+      ...project,
+      milestones,
+    }),
   );
 
   return changes;
 }
 
 function projectChanges(
-  data: Data,
   editor: Extract<PortalEditor, { kind: "project" | "projectPhase" }>,
 ): Change[] {
   const changes: Change[] = [];
@@ -82,7 +86,9 @@ function projectChanges(
       editor.phaseMonth > editor.value.end)
   )
     throw Error("Aşama ayı proje dönemi içinde olmalı.");
-  changes.push(command(data, "project", editor.value.id, editor.value));
+  changes.push(
+    command(editor.baseRevisions, "project", editor.value.id, editor.value),
+  );
 
   return changes;
 }
@@ -100,17 +106,7 @@ function resourceChanges(
     editor.isNew,
     start,
   );
-  if (
-    (isWorkingStatus(v.status) || (v.included && v.status === "Aktif İlan")) &&
-    !v.start
-  )
-    throw Error("Bu statü için İşbaşı Tarihi girin.");
-  if (v.status === "İşten Ayrıldı" && (!v.start || !v.end))
-    throw Error(
-      "İşten Ayrıldı için işbaşı ve işten ayrılış tarihlerini girin.",
-    );
-  if (v.start && v.end && v.end < v.start)
-    throw Error("İşten Ayrılış Tarihi, İşbaşı Tarihi’nden önce olamaz.");
+  assertResourceDates(v);
   if (!v.lead || !v.team) throw Error("Liderlik ve takım seçin.");
   const t = data.teams.find((t) => t.id === v.team);
   if (!t)
@@ -118,9 +114,16 @@ function resourceChanges(
   if (t.lead && t.lead !== v.lead)
     throw Error("Seçilen takım bu liderliğe bağlı değil.");
   if (!t.lead)
-    changes.push(command(data, "team", t.id, { ...t, lead: v.lead }));
+    changes.push(
+      command(editor.baseRevisions, "team", t.id, { ...t, lead: v.lead }),
+    );
   changes.push(
-    command(data, "resource", editor.value.id, withVersion(resourceForSave, v)),
+    command(
+      editor.baseRevisions,
+      "resource",
+      editor.value.id,
+      withVersion(resourceForSave, v),
+    ),
   );
 
   return changes;
@@ -142,7 +145,9 @@ function bulkResourceChanges(
   const leader = t ? t.lead || editor.lead : "";
   if (t && !leader) throw Error("Bu takım için liderlik seçin.");
   if (t && !t.lead)
-    changes.push(command(data, "team", t.id, { ...t, lead: leader }));
+    changes.push(
+      command(editor.baseRevisions, "team", t.id, { ...t, lead: leader }),
+    );
   for (const id of new Set(resourceIds)) {
     const r = data.resources.find((x) => x.id === id);
     if (!r)
@@ -158,16 +163,14 @@ function bulkResourceChanges(
         ? { included: editor.included === "yes" }
         : {}),
     };
-    if (editor.status && isWorkingStatus(v.status) && !v.start)
-      throw Error(
-        r.name + ": İşbaşı Tarihi girilmeden çalışan statüsüne geçirilemez.",
-      );
-    if (editor.status === "İşten Ayrıldı" && (!v.start || !v.end))
-      throw Error(
-        r.name +
-          ": İşten Ayrıldı statüsü için iki tarihi de bireysel düzenlemede girin.",
-      );
-    changes.push(command(data, "resource", id, withVersion(r, v)));
+    try {
+      assertResourceDates(v);
+    } catch (error) {
+      throw Error(r.name + ": " + (error as Error).message);
+    }
+    changes.push(
+      command(editor.baseRevisions, "resource", id, withVersion(r, v)),
+    );
   }
 
   return changes;
@@ -186,7 +189,7 @@ export function prepareEditorChanges(
       return milestoneChanges(data, editor);
     case "project":
     case "projectPhase":
-      return projectChanges(data, editor);
+      return projectChanges(editor);
     case "resource":
       return resourceChanges(data, editor, context.start);
     case "bulkResources":

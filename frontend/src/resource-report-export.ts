@@ -1,6 +1,11 @@
-import { escapeXml, columnName as column } from "./xlsx-cells.ts";
-import { zipFiles } from "./project-export";
-import { SYSTEM_NAME } from "./settings";
+import {
+  assertExcelRowCount,
+  escapeXml,
+  excelCellText,
+  columnName as column,
+} from "./xlsx-cells.ts";
+import { createWorkbook, downloadWorkbook } from "./xlsx-workbook.ts";
+import { SYSTEM_NAME } from "./settings.ts";
 
 export type ResourceReportMonth = { remaining: number; status: string };
 export type ResourceReportGroup = {
@@ -12,7 +17,7 @@ export type ResourceReportGroup = {
 
 const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 function textCell(row: number, index: number, value: string, style: number) {
-  return `<c r="${column(index)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
+  return `<c r="${column(index)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${excelCellText(value)}</t></is></c>`;
 }
 function numberCell(row: number, index: number, value: number, style: number) {
   const number = Number.isFinite(value) ? Number(value.toFixed(6)) : 0;
@@ -22,6 +27,7 @@ function blankCell(row: number, index: number, style: number) {
   return `<c r="${column(index)}${row}" s="${style}"/>`;
 }
 function xmlRow(index: number, height: number, cells: string[]) {
+  assertExcelRowCount(index);
   return `<row r="${index}" ht="${height}" customHeight="1">${cells.join("")}</row>`;
 }
 function monthLabel(month: string) {
@@ -273,27 +279,22 @@ export function resourceReportWorkbook(
       groups: teams,
     },
   ];
-  const files: Record<string, string> = {
-    "[Content_Types].xml":
-      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>',
-    "_rels/.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>',
-    "docProps/core.xml": `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>AA Mühendislik</dc:creator><dc:title>Kaynak Raporu</dc:title><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`,
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${sheets.map((sheet, i) => `<sheet name="${sheet.name}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join("")}</sheets><definedNames>${sheets.map((sheet, i) => `<definedName name="_xlnm.Print_Titles" localSheetId="${i}">'${sheet.name}'!$1:$5</definedName>`).join("")}</definedNames></workbook>`,
-    "xl/_rels/workbook.xml.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
-    "xl/styles.xml": stylesXml(),
-  };
-  sheets.forEach((sheet, i) => {
-    files[`xl/worksheets/sheet${i + 1}.xml`] = reportSheet(
-      sheet.title,
-      sheet.unit,
-      sheet.groups,
-      months,
-      filterSummary,
-    );
+  return createWorkbook({
+    sheets: sheets.map((sheet) => ({
+      name: sheet.name,
+      xml: reportSheet(
+        sheet.title,
+        sheet.unit,
+        sheet.groups,
+        months,
+        filterSummary,
+      ),
+      printTitleRows: 5,
+    })),
+    styles: stylesXml(),
+    activeTab: 0,
+    properties: { creator: "AA Mühendislik", title: "Kaynak Raporu" },
   });
-  return zipFiles(files);
 }
 export function downloadResourceReport(
   months: string[],
@@ -302,14 +303,8 @@ export function downloadResourceReport(
   filterSummary = "",
 ) {
   const bytes = resourceReportWorkbook(months, leaders, teams, filterSummary);
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }),
+  downloadWorkbook(
+    bytes,
+    `AA-Muhendislik-Kaynak-Raporu-${months[0]}-${months.at(-1)}.xlsx`,
   );
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `AA-Muhendislik-Kaynak-Raporu-${months[0]}-${months.at(-1)}.xlsx`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

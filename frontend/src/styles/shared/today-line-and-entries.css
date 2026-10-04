@@ -2,10 +2,10 @@
 [data-slot="table-container"] > .today-date-line {
   position: absolute;
   display: none;
-  width: 2px;
+  width: var(--table-today-width, 2px);
   z-index: 0;
   pointer-events: none;
-  background: #397ba8;
+  background: var(--table-today-color, #397ba8);
   box-shadow:
     0 0 0 1px #ffffffa6,
     0 0 4px #315f8059;
@@ -19,15 +19,15 @@
   height: 6px;
   border-radius: 50%;
   transform: translate(-50%, -2px);
-  background: #397ba8;
+  background: var(--table-today-color, #397ba8);
   box-shadow: 0 0 0 2px #fff;
 }
 
 /* Saved positive entries remain easy to scan in each distribution grid. */
 .app.tab-plan .allocation-grid td.has-entry .cell input:not(:focus) {
-  background: #dcecf9;
-  border-color: #afcee8;
-  color: #184e78;
+  background: var(--table-planned-entry-background);
+  border-color: var(--table-planned-entry-border);
+  color: var(--table-planned-entry-color);
   font-weight: 700;
 }
 .app.tab-plan .allocation-grid td:has(> .cell) {
@@ -48,15 +48,15 @@
   color: #205d53;
 }
 .app.tab-actual .allocation-grid td.has-entry {
-  background: #e4f4f0;
+  background: var(--table-actual-cell-background);
 }
 .person-allocation
   .allocation-grid
   td.has-entry
   .person-amount
   input:not(:focus) {
-  background: #d8eee8;
-  border-color: #9bcbbf;
-  color: #1f5f54;
+  background: var(--table-actual-entry-background);
+  border-color: var(--table-actual-entry-border);
+  color: var(--table-actual-entry-color);
   font-weight: 700;
 }

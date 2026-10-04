@@ -46,7 +46,7 @@
 }
 .app.tab-plan .project-team-view thead tr:not(.yearrow) > th:first-child {
   z-index: 6;
-  background: #f2f6fb;
+  background: var(--table-header-background);
 }
 .app.tab-plan .project-team-view .actual-row > td:first-child {
   background: #edf6f8;
@@ -55,7 +55,7 @@
   position: sticky;
   left: 0;
   z-index: 7;
-  background: #e3edf8;
+  background: var(--table-year-label-background);
 }
 
 .worked-hours-input {

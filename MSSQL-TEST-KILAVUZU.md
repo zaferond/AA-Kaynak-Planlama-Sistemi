@@ -24,7 +24,7 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 
 ## Native senaryolar
 
-1. Eski v2 kişi dağılımlarının şema 29'a taşınması, Türkçe veri ve toplamların korunması, yeniden bağlantıda dönüşümün tekrarlanmaması.
+1. Eski v2 kişi dağılımlarının şema 30'a taşınması, Türkçe veri ve toplamların korunması, yeniden bağlantıda dönüşümün tekrarlanmaması.
 2. Ortak HTTP suite: CRUD, yetki/CSRF/oturum iptali, FK/CHECK, toplu geri alma, içe aktarma sayaçları, generation/revision, restore ve liderlik işlemleri.
 3. Ortak eşzamanlılık suite: aynı hücrede tek kazanan, 24 bağımsız kayıt, çakışan batch, aylık sınır/takvim/izin/eğitim ve tutarlı okuyucular.
 4. **İki bağımsız native bağlantı havuzu:** aynı revision yarışı; ortak okuma kilitlerinin birlikte çalışması; yazmanın okuyucuya yarım veri göstermemesi; kilitlerin sıfır timeout ile doğrudan sınanması.
@@ -46,10 +46,10 @@ npm run test:db -- --env-file .env.mssql.test --size 10000 --samples 5 --report 
 
 Global uygulama kilidi bu pakette korunur. Kaldırılması veya repository kapsamının değiştirilmesi ancak native sonuçlar incelendikten sonra değerlendirilebilir.
 
-## GitHub üzerinde isteğe bağlı test ortamı
+## GitHub üzerinde zamanlanmış ve manuel test ortamı
 
-`Native MSSQL verification` workflow'u **yalnız elle çalıştırılır**. Ubuntu x64 üzerinde geçici SQL Server 2022 Developer container'ı ve boş test veritabanı oluşturur; her çalıştırmada ayrı rastgele şifre üretir, loglarda maskeler ve sonuç JSON'unu artifact olarak saklar. Çalışma sonunda container silinir. Push bu testi otomatik başlatmaz.
+`Native MSSQL verification` workflow'u **her pazartesi 02:20 UTC ve elle çalıştırılır**. Ubuntu x64 üzerinde geçici SQL Server 2022 Developer container'ı ve boş test veritabanı oluşturur; her çalıştırmada ayrı rastgele şifre üretir, loglarda maskeler ve sonuç JSON'unu artifact olarak saklar. Çalışma sonunda container silinir. Push bu testi otomatik başlatmaz.
 
 Bu workflow'un container'ında şifreleme açık, self-signed sertifika için trust açıktır. Bu koşu kurumun CA/hostname doğrulamasını, NTLM/domain bağlantısını, şirket proxy'sini veya Windows servis kurulumunu doğrulamaz. Kurum bağlantısı bunlar için ayrı test gerektirir. [Microsoft container desteği](https://learn.microsoft.com/en-us/sql/linux/sql-server-linux-docker-container-deployment) x86-64 Linux içindir; bu bilgisayar ARM64 olduğundan yerel bir koşu yapılmış sayılmaz.
 
-Workflow henüz çalıştırılmadı. Gerçek koşu başarılı olmadan 31. adımın native doğrulaması tamamlandı olarak işaretlenmemelidir.
+Bu yerel turda workflow çalıştırılmadı; başarılı runner sonucu doğrulanmadı. Gerçek koşu başarılı olmadan 31. adımın native doğrulaması tamamlandı olarak işaretlenmemelidir.

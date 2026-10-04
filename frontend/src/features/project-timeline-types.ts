@@ -5,8 +5,10 @@ import type { milestoneRanges } from "../milestone-ranges";
 import type { milestoneBarsForPeriods } from "../milestone-bars";
 import type { weeklyNoteLayout } from "../weekly-note-bars";
 import type { usePhaseGrid } from "./usePhaseGrid";
+import type { useProjectRowOrder } from "./useProjectRowOrder";
 
 export type ProjectTimelineRowProps = {
+  ordering: ReturnType<ReturnType<typeof useProjectRowOrder>["rowProps"]>;
   phaseSelection: ReturnType<typeof usePhaseGrid>;
   project: Project;
   periods: TimelinePeriod[];

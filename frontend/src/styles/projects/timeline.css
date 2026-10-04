@@ -233,6 +233,9 @@
 }
 .app .projectmatrix .milestone-row td.milestone-month {
   position: relative;
+  /* Keep hover, drag and resize layers inside the scrolling timeline cell. */
+  z-index: 0;
+  isolation: isolate;
   height: 36px;
   padding: 8px 0 !important;
   vertical-align: middle;

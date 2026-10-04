@@ -5,6 +5,27 @@ import path from "node:path";
 import { Store } from "../backend/store.mjs";
 import { SqlJsAdapter } from "../backend/adapters/sqljs.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
+test("unknown applied migration versions are refused without modifying an existing database", async () => {
+  const dir = await fs.mkdtemp(path.resolve("tests/local-unknown-schema-"));
+  const file = path.join(dir, "synthetic.sqlite");
+  const env = { NODE_ENV: "test", DB_PROVIDER: "sqljs", SQLJS_FILE: file };
+  let store = new Store({ env });
+  try {
+    await store.connect();
+    await store.transaction((c) =>
+      c.query("INSERT INTO kp_schema_migrations(version) VALUES(@p0)", [999]),
+    );
+    await store.close();
+    const before = await fs.readFile(file);
+    store = new Store({ env });
+    await assert.rejects(store.connect(), /Desteklenmeyen.*şema sürümü/);
+    assert.deepEqual(await fs.readFile(file), before);
+    await assert.rejects(fs.stat(file + ".lock"), /ENOENT/);
+  } finally {
+    await store.close();
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
 test("sql.js: a lock left by a terminated process is recovered", async () => {
   const dir = await fs.mkdtemp(path.resolve("tests/local-stale-lock-"));
   const file = path.join(dir, "test.sqlite"),
@@ -105,7 +126,7 @@ test("sql.js: person allocations are folded into team allocations once", async (
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        29,
+        30,
       );
       await store.close();
       await store.connect();
@@ -152,7 +173,7 @@ test("sql.js: existing actual entries keep their hours when the baseline changes
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      29,
+      30,
     );
     await store.close();
     store = new Store({ env });

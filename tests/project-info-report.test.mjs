@@ -410,3 +410,61 @@ test("report edits persist as project notes across a database restart", async ()
     await fs.rm(dir, { recursive: true, force: true });
   }
 });
+
+test("long and multi-line critical details export losslessly as bounded continuation rows", () => {
+  for (const text of [
+    "A".repeat(40000),
+    "😀 <&>\n".repeat(900),
+    "line\r\n".repeat(400),
+  ]) {
+    const report = [
+      {
+        id: "p",
+        name: "=Untrusted",
+        infos: [
+          {
+            id: "i",
+            name: "Title",
+            topics: [
+              {
+                text,
+                start: "2026-01-01",
+                end: "2026-01-02",
+                rangeIndex: 0,
+                noteIndex: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const sheet = zipEntry(
+      projectInfoReportWorkbook(report),
+      "xl/worksheets/sheet1.xml",
+    );
+    const cells = [
+      ...sheet.matchAll(/<c r="C(\d+)"[^>]*><is><t[^>]*>([\s\S]*?)<\/t>/g),
+    ]
+      .filter((m) => Number(m[1]) >= 4)
+      .map((m) =>
+        m[2]
+          .replaceAll("&lt;", "<")
+          .replaceAll("&gt;", ">")
+          .replaceAll("&quot;", '"')
+          .replaceAll("&apos;", "'")
+          .replaceAll("&amp;", "&")
+          .replaceAll("&#13;", "\r"),
+      );
+    assert(cells.length > 1);
+    assert.equal(cells.join(""), `• ${text} (01.01.2026 – 02.01.2026)`);
+    for (const content of cells) {
+      assert(content.length <= 32767);
+      assert((content.match(/\n/g) || []).length <= 253);
+      assert(!/[\ud800-\udbff]$/.test(content));
+      assert(!/^[\udc00-\udfff]/.test(content));
+    }
+    for (const row of sheet.matchAll(/<row[^>]*ht="(\d+)"/g))
+      assert(Number(row[1]) <= 409);
+    assert.doesNotMatch(sheet, /<f[ >]/);
+  }
+});

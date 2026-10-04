@@ -1,15 +1,19 @@
-import { escapeXml as xml, columnName as col } from "./xlsx-cells.ts";
-import type { Project } from "./model";
-import { phasePalette } from "./model";
-import { SYSTEM_NAME } from "./settings";
+import {
+  assertExcelRowCount,
+  escapeXml as xml,
+  excelCellText,
+  columnName as col,
+} from "./xlsx-cells.ts";
+import type { Project } from "./model.ts";
+import { phasePalette } from "./model.ts";
+import { SYSTEM_NAME } from "./settings.ts";
 import {
   periodOverlapsProject,
   phaseInitial,
   phaseMonthForPeriod,
   projectTimelinePeriods,
-} from "./timeline-periods";
-import { zipFiles } from "./xlsx-zip";
-export { zipFiles } from "./xlsx-zip";
+} from "./timeline-periods.ts";
+import { createWorkbook, downloadWorkbook } from "./xlsx-workbook.ts";
 
 // The browser creates a self-contained XLSX. Project text is always an inline
 // string, so names and phase descriptions cannot become spreadsheet formulas.
@@ -31,12 +35,13 @@ const S = {
   phaseOverview: 20,
 } as const;
 function textCell(r: number, c: number, value: string, style: number) {
-  return `<c r="${col(c)}${r}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
+  return `<c r="${col(c)}${r}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${excelCellText(value)}</t></is></c>`;
 }
 function blankCell(r: number, c: number, style: number) {
   return `<c r="${col(c)}${r}" s="${style}"/>`;
 }
 function row(r: number, height: number, cells: string[]) {
+  assertExcelRowCount(r);
   return `<row r="${r}" ht="${height}" customHeight="1">${cells.join("")}</row>`;
 }
 function styledRow(
@@ -302,19 +307,18 @@ export function projectWorkbook(
     throw Error("1–60 aylık geçerli bir görünür dönem seçin.");
   if (!projects.length) throw Error("Dışa aktarılacak proje bulunamadı.");
   const sheetName = "Projeler";
-  const files: Record<string, string> = {
-    "[Content_Types].xml":
-      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/></Types>',
-    "_rels/.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/></Relationships>',
-    "docProps/core.xml": `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>AA Mühendislik</dc:creator><dc:title>Projeler Raporu</dc:title><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`,
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'${sheetName}'!$1:$5</definedName></definedNames></workbook>`,
-    "xl/_rels/workbook.xml.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
-    "xl/styles.xml": stylesXml(),
-    "xl/worksheets/sheet1.xml": projectSheet(projects, months, view, weekly),
-  };
-  return zipFiles(files);
+  return createWorkbook({
+    sheets: [
+      {
+        name: sheetName,
+        xml: projectSheet(projects, months, view, weekly),
+        printTitleRows: 5,
+      },
+    ],
+    styles: stylesXml(),
+    activeTab: 0,
+    properties: { creator: "AA Mühendislik", title: "Projeler Raporu" },
+  });
 }
 export function downloadProjects(
   projects: Project[],
@@ -323,20 +327,13 @@ export function downloadProjects(
   weekly = false,
 ) {
   const bytes = projectWorkbook(projects, months, view, weekly);
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }),
-  );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download =
+  downloadWorkbook(
+    bytes,
     "AA-Muhendislik-Projeler-Raporu-" +
-    (weekly ? "Haftalik-" : "") +
-    months[0] +
-    "-" +
-    months.at(-1) +
-    ".xlsx";
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+      (weekly ? "Haftalik-" : "") +
+      months[0] +
+      "-" +
+      months.at(-1) +
+      ".xlsx",
+  );
 }

@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
 import { SYSTEM_NAME } from "./settings";
 import Portal from "./App";
-import { login, resumeRemembered } from "./storage";
+import { login, observeSessionChanges, resumeRemembered } from "./storage";
 
 const LOGIN_NAME = "Askeri Araçlar Kaynak Yönetimi Sistemi";
 
@@ -16,46 +16,92 @@ function App() {
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const authRequest = useRef(0);
+  const busyRef = useRef(false);
+  const [sessionKey, setSessionKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    resumeRemembered()
-      .then((ok) => {
-        if (active) {
+    const verify = async () => {
+      const request = ++authRequest.current;
+      try {
+        const ok = await resumeRemembered();
+        if (active && request === authRequest.current) {
           setReady(ok);
           setChecking(false);
         }
-      })
-      .catch(() => {
-        if (active) setChecking(false);
-      });
+      } catch {
+        if (active && request === authRequest.current) {
+          // A failed focus check must not discard an authenticated editor.
+          setChecking(false);
+          setError("Oturum kontrol edilemedi. Tekrar deneyin.");
+        }
+      }
+    };
+    const reset = () => {
+      authRequest.current++;
+      busyRef.current = false;
+      setReady(false);
+      setBusy(false);
+      setPassword("");
+      // A new Portal instance also clears selections, editors and child caches.
+      setSessionKey((key) => key + 1);
+    };
+    const expired = () => {
+      reset();
+      setChecking(false);
+    };
+    const changed = () => {
+      reset();
+      setError("");
+      setChecking(true);
+      void verify();
+    };
+    const focus = () => {
+      if (!busyRef.current && document.visibilityState === "visible")
+        void verify();
+    };
+    window.addEventListener("session-expired", expired);
+    window.addEventListener("session-changed", changed);
+    window.addEventListener("focus", focus);
+    document.addEventListener("visibilitychange", focus);
+    const stop = observeSessionChanges();
+    void verify();
     return () => {
       active = false;
+      authRequest.current++;
+      stop();
+      window.removeEventListener("session-expired", expired);
+      window.removeEventListener("session-changed", changed);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", focus);
     };
-  }, []);
-  useEffect(() => {
-    const expired = () => setReady(false);
-    window.addEventListener("session-expired", expired);
-    return () => window.removeEventListener("session-expired", expired);
   }, []);
   useEffect(() => {
     document.title = ready ? SYSTEM_NAME : LOGIN_NAME;
   }, [ready]);
 
-  if (ready) return <Portal />;
+  if (ready) return <Portal key={sessionKey} />;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const request = ++authRequest.current;
+    busyRef.current = true;
     setBusy(true);
     setError("");
     try {
       await login(username, password, remember);
-      setPassword("");
-      setReady(true);
+      if (request === authRequest.current) {
+        setPassword("");
+        setReady(true);
+      }
     } catch (cause) {
-      setError((cause as Error).message);
+      if (request === authRequest.current) setError((cause as Error).message);
     } finally {
-      setBusy(false);
+      if (request === authRequest.current) {
+        busyRef.current = false;
+        setBusy(false);
+      }
     }
   }
 

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { captureEditorRevisions } from "../frontend/src/features/editor-revisions.ts";
 import { prepareEditorChanges } from "../frontend/src/features/editor-commands.ts";
 import { applyChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
@@ -68,6 +69,7 @@ test("new topics append even with earlier dates; edits keep their existing row",
     { ...structuredClone(current), id: "second", name: "Second" },
   ];
   const editor = {
+    baseRevisions: captureEditorRevisions(data),
     kind: "milestone",
     projectId: "p",
     isNew: true,
@@ -107,6 +109,7 @@ test("new topics append even with earlier dates; edits keep their existing row",
 test("editor prepares revision-aware project updates without changing the draft or source", () => {
   const data = freeze(fixture());
   const editor = freeze({
+    baseRevisions: captureEditorRevisions(data),
     kind: "project",
     isNew: false,
     value: { ...data.projects[0], name: "Yeni ad" },
@@ -126,6 +129,7 @@ test("editor prepares revision-aware project updates without changing the draft 
 test("phase editor rejects a month outside the project dates", () => {
   const data = fixture();
   const editor = {
+    baseRevisions: captureEditorRevisions(data),
     kind: "projectPhase",
     value: data.projects[0],
     phaseMonth: "2027-01",
@@ -143,6 +147,7 @@ test("phase editor rejects a month outside the project dates", () => {
 test("critical topic preparation preserves enclosing dates and allows a topic with no notes", () => {
   const data = freeze(fixture());
   const editor = freeze({
+    baseRevisions: captureEditorRevisions(data),
     kind: "milestone",
     projectId: "p",
     isNew: true,
@@ -169,6 +174,7 @@ test("critical topic preparation preserves enclosing dates and allows a topic wi
 test("critical topic preparation rejects missing projects and overlapping date ranges before saving", () => {
   const data = fixture();
   const editor = {
+    baseRevisions: captureEditorRevisions(data),
     kind: "milestone",
     projectId: "p",
     isNew: true,
@@ -197,6 +203,7 @@ test("critical topic preparation rejects missing projects and overlapping date r
 test("new resource and team leadership are prepared as one valid batch", () => {
   const data = freeze(fixture());
   const editor = freeze({
+    baseRevisions: captureEditorRevisions(data),
     kind: "resource",
     isNew: true,
     value: { id: "new", name: "Yeni çalışan", note: "", versions: [] },
@@ -217,6 +224,7 @@ test("new resource and team leadership are prepared as one valid batch", () => {
 test("resource edits retain date and leadership checks and explain stale team selections", () => {
   const data = fixture();
   const editor = {
+    baseRevisions: captureEditorRevisions(data),
     kind: "resource",
     isNew: false,
     value: data.resources[0],
@@ -248,6 +256,7 @@ test("bulk resource edits preserve history, deduplicate selections and keep sour
   });
   freeze(data);
   const editor = freeze({
+    baseRevisions: captureEditorRevisions(data),
     kind: "bulkResources",
     effective: "2026-10",
     team: "",
@@ -274,6 +283,7 @@ test("bulk resource edits preserve history, deduplicate selections and keep sour
 test("bulk resource edits fail clearly for removed selections without partially changing a team", () => {
   const data = freeze(fixture());
   const editor = {
+    baseRevisions: captureEditorRevisions(data),
     kind: "bulkResources",
     effective: "2026-10",
     team: "unassigned",
@@ -303,4 +313,100 @@ test("bulk resource edits fail clearly for removed selections without partially 
     () => prepareEditorChanges(data, editor, context),
     /En az bir kayıt/,
   );
+});
+
+test("all entity editor drafts retain opening revisions after a background snapshot changes", () => {
+  for (const kind of [
+    "project",
+    "projectPhase",
+    "milestone",
+    "resource",
+    "bulkResources",
+  ]) {
+    const data = fixture();
+    data.projects[0].milestones = [milestone()];
+    const baseRevisions = captureEditorRevisions(data);
+    const draft =
+      kind === "resource"
+        ? {
+            kind,
+            baseRevisions,
+            isNew: false,
+            value: structuredClone(data.resources[0]),
+            version: { ...version },
+          }
+        : kind === "bulkResources"
+          ? {
+              kind,
+              baseRevisions,
+              effective: "2026-10",
+              team: "",
+              lead: "",
+              status: "",
+              included: "no",
+            }
+          : kind === "milestone"
+            ? {
+                kind,
+                baseRevisions,
+                isNew: false,
+                draftEmpty: false,
+                projectId: "p",
+                value: milestone(),
+              }
+            : {
+                kind,
+                baseRevisions,
+                isNew: false,
+                phaseMonth: "2026-10",
+                value: structuredClone(data.projects[0]),
+              };
+    const target =
+      kind === "resource" || kind === "bulkResources" ? "resource" : "project";
+    const id = target === "resource" ? "r" : "p";
+    const opening = data.revisions[target + ":" + id];
+    applyChanges(data, admin, [
+      {
+        kind: target,
+        id,
+        revision: opening,
+        value:
+          target === "resource"
+            ? { ...data.resources[0], note: "Remote note" }
+            : { ...data.projects[0], responsibleName: "Remote owner" },
+      },
+    ]);
+    const afterRemote = structuredClone(data);
+    const changes = prepareEditorChanges(data, draft, {
+      ...context,
+      resourceIds: ["r"],
+    });
+    assert.equal(changes.at(-1).revision, opening, kind);
+    assert.throws(
+      () => applyChanges(data, admin, changes),
+      (error) => error.status === 409,
+      kind,
+    );
+    assert.deepEqual(data, afterRemote);
+    assert.equal(baseRevisions[target + ":" + id], opening);
+  }
+});
+
+test("resource drafts also keep the opening revision of a previously unassigned team", () => {
+  const data = fixture();
+  const draft = {
+    kind: "resource",
+    baseRevisions: captureEditorRevisions(data),
+    isNew: true,
+    value: { id: "new", name: "Synthetic", note: "", versions: [] },
+    version: { ...version, team: "unassigned" },
+  };
+  data.revisions["team:unassigned"] = 1;
+  const commands = prepareEditorChanges(data, draft, context);
+  assert.equal(commands[0].revision, 0);
+  assert.throws(
+    () => applyChanges(data, admin, commands),
+    (error) => error.status === 409,
+  );
+  assert.equal(data.resources.length, 1);
 });

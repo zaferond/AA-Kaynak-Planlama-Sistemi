@@ -92,7 +92,7 @@ export async function integrationSuite(store) {
           status: "Aktif Çalışan",
           included: true,
           amount: 1,
-          start: "",
+          start: "2026-01-01",
           end: "",
         },
       ],
@@ -103,6 +103,35 @@ export async function integrationSuite(store) {
         { kind: "resource", id: "r", value: resource, revision: 0 },
       ],
     });
+    // Direct API callers cannot bypass the shared mandatory-date rule.
+    for (const status of [
+      "Aktif Çalışan",
+      "SAAT Ücretli Ofis Ç.",
+      "Gear Up",
+      "Aktif İlan",
+    ]) {
+      const before = await get();
+      const invalid = {
+        ...resource,
+        id: "undated",
+        versions: [{ ...resource.versions[0], status, start: "" }],
+      };
+      const response = await request(
+        "/changes",
+        {
+          changes: [
+            { kind: "resource", id: invalid.id, revision: 0, value: invalid },
+          ],
+        },
+        400,
+      );
+      assert.match(response.json.error, /İşbaşı Tarihi/);
+      assert.deepEqual(
+        await get(),
+        before,
+        "invalid API input must roll back model, revisions and generation",
+      );
+    }
     const milestone = {
       id: "info_1",
       name: "Proje Bilgisi",

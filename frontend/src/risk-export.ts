@@ -1,15 +1,29 @@
-import { escapeXml as xml, columnName } from "./xlsx-cells.ts";
+import {
+  riskCategories,
+  riskStatuses,
+  riskStrategyKeys,
+} from "../../shared/risk-policy.ts";
+import {
+  escapeXml as xml,
+  excelCellText,
+  columnName,
+  assertExcelRowCount,
+} from "./xlsx-cells.ts";
 const column = (index: number) => columnName(index - 1);
 import type { Project, Risk } from "./model";
 import { riskAssessment, riskBand, riskBands } from "./risk-score.ts";
-import { zipFiles } from "./xlsx-zip.ts";
+import {
+  createWorkbook,
+  downloadWorkbook,
+  excelSheetNameKeys,
+} from "./xlsx-workbook.ts";
 
 const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
 const cell = (row: number, col: number, style: number, content = "") =>
   `<c r="${column(col)}${row}" s="${style}"${content ? " " + content : ""}/>`;
 const textCell = (row: number, col: number, value: string, style: number) =>
   value
-    ? `<c r="${column(col)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`
+    ? `<c r="${column(col)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${excelCellText(value)}</t></is></c>`
     : cell(row, col, style);
 const numberCell = (
   row: number,
@@ -38,8 +52,10 @@ const formulaCell = (
   style: number,
 ) =>
   `<c r="${column(col)}${row}" s="${style}"${typeof cached === "number" ? "" : ' t="str"'}><f>${xml(formula)}</f>${cached === null ? "<v/>" : `<v>${xml(cached)}</v>`}</c>`;
-const rowXml = (number: number, height: number, cells: string[]) =>
-  `<row r="${number}" ht="${height}" customHeight="1">${cells.join("")}</row>`;
+const rowXml = (number: number, height: number, cells: string[]) => {
+  assertExcelRowCount(number);
+  return `<row r="${number}" ht="${height}" customHeight="1">${cells.join("")}</row>`;
+};
 const styles = {
   title: 1,
   group: 2,
@@ -166,12 +182,9 @@ const headers: Record<number, string> = {
   24: "ALINAN AKSİYON SONRASI\nRİSK PUANI (Olasılık × Etki)",
   25: "RİSK SEVİYESİ",
 };
-const strategyColumns: [string, number][] = [
-  ["Kaçınma", 16],
-  ["Kontrol", 17],
-  ["Üstlenme-Kabul", 18],
-  ["Transfer", 19],
-];
+const strategyColumns: [string, number][] = Object.values(riskStrategyKeys).map(
+  (strategy, index) => [strategy, 16 + index],
+);
 const columnWidths = [
   3.5, 18.2, 13.2, 13.5, 16.6, 48, 40, 45, 13, 12, 20, 10, 8, 19, 20, 13, 15.5,
   15, 12.5, 17, 31, 10, 8, 22, 20,
@@ -312,6 +325,7 @@ function registerSheet(project: Project, risks: Risk[]) {
     lastRow = length + 5,
     rows: string[] = [],
     merges = ["B1:Y2", "P3:S3"];
+  assertExcelRowCount(lastRow);
   rows.push(
     rowXml(1, 30, [
       cell(1, 1, styles.title),
@@ -374,7 +388,7 @@ function registerSheet(project: Project, risks: Risk[]) {
         `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`,
     )
     .join("");
-  const validations = `<dataValidations count="4"><dataValidation type="list" allowBlank="1" showErrorMessage="1" error="Takvim, Mali, Teknik veya İdari seçin." sqref="C6:C${lastRow}"><formula1>"Takvim,Mali,Teknik,İdari"</formula1></dataValidation><dataValidation type="list" allowBlank="1" showErrorMessage="1" error="Açık, Kapalı veya Takipte seçin." sqref="J6:J${lastRow}"><formula1>"Açık,Kapalı,Takipte"</formula1></dataValidation><dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" error="1 ile 5 arasında bir tam sayı girin." sqref="L6:M${lastRow} V6:W${lastRow}"><formula1>1</formula1><formula2>5</formula2></dataValidation><dataValidation type="list" allowBlank="1" sqref="P6:S${lastRow}"><formula1>"X"</formula1></dataValidation></dataValidations>`;
+  const validations = `<dataValidations count="4"><dataValidation type="list" allowBlank="1" showErrorMessage="1" error="Takvim, Mali, Teknik veya İdari seçin." sqref="C6:C${lastRow}"><formula1>"${xml(riskCategories.join(","))}"</formula1></dataValidation><dataValidation type="list" allowBlank="1" showErrorMessage="1" error="Açık, Kapalı veya Takipte seçin." sqref="J6:J${lastRow}"><formula1>"${xml(riskStatuses.join(","))}"</formula1></dataValidation><dataValidation type="whole" operator="between" allowBlank="1" showErrorMessage="1" error="1 ile 5 arasında bir tam sayı girin." sqref="L6:M${lastRow} V6:W${lastRow}"><formula1>1</formula1><formula2>5</formula2></dataValidation><dataValidation type="list" allowBlank="1" sqref="P6:S${lastRow}"><formula1>"X"</formula1></dataValidation></dataValidations>`;
   return `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${ns}"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:Y${lastRow}"/><sheetViews><sheetView workbookViewId="0" showGridLines="0" zoomScale="85"><pane ySplit="5" topLeftCell="B6" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="B6" sqref="B6"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="19"/><cols>${widths}</cols><sheetData>${rows.join("")}</sheetData><mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells>${conditionalFormatting(6, lastRow, "N", "O", 1)}${conditionalFormatting(6, lastRow, "X", "Y", 6)}${validations}<printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.45" bottom="0.45" header="0.2" footer="0.2"/><pageSetup paperSize="8" orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
 }
 function matrixSheet() {
@@ -440,7 +454,8 @@ export function riskWorkbooks(projects: Project[], risks: Risk[]): Uint8Array {
     risks.some((risk) => !projectIds.has(risk.projectId))
   )
     throw Error("Risk kayıtları seçili projeye ait olmalı.");
-  const names = new Set<string>(["etki-olasılık tablosu"]);
+  const matrixName = "Etki-Olasılık Tablosu";
+  const names = new Set<string>(excelSheetNameKeys(matrixName));
   const sheetNames = projects.map((project, index) => {
     if (projects.length === 1) return "FT.540.001-1";
     const base =
@@ -451,69 +466,42 @@ export function riskWorkbooks(projects: Project[], risks: Risk[]): Uint8Array {
         .slice(0, 31) || `Proje ${index + 1}`;
     let name = base,
       serial = 2;
-    while (names.has(name.toLocaleLowerCase("tr-TR"))) {
+    while (excelSheetNameKeys(name).some((key) => names.has(key))) {
       const suffix = ` (${serial++})`;
       name = base.slice(0, 31 - suffix.length) + suffix;
     }
-    names.add(name.toLocaleLowerCase("tr-TR"));
+    excelSheetNameKeys(name).forEach((key) => names.add(key));
     return name;
   });
-  const matrixIndex = projects.length + 1;
-  const sheets = [...sheetNames, "Etki-Olasılık Tablosu"];
-  const overrides = sheets
-    .map(
-      (_, index) =>
-        `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`,
-    )
-    .join("");
-  const workbookSheets = sheets
-    .map(
-      (name, index) =>
-        `<sheet name="${xml(name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`,
-    )
-    .join("");
-  const relationships = sheets
-    .map(
-      (_, index) =>
-        `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`,
-    )
-    .join("");
-  const files: Record<string, string> = {
-    "[Content_Types].xml": `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${overrides}</Types>`,
-    "_rels/.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${ns}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${workbookSheets}</sheets><calcPr calcId="0" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`,
-    "xl/_rels/workbook.xml.rels": `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${relationships}<Relationship Id="rId${matrixIndex + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    "xl/styles.xml": stylesXml(),
-  };
-  projects.forEach((project, index) => {
-    files[`xl/worksheets/sheet${index + 1}.xml`] = registerSheet(
-      project,
-      risks.filter((risk) => risk.projectId === project.id),
-    );
+  return createWorkbook({
+    sheets: [
+      ...projects.map((project, index) => ({
+        name: sheetNames[index],
+        xml: registerSheet(
+          project,
+          risks.filter((risk) => risk.projectId === project.id),
+        ),
+      })),
+      { name: matrixName, xml: matrixSheet() },
+    ],
+    styles: stylesXml(),
+    activeTab: 0,
+    recalculate: true,
   });
-  files[`xl/worksheets/sheet${matrixIndex}.xml`] = matrixSheet();
-  return zipFiles(files);
 }
 export function riskWorkbook(project: Project, risks: Risk[]): Uint8Array {
   return riskWorkbooks([project], risks);
 }
 export function downloadRiskPlans(projects: Project[], risks: Risk[]) {
-  const bytes = riskWorkbooks(projects, risks),
-    url = URL.createObjectURL(
-      new Blob([bytes as BlobPart], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      }),
-    );
+  const bytes = riskWorkbooks(projects, risks);
   const label =
     projects.length === 1
       ? projects[0].name.replace(/[^\p{L}\p{N}]+/gu, "-").slice(0, 60)
       : `${projects.length}-Proje`;
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `AA-Risk-Plani-${label}-${new Date().toISOString().slice(0, 10)}.xlsx`;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadWorkbook(
+    bytes,
+    `AA-Risk-Plani-${label}-${new Date().toISOString().slice(0, 10)}.xlsx`,
+  );
 }
 export function downloadRiskPlan(project: Project, risks: Risk[]) {
   downloadRiskPlans([project], risks);

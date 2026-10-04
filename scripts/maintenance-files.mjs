@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { z } from "zod";
+import { verifySnapshotModel } from "./snapshot-model.mjs";
 import {
   openSnapshot,
   auditRows,
@@ -82,6 +83,12 @@ export async function writeBundle({
 }) {
   const schema = await currentSchema();
   const { db, summary } = openSnapshot(bytes, schema);
+  try {
+    await verifySnapshotModel(db);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
   let stage;
   try {
     const folder = await outputDirectory(output);
@@ -187,7 +194,9 @@ export async function verifyBundle(folder) {
   const schema = await currentSchema();
   if (
     manifest.schemaVersion !== schema.version ||
-    manifest.migrationsSha256 !== schema.migrationsSha256
+    (manifest.migrationsSha256 !== schema.migrationsSha256 &&
+      manifest.migrationsSha256 !== schema.legacyMigrationsSha256 &&
+      !schema.compatibleMigrationsSha256.includes(manifest.migrationsSha256))
   )
     throw Error(
       "Yedeğe uygun uygulama sürümünü kullanın; şema kaynakları farklı.",
@@ -200,6 +209,7 @@ export async function verifyBundle(folder) {
       throw Error("Tam yedek kapsamı geçersiz.");
     const { db, summary } = openSnapshot(contents["database.sqlite"], schema);
     try {
+      await verifySnapshotModel(db);
       if (
         !isDeepStrictEqual(summary.tableCounts, manifest.tableCounts) ||
         summary.generation !== manifest.generation ||

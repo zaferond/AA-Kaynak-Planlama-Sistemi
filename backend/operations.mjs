@@ -20,6 +20,7 @@ import {
   personDaySchema,
 } from "./domain/index.mjs";
 import { entityCollections as kinds } from "../shared/entity-kinds.ts";
+import { orderedProjects } from "../shared/project-order.ts";
 const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
 const changesSchema = z
   .array(
@@ -99,8 +100,9 @@ function recalculateActualPercentages(d, affectedMonths) {
   }
 }
 export function applyChanges(d, u, input) {
+  const previousResources = structuredClone(d.resources);
   stageChanges(d, u, input);
-  Object.assign(d, validate(d));
+  Object.assign(d, validate(d, { previousResources }));
   return d;
 }
 
@@ -361,7 +363,25 @@ export function stageChanges(d, u, input) {
             }
           }
         }
-        d[c] = [...d[c].filter((x) => x.id !== id), value];
+        let nextValue = value;
+        if (kind === "project" && value.sortOrder === undefined) {
+          const previous = d.projects.find((p) => p.id === id);
+          if (previous?.sortOrder !== undefined)
+            nextValue = { ...value, sortOrder: previous.sortOrder };
+          else if (
+            !previous &&
+            d.projects.some((p) => p.sortOrder !== undefined)
+          )
+            nextValue = {
+              ...value,
+              sortOrder:
+                d.projects.reduce(
+                  (max, p) => Math.max(max, p.sortOrder ?? -1),
+                  -1,
+                ) + 1,
+            };
+        }
+        d[c] = [...d[c].filter((x) => x.id !== id), nextValue];
       }
     }
     d.revisions[k] = revision + 1;
@@ -371,6 +391,8 @@ export function stageChanges(d, u, input) {
   // Recalculate only after explicit revisions have been checked for every change.
   assertActualMonthlyLimits(d, affectedActualMonths);
   recalculateActualPercentages(d, affectedActualMonths);
+  if (changes.some((change) => change.kind === "project"))
+    d.projects = orderedProjects(d.projects);
   return d;
 }
 const leaderChangeSchema = z.object({
@@ -382,6 +404,7 @@ const leaderChangeSchema = z.object({
 });
 export async function applyLeaderChange(d, u, input, c, generation) {
   admin(u);
+  const previousResources = structuredClone(d.resources);
   const change = leaderChangeSchema.parse(input);
   if (change.generation !== generation)
     fail(409, "Liderlik listesi değişti. Yenileyip tekrar deneyin.");
@@ -472,7 +495,7 @@ export async function applyLeaderChange(d, u, input, c, generation) {
     d.leaders = d.leaders.filter((name) => name !== change.name);
     if (d.leaderManagers) delete d.leaderManagers[change.name];
   }
-  Object.assign(d, validate(d));
+  Object.assign(d, validate(d, { previousResources }));
 }
 export function reset(d, u, expected) {
   admin(u);
@@ -552,7 +575,9 @@ export function restore(d, u, backup) {
     }
     backup = { ...backup, allocations: totals };
   }
-  const next = validate(migrate(backup));
+  // An existing undated employment period may be restored unchanged; a JSON
+  // upload cannot introduce new undated resources/periods or change their policy.
+  const next = validate(migrate(backup), { previousResources: d.resources });
   assertActualMonthlyLimits(next);
   // Backup counters belong to another point in time. Rebuild from current
   // revisions, including deleted records, so no stale client becomes current.

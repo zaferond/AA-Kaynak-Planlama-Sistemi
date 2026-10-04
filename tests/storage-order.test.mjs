@@ -12,12 +12,15 @@ async function setup(t) {
     (url, options) =>
       new Promise((resolve) => pending.push({ url, options, resolve })),
   );
-  const reply = (path, result, status = 200) => {
+  const reply = (path, result, status = 200, identity = "") => {
     const index = pending.findIndex((item) => item.url === "/api" + path);
     assert(index >= 0, "pending request " + path);
-    pending
-      .splice(index, 1)[0]
-      .resolve({ ok: status < 400, status, json: async () => result });
+    pending.splice(index, 1)[0].resolve({
+      ok: status < 400,
+      status,
+      headers: new Headers(identity ? { "X-Session-Identity": identity } : {}),
+      json: async () => result,
+    });
   };
   return { storage, pending, reply };
 }
@@ -283,4 +286,224 @@ test("a delta from a previous session is rejected before parsing or fetching rec
   await rejected;
   assert.equal(storage.currentUser().id, "new");
   assert.equal(pending.length, 0);
+});
+
+function browserEvents(t) {
+  const window = new EventTarget(),
+    signals = [],
+    events = [];
+  window.localStorage = {
+    setItem: (key, value) => signals.push({ key, value }),
+  };
+  globalThis.window = window;
+  t.after(() => delete globalThis.window);
+  for (const name of ["session-expired", "session-changed"])
+    window.addEventListener(name, () => events.push(name));
+  return { window, signals, events };
+}
+async function bindSession(storage, reply, identity = "old-session") {
+  const login = storage.login("old.user", "unused");
+  reply("/auth/login", {
+    user: planningUser,
+    csrf: "old-csrf",
+    sessionIdentity: identity,
+  });
+  await login;
+  return loadPlanning(storage, reply, 10);
+}
+
+test("unchanged generation still detects a different session; old queued writes cancel while the new session can write immediately", async (t) => {
+  const { events } = browserEvents(t);
+  const { storage, reply, pending } = await setup(t);
+  await bindSession(storage, reply);
+  const first = storage.writeBatch([
+    { kind: "allocation", id: "old", value: 1, revision: 0 },
+  ]);
+  const queued = storage.writeBatch([
+    { kind: "allocation", id: "queued", value: 1, revision: 0 },
+  ]);
+  const rejectFirst = assert.rejects(first, { name: "StaleSessionError" });
+  const rejectQueued = assert.rejects(queued, { name: "StaleSessionError" });
+  await setImmediate();
+  const oldWrite = pending.shift();
+  const check = storage.checkUpdates();
+  reply("/version", { generation: 10, sessionIdentity: "new-session" });
+  assert.equal(await check, false);
+  assert.equal(storage.currentUser(), null);
+  assert.deepEqual(events, ["session-changed"]);
+  const login = storage.login("new.user", "unused");
+  reply("/auth/login", {
+    user: { ...planningUser, id: "new", role: "normal" },
+    csrf: "new-csrf",
+    sessionIdentity: "new-session",
+  });
+  await login;
+  const next = storage.writeBatch([
+    { kind: "allocation", id: "new", value: 1, revision: 0 },
+  ]);
+  await setImmediate();
+  assert.equal(pending.length, 1);
+  assert.equal(pending[0].options.headers["X-CSRF-Token"], "new-csrf");
+  assert.equal(JSON.parse(pending[0].options.body).responseMode, undefined);
+  reply(
+    "/changes",
+    {
+      generation: 1,
+      data: { marker: "new-session" },
+      user: { ...planningUser, id: "new", role: "normal" },
+    },
+    200,
+    "new-session",
+  );
+  assert.deepEqual(await next, { marker: "new-session" });
+  oldWrite.resolve({
+    status: 401,
+    ok: false,
+    json: () => {
+      throw Error("Old body must not be read");
+    },
+  });
+  await Promise.all([rejectFirst, rejectQueued]);
+  assert.equal(storage.currentUser().id, "new");
+  assert.equal(pending.length, 0);
+});
+
+test("a changed identity on any API response invalidates the view before parsing its body", async (t) => {
+  const { events } = browserEvents(t);
+  const { storage, reply, pending } = await setup(t);
+  await bindSession(storage, reply);
+  const read = storage.readLocal();
+  const rejected = assert.rejects(read, { name: "StaleSessionError" });
+  pending.shift().resolve({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "X-Session-Identity": "another-session" }),
+    json: () => {
+      throw Error("Body must not be parsed");
+    },
+  });
+  await rejected;
+  assert.equal(storage.currentUser(), null);
+  assert.deepEqual(events, ["session-changed"]);
+});
+
+test("cross-tab invalidation rejects in-flight reads; a late old 401 cannot expire the new session", async (t) => {
+  const { window, events } = browserEvents(t);
+  const { storage, reply, pending } = await setup(t);
+  const stop = storage.observeSessionChanges();
+  t.after(stop);
+  await bindSession(storage, reply);
+  const read = storage.readLocal();
+  const rejected = assert.rejects(read, { name: "StaleSessionError" });
+  const old = pending.shift();
+  const emit = (value) => {
+    const event = new Event("storage");
+    Object.assign(event, {
+      key: "aa-session-change-v1",
+      newValue: JSON.stringify(value),
+    });
+    window.dispatchEvent(event);
+  };
+  emit({ version: 1, id: "signal", source: "other-tab" });
+  emit({ version: 1, id: "signal", source: "other-tab" }); // channel/storage duplicate
+  emit({ version: 2, id: "ignored", source: "other-tab" });
+  assert.deepEqual(events, ["session-changed"]);
+  assert.equal(storage.currentUser(), null);
+  const login = storage.login("new.user", "unused");
+  reply("/auth/login", {
+    user: { ...planningUser, id: "new" },
+    csrf: "new",
+    sessionIdentity: "new",
+  });
+  await login;
+  old.resolve({
+    ok: false,
+    status: 401,
+    json: () => {
+      throw Error("Old body must not be parsed");
+    },
+  });
+  await rejected;
+  assert.equal(storage.currentUser().id, "new");
+  assert.deepEqual(events, ["session-changed"]);
+});
+
+test("session notifications contain only a nonce; failed login/logout do not publish a successful account change", async (t) => {
+  const { signals, events } = browserEvents(t);
+  const { storage, reply } = await setup(t);
+  await bindSession(storage, reply);
+  assert.equal(signals.length, 1);
+  const assertSession = storage.captureSessionGuard();
+  assert.deepEqual(Object.keys(JSON.parse(signals[0].value)).sort(), [
+    "id",
+    "source",
+    "version",
+  ]);
+  assert(!JSON.stringify(signals).includes("old-csrf"));
+  assert(!JSON.stringify(signals).includes("old-session"));
+  const logout = storage.logout();
+  const failed = assert.rejects(logout, { status: 503 });
+  reply("/auth/logout", { error: "temporary failure" }, 503, "old-session");
+  await failed;
+  assertSession(); // Failed logout does not invalidate the component context.
+  assert.equal(storage.currentUser().id, planningUser.id);
+  assert.equal(signals.length, 1);
+  const success = storage.logout();
+  reply("/auth/logout", { ok: true }, 200, "old-session");
+  await success;
+  assert.throws(assertSession, { name: "StaleSessionError" });
+  assert.equal(storage.currentUser(), null);
+  assert.equal(signals.length, 2);
+  const login = storage.login("bad.user", "unused");
+  const denied = assert.rejects(login, { status: 401 });
+  reply("/auth/login", { error: "wrong password" }, 401);
+  await denied;
+  assert.equal(signals.length, 2);
+  assert.deepEqual(events, []);
+});
+
+test("a temporary identity check failure preserves the session; expiry clears it without a notification loop", async (t) => {
+  const { signals, events } = browserEvents(t);
+  const { storage, reply } = await setup(t);
+  await bindSession(storage, reply);
+  const resume = storage.resumeRemembered();
+  const failed = assert.rejects(resume, { status: 503 });
+  reply("/auth/me", { error: "temporary failure" }, 503, "old-session");
+  await failed;
+  assert.equal(storage.currentUser().id, planningUser.id);
+  const expiry = storage.resumeRemembered();
+  reply("/auth/me", { error: "expired" }, 401);
+  assert.equal(await expiry, false);
+  assert.equal(storage.currentUser(), null);
+  assert.equal(signals.length, 2); // one login and one expiry
+  const repeated = storage.resumeRemembered();
+  reply("/auth/me", { error: "expired" }, 401);
+  assert.equal(await repeated, false);
+  assert.equal(signals.length, 2);
+  assert.deepEqual(events, ["session-expired", "session-expired"]);
+});
+
+test("a backup file read started in the old session cannot send a restore after another account logs in", async (t) => {
+  browserEvents(t);
+  const { storage, reply, pending } = await setup(t);
+  await bindSession(storage, reply);
+  let finish;
+  const text = new Promise((resolve) => {
+    finish = resolve;
+  });
+  const restore = storage.restoreBackup({ size: 100, text: () => text });
+  const rejected = assert.rejects(restore, { name: "StaleSessionError" });
+  const login = storage.login("new.user", "unused");
+  reply("/auth/login", {
+    user: { ...planningUser, id: "new" },
+    csrf: "new",
+    sessionIdentity: "new",
+  });
+  await login;
+  finish(
+    JSON.stringify({ format: "aa-planning-data-v1", data: planningData() }),
+  );
+  await rejected;
+  assert.equal(pending.length, 0);
+  assert.equal(storage.currentUser().id, "new");
 });

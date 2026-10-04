@@ -1,11 +1,5 @@
 import { useMemo, type MouseEvent } from "react";
-import {
-  Table,
-  TableBody,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { Table, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   TimelineMonthHead,
   TimelineYearRow,
@@ -17,8 +11,15 @@ import type { Project, Milestone } from "../model";
 import { projectTimelinePeriods } from "../timeline-periods";
 
 import type { usePhaseGrid } from "./usePhaseGrid";
+import { useProjectRowOrder } from "./useProjectRowOrder";
 type DragMode = "move" | "start" | "end";
 export type ProjectTimelineActions = {
+  onReorderProject: (
+    sourceId: string,
+    targetId: string,
+    after: boolean,
+    expected: string[],
+  ) => Promise<void>;
   onProjectInfo: (project: Project) => void;
   onPhaseClick: (project: Project, month: string) => void;
   onPhaseContextMenu: (
@@ -90,6 +91,12 @@ export default function ProjectTimelinePanel({
   actions,
   selection,
 }: Props) {
+  const ordering = useProjectRowOrder(
+    projects,
+    isAdmin,
+    saving,
+    actions.onReorderProject,
+  );
   const projectPeriods = useMemo(
     () => projectTimelinePeriods(months, weekly),
     [months, weekly],
@@ -110,12 +117,14 @@ export default function ProjectTimelinePanel({
       <div className="phase-selection-hint">
         Sürükleyerek ayları seçin · Sağ tık: metin / renk kopyala ve yapıştır ·
         Çift tık veya Enter: düzenle
+        {isAdmin && <span>Proje sırası: soldaki tutamacı sürükleyin</span>}
         {weekly && " · Aşama bilgileri ay bazında seçilir"}
         {!!selection.cells.length && (
           <strong>{selection.cells.length} hücre seçili</strong>
         )}
       </div>
       <Table
+        stickyProjectRows
         ref={selection.tableRef}
         todayDate={todayDate}
         todayMonthsKey={projectPeriods.map((period) => period.key).join("|")}
@@ -165,63 +174,62 @@ export default function ProjectTimelinePanel({
             )}
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {projects.slice(page * 20, (page + 1) * 20).map((p) => (
-            <ProjectTimelineRows
-              key={p.id}
-              project={p}
-              phaseSelection={selection}
-              periods={projectPeriods}
-              density={density}
-              expandAllDetails={expandAllDetails}
-              isAdmin={!!isAdmin}
-              saving={saving}
-              onProjectInfo={() => actions.onProjectInfo(p)}
-              onPhaseClick={(m) => actions.onPhaseClick(p, m)}
-              onPhaseContextMenu={(event, m) =>
-                actions.onPhaseContextMenu(event, p, m)
-              }
-              onAddMilestone={() => actions.onAddMilestone(p)}
-              onEditMilestone={(milestone) =>
-                actions.onEditMilestone(p, milestone)
-              }
-              onDeleteMilestone={(milestone) =>
-                void actions.onDeleteMilestone(p, milestone)
-              }
-              onReorderMilestone={(sourceId, targetId, after) =>
-                void actions.onReorderMilestone(p, sourceId, targetId, after)
-              }
-              onMilestoneContextMenu={(event, milestone, rangeIndex) =>
-                actions.onMilestoneContextMenu(event, p, milestone, rangeIndex)
-              }
-              onChangeMilestoneRange={(milestone, rangeIndex, mode, days) =>
-                actions.onChangeMilestoneRange(
-                  p,
-                  milestone,
-                  rangeIndex,
-                  mode,
-                  days,
-                )
-              }
-              onChangeMilestoneNote={(
+        {projects.slice(page * 20, (page + 1) * 20).map((p) => (
+          <ProjectTimelineRows
+            key={p.id}
+            project={p}
+            ordering={ordering.rowProps(p.id)}
+            phaseSelection={selection}
+            periods={projectPeriods}
+            density={density}
+            expandAllDetails={expandAllDetails}
+            isAdmin={!!isAdmin}
+            saving={saving}
+            onProjectInfo={() => actions.onProjectInfo(p)}
+            onPhaseClick={(m) => actions.onPhaseClick(p, m)}
+            onPhaseContextMenu={(event, m) =>
+              actions.onPhaseContextMenu(event, p, m)
+            }
+            onAddMilestone={() => actions.onAddMilestone(p)}
+            onEditMilestone={(milestone) =>
+              actions.onEditMilestone(p, milestone)
+            }
+            onDeleteMilestone={(milestone) =>
+              void actions.onDeleteMilestone(p, milestone)
+            }
+            onReorderMilestone={(sourceId, targetId, after) =>
+              void actions.onReorderMilestone(p, sourceId, targetId, after)
+            }
+            onMilestoneContextMenu={(event, milestone, rangeIndex) =>
+              actions.onMilestoneContextMenu(event, p, milestone, rangeIndex)
+            }
+            onChangeMilestoneRange={(milestone, rangeIndex, mode, days) =>
+              actions.onChangeMilestoneRange(
+                p,
+                milestone,
+                rangeIndex,
+                mode,
+                days,
+              )
+            }
+            onChangeMilestoneNote={(
+              milestone,
+              rangeIndex,
+              noteIndex,
+              mode,
+              days,
+            ) =>
+              actions.onChangeMilestoneNote(
+                p,
                 milestone,
                 rangeIndex,
                 noteIndex,
                 mode,
                 days,
-              ) =>
-                actions.onChangeMilestoneNote(
-                  p,
-                  milestone,
-                  rangeIndex,
-                  noteIndex,
-                  mode,
-                  days,
-                )
-              }
-            />
-          ))}
-        </TableBody>
+              )
+            }
+          />
+        ))}
       </Table>
       {!projects.length && (
         <p className="emptymsg">Seçili filtrelere uygun proje bulunamadı.</p>

@@ -52,77 +52,33 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+/* Keep this rule at its original cascade position. Allocation borders below
+   intentionally override some band borders in the actual distribution grid. */
 .app
   :is(.remaining-report, .allocation-grid, .projectmatrix)
   .yearrow
-  th.year-band-0,
+  th:is(
+    .year-band-0,
+    .year-band-1,
+    .year-band-2,
+    .year-band-3,
+    .year-band-4,
+    .year-band-5
+  ),
 .app
   :is(.remaining-report, .allocation-grid, .projectmatrix)
   thead
-  th.monthhead.year-band-0 {
-  background: #e9f1fa;
-  color: #285074;
-  border-color: #b9cfdf;
-}
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  .yearrow
-  th.year-band-1,
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  thead
-  th.monthhead.year-band-1 {
-  background: #eaf4ee;
-  color: #2c6549;
-  border-color: #bdd8c8;
-}
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  .yearrow
-  th.year-band-2,
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  thead
-  th.monthhead.year-band-2 {
-  background: #f6efe4;
-  color: #755a35;
-  border-color: #e0d0b7;
-}
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  .yearrow
-  th.year-band-3,
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  thead
-  th.monthhead.year-band-3 {
-  background: #f1ecf8;
-  color: #675384;
-  border-color: #d6c8e4;
-}
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  .yearrow
-  th.year-band-4,
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  thead
-  th.monthhead.year-band-4 {
-  background: #e9f4f5;
-  color: #2d6570;
-  border-color: #bddbdf;
-}
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  .yearrow
-  th.year-band-5,
-.app
-  :is(.remaining-report, .allocation-grid, .projectmatrix)
-  thead
-  th.monthhead.year-band-5 {
-  background: #f8edef;
-  color: #805265;
-  border-color: #e4c9d2;
+  th.monthhead:is(
+    .year-band-0,
+    .year-band-1,
+    .year-band-2,
+    .year-band-3,
+    .year-band-4,
+    .year-band-5
+  ) {
+  background: var(--table-year-background);
+  color: var(--table-year-color);
+  border-color: var(--table-year-border);
 }
 .person-allocation .panelhead p {
   font-size: 11px;
@@ -229,12 +185,12 @@
 
 .app.tab-actual .allocation-grid tr > th:not(:first-child),
 .app.tab-actual .allocation-grid tr > td:not(:first-child) {
-  border-left: 1px solid #bdcede;
+  border-left: 1px solid var(--table-grid-border);
 }
 .app.tab-actual .allocation-grid tr > th:first-child,
 .app.tab-actual .allocation-grid tr > td:first-child {
-  border-right: 1px solid #aebfd1;
+  border-right: 1px solid var(--table-label-border);
 }
 .app.tab-actual .allocation-grid .yearrow th:not(:first-child) {
-  border-left-color: #9fb5cb;
+  border-left-color: var(--table-year-divider);
 }

@@ -99,14 +99,14 @@ export function scopeData(d: Data, u: Principal): Data {
       leaderNames.has(name),
     ),
     resources: d.resources
-      .filter((r) => r.versions.some((v) => ids.has(v.team)))
+      .filter((r) => r.id === ownId || r.versions.some((v) => ids.has(v.team)))
       .map((r) => ({
         ...r,
         name: managerCanSeePeople || r.id === ownId ? r.name : "",
         note: "",
         code: undefined,
         versions: r.versions.map((v) =>
-          ids.has(v.team)
+          r.id === ownId || ids.has(v.team)
             ? v
             : {
                 effective: v.effective,

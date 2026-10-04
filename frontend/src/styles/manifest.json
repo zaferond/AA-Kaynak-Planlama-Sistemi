@@ -1,4 +1,5 @@
 [
+  "shared/table-tokens.css",
   "shared/controls.css",
   "administration/access-form.css",
   "resources/import.css",
@@ -26,5 +27,6 @@
   "administration/access-panel.css",
   "shared/member-badges.css",
   "shared/today-line-and-entries.css",
-  "calendar/work-calendar.css"
+  "calendar/work-calendar.css",
+  "shared/project-groups.css"
 ]

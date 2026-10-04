@@ -8,11 +8,52 @@ import { todayMonthProgress } from "@/src/resource-dates"
 type TableProps = React.ComponentProps<"table"> & {
   todayDate?: string
   todayMonthsKey?: string
+  stickyProjectRows?: boolean
 }
 
-function Table({ className, todayDate, todayMonthsKey, ...props }: TableProps) {
+function Table({ className, todayDate, todayMonthsKey, stickyProjectRows, ...props }: TableProps) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const markerRef = React.useRef<HTMLDivElement>(null)
+  const updateProjectRows = React.useRef<(() => void) | null>(null)
+
+  React.useLayoutEffect(() => {
+    const container = containerRef.current
+    const header = container?.querySelector("thead")
+    if (!stickyProjectRows || !container || !header) return
+    const update = () => {
+      const headerHeight = header.offsetHeight
+      const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1
+      const top = container.getBoundingClientRect().top
+      // Read all group bounds before updating styles to avoid repeated layout work.
+      const positions = Array.from(container.querySelectorAll<HTMLTableSectionElement>("tbody[data-project-group]"))
+        .flatMap(group => {
+          const heading = group.querySelector<HTMLTableRowElement>("[data-project-heading]")
+          if (!heading) return []
+          const end = (group.getBoundingClientRect().bottom - top - heading.getBoundingClientRect().height) / zoom
+          return [{ heading, offset: Math.min(headerHeight, end) }]
+        })
+      container.style.setProperty("--project-sticky-offset", `${headerHeight}px`)
+      for (const { heading, offset } of positions) {
+        heading.style.setProperty("--project-row-top", `${offset}px`)
+      }
+    }
+    updateProjectRows.current = update
+    update()
+    container.addEventListener("scroll", update, { passive: true })
+    const observer = new ResizeObserver(update)
+    observer.observe(header)
+    const table = container.querySelector("table")
+    if (table) observer.observe(table)
+    return () => {
+      updateProjectRows.current = null
+      container.removeEventListener("scroll", update)
+      observer.disconnect()
+      container.style.removeProperty("--project-sticky-offset")
+      for (const row of container.querySelectorAll<HTMLElement>("[data-project-heading]")) row.style.removeProperty("--project-row-top")
+    }
+  }, [stickyProjectRows])
+
+  React.useLayoutEffect(() => { updateProjectRows.current?.() })
 
   React.useLayoutEffect(() => {
     const container = containerRef.current
@@ -53,6 +94,7 @@ function Table({ className, todayDate, todayMonthsKey, ...props }: TableProps) {
     <div
       ref={containerRef}
       data-slot="table-container"
+      data-sticky-projects={stickyProjectRows ? "true" : undefined}
       className="relative w-full overflow-x-auto"
     >
       <table

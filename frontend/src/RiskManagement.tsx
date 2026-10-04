@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -82,21 +83,33 @@ export default function RiskManagement({
   data,
   leaveGuardRef,
   user,
+  onEditingChange,
+  onReload,
   onSave,
   onDelete,
 }: {
   leaveGuardRef: RefObject<RiskLeaveGuard | null>;
   data: Data;
   user: Principal;
-  onSave: (risk: Risk) => Promise<void>;
-  onDelete: (risk: Risk) => Promise<void>;
+  onEditingChange: (editing: boolean) => void;
+  onReload: () => Promise<Data>;
+  onSave: (risk: Risk, revision: number) => Promise<void>;
+  onDelete: (risk: Risk, revision: number) => Promise<void>;
 }) {
   const [selection, setSelection] = useState<string[] | "all">([]),
     [projectMenuOpen, setProjectMenuOpen] = useState(false),
     [newRiskProjectId, setNewRiskProjectId] = useState(""),
     [createSignal, setCreateSignal] = useState(0),
     [exportError, setExportError] = useState(""),
-    [exporting, setExporting] = useState(false);
+    [exporting, setExporting] = useState(false),
+    [editing, setEditing] = useState(false);
+  const reportEditing = useCallback(
+    (editing: boolean) => {
+      setEditing(editing);
+      onEditingChange(editing);
+    },
+    [onEditingChange],
+  );
   const pickerRef = useRef<HTMLDivElement>(null);
   const selectedProjectIds =
     selection === "all"
@@ -289,7 +302,7 @@ export default function RiskManagement({
           </button>
         </div>
       </div>
-      {selectedProjects.length === 0 ? (
+      {selectedProjects.length === 0 && !editing ? (
         <div className="risk-placeholder">
           <ShieldAlert size={32} />
           <strong>Risk planını açmak için proje seçin</strong>
@@ -323,6 +336,9 @@ export default function RiskManagement({
           <RiskTable
             leaveGuardRef={leaveGuardRef}
             risks={risks}
+            revisions={data.revisions}
+            onEditingChange={reportEditing}
+            onReload={onReload}
             selectedProjectIds={selectedProjectIds}
             projectNames={projectNames}
             createSignal={createSignal}

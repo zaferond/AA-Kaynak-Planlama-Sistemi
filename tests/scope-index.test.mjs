@@ -257,11 +257,11 @@ test("scoped views preserve historical team boundaries, owned actuals, anonymous
   );
   assert.equal(
     own.resources.find((resource) => resource.id === "r").versions[0].team,
-    "",
+    "b",
   );
   assert.equal(
     own.resources.find((resource) => resource.id === "r").versions[0].status,
-    "",
+    "İşten Ayrıldı",
   );
   assert.deepEqual(data, before);
 });
@@ -298,4 +298,43 @@ test("scope changes cannot reuse a previous user's permissions or a previous res
     undefined,
   );
   assert.equal(scopeData(data, principal("admin")), data);
+});
+
+test("a normal user's own record survives a complete transfer outside their account leadership without widening other data", () => {
+  const data = fixture();
+  data.resources[0].versions = [version("2026-01", "b")];
+  data.resources.push({
+    id: "private-b",
+    name: "Private B",
+    note: "HR",
+    code: "HR",
+    versions: [version("2026-01", "b")],
+  });
+  data.actualAllocations["private-b|p|2026-07"] = 0.25;
+  data.personCalendar["private-b|2026-07-02|leave"] = {
+    type: "leave",
+    label: "Private",
+    hours: 1,
+  };
+  const view = scopeData(data, principal("normal"));
+  assert.equal(view.resources.find((r) => r.id === "r").versions[0].team, "b");
+  assert.equal(view.resources.find((r) => r.id === "r").name, "Owner");
+  assert.equal(
+    view.resources.some((r) => r.id === "private-b"),
+    false,
+  );
+  assert.deepEqual(
+    view.teams.map((t) => t.id),
+    ["a"],
+  );
+  assert.deepEqual(view.allocations, { "a|p|2026-01": 1 });
+  assert.equal(view.actualTeamTotals["b|p|2026-07"], undefined);
+  assert.equal(view.actualAllocations["r|p|2026-07"], 0.5);
+  assert.equal(view.actualAllocations["private-b|p|2026-07"], undefined);
+  assert.equal(view.personCalendar["private-b|2026-07-02|leave"], undefined);
+  const manager = scopeData(data, principal("manager"));
+  assert.equal(
+    manager.resources.some((r) => r.id === "r"),
+    false,
+  );
 });

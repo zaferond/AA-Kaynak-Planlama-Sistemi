@@ -1,3 +1,4 @@
+import { captureEditorRevisions } from "../frontend/src/features/editor-revisions.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -102,6 +103,7 @@ test("monthly and weekly diamond center maps back to the exact date; filtered pe
 test("editor appends point, color paste preserves kind/date, empty or range-shaped point rejects", () => {
   const data = fixture();
   const editor = {
+    baseRevisions: captureEditorRevisions(data),
     kind: "milestone",
     projectId: "p",
     isNew: true,
@@ -240,7 +242,7 @@ test("versions 27/28 preserve existing bars, default filled diamonds and persist
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      29,
+      30,
     );
   } finally {
     await store.close();

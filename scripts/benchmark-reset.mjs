@@ -182,6 +182,11 @@ const report = {
     await Promise.all(
       [
         "backend/store.mjs",
+        "backend/identity-repository.mjs",
+        "backend/planning-reader.mjs",
+        "backend/planning-writer.mjs",
+        "backend/schema-migrations.mjs",
+        "backend/migration-catalog.mjs",
         "backend/operations.mjs",
         "backend/read-records.mjs",
         "shared/server-domain.ts",

@@ -1,9 +1,14 @@
+import { riskCategories, riskStatuses, riskStrategies } from "./risk-policy.ts";
 import { validPlanningMonth, validPlanningDate } from "./planning-dates.ts";
 import { personDaySchema } from "./calendar-rules.ts";
 export { personDaySchema } from "./calendar-rules.ts";
 const bad = (message: string) => Object.assign(Error(message), { status: 400 });
 import { z } from "zod";
-import type { Data } from "./model.ts";
+import type { Data, Resource } from "./model.ts";
+import {
+  assertResourceDates,
+  unchangedLegacyPeriod,
+} from "./resource-policy.ts";
 import { statuses, phasePalette, actualVersionAt } from "./model.ts";
 import {
   normalizeResourceDate,
@@ -102,6 +107,7 @@ const milestone = z.object({
 const proj = z.object({
   id: z.string().min(1),
   name: z.string().trim().min(1).max(200),
+  sortOrder: z.number().int().min(0).max(1000000000).optional(),
   responsibleName: z.string().trim().max(200).optional(),
   start: mo,
   end: mo,
@@ -116,18 +122,18 @@ const risk = z
     id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
     projectId: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
     reportedBy: z.string().trim().min(1).max(200),
-    category: z.enum(["Takvim", "Mali", "Teknik", "İdari"]),
+    category: z.enum(riskCategories),
     reportedAt: day,
     system: z.string().trim().max(200),
     description: z.string().trim().min(1).max(5000),
     cause: z.string().trim().max(5000),
     actionPlan: z.string().trim().max(5000),
     targetAt: z.union([day, z.literal("")]),
-    status: z.enum(["Açık", "Takipte", "Kapalı"]),
+    status: z.enum(riskStatuses),
     owner: z.string().trim().max(200),
     likelihood: z.number().int().min(1).max(5),
     impact: z.number().int().min(1).max(5),
-    strategy: z.enum(["", "Kaçınma", "Kontrol", "Üstlenme-Kabul", "Transfer"]),
+    strategy: z.enum(riskStrategies),
     implementedAt: z.union([day, z.literal("")]),
     actionResult: z.string().trim().max(5000),
     residualLikelihood: z.number().int().min(1).max(5).nullable(),
@@ -221,7 +227,16 @@ const schema = z.object({
     })
     .optional(),
 });
-export function validate(input: unknown): Data {
+export function validate(
+  input: unknown,
+  options: { previousResources?: readonly Resource[] } = {},
+): Data {
+  const previous = new Map(
+    (options.previousResources || []).map((r) => [
+      r.id,
+      new Map(r.versions.map((v) => [v.effective, v])),
+    ]),
+  );
   const d = schema.parse(input) as Data;
   // Record keys (and their split parts) are already strings. Use the same
   // predicates as the schemas without rebuilding a Zod result for each key.
@@ -237,6 +252,11 @@ export function validate(input: unknown): Data {
     if (new Set(list.map((x) => x.id)).size !== list.length)
       throw bad("Tekrarlanan kayıt kimliği.");
   const teamIds = new Set(d.teams.map((team) => team.id));
+  const projectRanks = d.projects.flatMap((p) =>
+    p.sortOrder === undefined ? [] : [p.sortOrder],
+  );
+  if (new Set(projectRanks).size !== projectRanks.length)
+    throw bad("Projelerin sıralama değerleri farklı olmalıdır.");
   const projectsById = new Map(
     d.projects.map((project) => [project.id, project]),
   );
@@ -289,14 +309,14 @@ export function validate(input: unknown): Data {
       v.start = normalizeResourceDate(v.start, "start");
       v.end = normalizeResourceDate(v.end, "end");
       if (v.team && !teamIds.has(v.team)) throw bad("Takım bulunamadı.");
-      if (v.end && v.start && v.end < v.start)
-        throw bad("Bitiş başlangıçtan önce olamaz.");
-      if (v.included && v.status === "Aktif İlan" && !v.start)
-        throw bad("Dahil edilen aktif ilan için başlangıç ayı zorunludur.");
-      if (v.status === "İşten Ayrıldı" && (!v.start || !v.end))
-        throw bad(
-          "İşten Ayrıldı statüsü için işbaşı ve işten ayrılış tarihleri zorunludur.",
+      try {
+        assertResourceDates(
+          v,
+          unchangedLegacyPeriod(v, previous.get(r.id)?.get(v.effective)),
         );
+      } catch (error) {
+        throw bad((error as Error).message);
+      }
     }
     for (const departure of r.versions.filter(
       (v) => v.status === "İşten Ayrıldı",

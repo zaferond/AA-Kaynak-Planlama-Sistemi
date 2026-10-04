@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
-import { TableRow, TableCell } from "@/components/ui/table";
+import { TableBody, TableRow, TableCell } from "@/components/ui/table";
 import {
   periodOverlapsProject,
   phaseInitial,
@@ -21,6 +21,7 @@ import { monthLabel, dateLabel } from "./features/timeline-labels";
 
 export default function ProjectTimelineRows({
   project,
+  ordering,
   periods,
   density,
   expandAllDetails,
@@ -73,10 +74,36 @@ export default function ProjectTimelineRows({
   }
   const milestones = project.milestones || [];
   return (
-    <>
-      <TableRow className="project-main-row">
+    <TableBody className="project-row-group" data-project-group={project.id}>
+      <TableRow
+        data-project-heading={project.id}
+        className={
+          "project-main-row project-freeze-row" +
+          (ordering.dragging ? " project-dragging" : "") +
+          (ordering.dropPosition
+            ? " project-drop-" + ordering.dropPosition
+            : "")
+        }
+        onDragOver={ordering.onDragOver}
+        onDrop={ordering.onDrop}
+      >
         <TableCell>
           <div className="project-name-cell">
+            {isAdmin && (
+              <button
+                type="button"
+                className="project-reorder-handle"
+                disabled={saving}
+                draggable={!saving}
+                title="Sürükleyerek sırala · Alt + ↑ / ↓"
+                aria-label={project.name + " proje sırasını değiştir"}
+                onDragStart={ordering.onDragStart}
+                onDragEnd={ordering.onDragEnd}
+                onKeyDown={ordering.onKeyDown}
+              >
+                <GripVertical size={16} />
+              </button>
+            )}
             <button
               type="button"
               className="project-expand"
@@ -459,6 +486,6 @@ export default function ProjectTimelineRows({
           </div>,
           document.body,
         )}
-    </>
+    </TableBody>
   );
 }

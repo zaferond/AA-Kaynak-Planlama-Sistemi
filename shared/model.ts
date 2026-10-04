@@ -1,3 +1,4 @@
+import type { RiskCategory, RiskStatus, RiskStrategy } from "./risk-policy.ts";
 import type { Account } from "./access.ts";
 import catalog from "./catalog.json" with { type: "json" };
 import {
@@ -48,6 +49,7 @@ export type Milestone = {
 export type Project = {
   id: string;
   name: string;
+  sortOrder?: number;
   responsibleName?: string;
   start: string;
   end: string;
@@ -59,18 +61,18 @@ export type Risk = {
   id: string;
   projectId: string;
   reportedBy: string;
-  category: "Takvim" | "Mali" | "Teknik" | "İdari";
+  category: RiskCategory;
   reportedAt: string;
   system: string;
   description: string;
   cause: string;
   actionPlan: string;
   targetAt: string;
-  status: "Açık" | "Takipte" | "Kapalı";
+  status: RiskStatus;
   owner: string;
   likelihood: number;
   impact: number;
-  strategy: "Kaçınma" | "Kontrol" | "Üstlenme-Kabul" | "Transfer" | "";
+  strategy: RiskStrategy;
   implementedAt: string;
   actionResult: string;
   residualLikelihood: number | null;

@@ -124,6 +124,69 @@ export async function checkRisks(f) {
       },
     );
     await f.check(
+      "risk: Tab/Shift+Tab retain focus; composing Enter and delete-button Enter cannot autosave",
+      async () => {
+        const before = (await f.state()).risks.find((r) => r.id === second);
+        let requests = 0;
+        const count = (request) => {
+          if (request.url().endsWith("/api/changes")) requests++;
+        };
+        page.on("request", count);
+        try {
+          await row(page, second)
+            .locator('[data-risk-column="reportedBy"]')
+            .click();
+          await field(page, "reportedBy").fill("Synthetic composing draft");
+          await page.keyboard.press("Tab");
+          assert(
+            await field(page, "category").evaluate(
+              (element) => element === document.activeElement,
+            ),
+          );
+          await page.keyboard.press("Shift+Tab");
+          assert(
+            await field(page, "reportedBy").evaluate(
+              (element) => element === document.activeElement,
+            ),
+          );
+          await field(page, "reportedBy").evaluate((element) =>
+            element.dispatchEvent(
+              new KeyboardEvent("keydown", {
+                key: "Enter",
+                code: "Enter",
+                bubbles: true,
+                cancelable: true,
+                isComposing: true,
+              }),
+            ),
+          );
+          await page.waitForTimeout(100);
+          assert.equal(
+            await field(page, "reportedBy").inputValue(),
+            "Synthetic composing draft",
+          );
+          assert.deepEqual(
+            (await f.state()).risks.find((r) => r.id === second),
+            before,
+          );
+          await page
+            .getByRole("button", { name: "Riski Sil", exact: true })
+            .focus();
+          page.once("dialog", (dialog) => dialog.dismiss());
+          await page.keyboard.press("Enter");
+          assert.equal(await edit(page).count(), 1);
+          await field(page, "reportedBy").press("Escape");
+          assert.equal(requests, 0);
+          assert.deepEqual(
+            (await f.state()).risks.find((r) => r.id === second),
+            before,
+          );
+        } finally {
+          page.off("request", count);
+        }
+      },
+    );
+    await f.check(
       "risk: failed autosave blocks tab change and retains the draft; retry navigates",
       async () => {
         await row(page, first)

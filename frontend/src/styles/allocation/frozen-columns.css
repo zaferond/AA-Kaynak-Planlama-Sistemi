@@ -3,13 +3,13 @@
   position: sticky;
   left: 0;
   z-index: 3;
-  background: #eaf0f7 !important;
+  background: var(--table-project-background) !important;
 }
 .app.tab-plan .project-team-view .summary.s2 > td:first-child {
   position: sticky;
   left: 0;
   z-index: 2;
-  background: #f7fafc;
+  background: var(--table-summary-background);
 }
 .app.tab-plan .project-team-view .project-phase-group .project-group-name {
   padding: 5px 10px !important;
@@ -47,7 +47,7 @@
 }
 .app.tab-overview .remaining-report :is(tbody td, thead th):nth-child(2) {
   left: 110px;
-  box-shadow: 7px 0 8px -9px #1a3b59;
+  box-shadow: var(--table-frozen-shadow);
 }
 .app.tab-overview
   .remaining-report
@@ -55,13 +55,13 @@
   tr:not(.yearrow)
   > th:nth-child(-n + 2) {
   z-index: 6;
-  background: #f2f6fb;
+  background: var(--table-header-background);
 }
 .app.tab-overview .remaining-report .yearrow th:first-child {
   position: sticky;
   left: 0;
   z-index: 7;
-  background: #e3edf8;
+  background: var(--table-year-label-background);
 }
 .app.tab-overview .remaining-report tbody tr > td:nth-child(2) {
   background: #fff;
@@ -115,17 +115,17 @@
 .app.tab-plan .capacitystrip .planning-grid :is(th, td):first-child {
   width: var(--label-width);
   border-right: 2px solid #b8cbdc;
-  box-shadow: 7px 0 8px -9px #1a3b59;
+  box-shadow: var(--table-frozen-shadow);
 }
 .app.tab-plan .capacitystrip .planning-grid tbody td:first-child {
-  background: #f7fafc;
+  background: var(--table-summary-background);
 }
 
 /* Keep horizontal scrollbars below the last visible row in planning and reports. */
 .app.tab-plan [data-slot="table-container"]:has(> .allocation-grid),
 .app.tab-overview [data-slot="table-container"]:has(> .remaining-report),
 .app.tab-overview .absence-report [data-slot="table-container"] {
-  padding-bottom: 24px;
+  padding-bottom: var(--table-scrollbar-clearance);
 }
 .app.tab-plan .capacitystrip .planning-grid .summary td {
   height: 24px;

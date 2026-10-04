@@ -1,10 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import type {
-  Change,
-  ChangeKind,
-  ChangeValues,
-} from "../../../shared/commands";
+import type { Change } from "../../../shared/commands";
 import {
   monthsFrom,
   isWorkingStatus,
@@ -18,6 +14,7 @@ import { currentYearStartDate } from "../resource-dates";
 import { resourceVersionForEdit } from "../resource-version-edit";
 import { prepareEditorChanges } from "./editor-commands";
 import type { PortalEditor } from "./editor-state";
+import { captureEditorRevisions, editorRevision } from "./editor-revisions";
 
 type Props = {
   data: Data | null;
@@ -28,11 +25,6 @@ type Props = {
   leads: string[];
   resourceIds: string[];
   batch: (changes: Change[]) => Promise<void>;
-  change: <K extends ChangeKind>(
-    kind: K,
-    id: string,
-    value: ChangeValues[K] | null,
-  ) => Change<K>;
   onProjectDeleted: (id: string) => void;
   onSubmitted: () => void;
   setError: Dispatch<SetStateAction<string>>;
@@ -49,7 +41,6 @@ export function usePortalEditor({
   leads,
   resourceIds,
   batch,
-  change,
   onProjectDeleted,
   onSubmitted,
   setError,
@@ -59,17 +50,20 @@ export function usePortalEditor({
   const [formError, setFormError] = useState("");
   const months = useMemo(() => monthsFrom(start, count), [start, count]);
   function openProject(p?: Project, m?: string) {
-    if (!isAdmin) return;
+    if (!isAdmin || !data) return;
+    const baseRevisions = captureEditorRevisions(data);
     setFormError("");
     if (p && m)
       setEditor({
         kind: "projectPhase",
+        baseRevisions,
         value: structuredClone(p),
         phaseMonth: m,
       });
     else
       setEditor({
         kind: "project",
+        baseRevisions,
         isNew: !p,
         value: p
           ? structuredClone(p)
@@ -114,7 +108,13 @@ export function usePortalEditor({
     setFormError("");
     try {
       await batch([
-        { ...change("project", project.id, null), operation: "delete" },
+        {
+          kind: "project",
+          id: project.id,
+          value: null,
+          revision: editorRevision(editor.baseRevisions, "project", project.id),
+          operation: "delete",
+        },
       ]);
       setEditor(null);
       onProjectDeleted(project.id);
@@ -126,13 +126,14 @@ export function usePortalEditor({
     }
   }
   function openMilestone(project: Project, milestone?: Milestone) {
-    if (!isAdmin) return;
+    if (!isAdmin || !data) return;
     setFormError("");
     const first =
       months.find((month) => month >= project.start && month <= project.end) ||
       project.start;
     setEditor({
       kind: "milestone",
+      baseRevisions: captureEditorRevisions(data),
       projectId: project.id,
       isNew: !milestone,
       draftEmpty: !milestone || milestone.hasCriticalTopics === false,
@@ -173,12 +174,20 @@ export function usePortalEditor({
       return;
     try {
       await batch([
-        change("project", current.id, {
-          ...current,
-          milestones: current.milestones.filter(
-            (item) => item.id !== milestone.id,
-          ),
-        }),
+        {
+          kind: "project",
+          id: current.id,
+          revision:
+            editor?.kind === "milestone" && editor.projectId === current.id
+              ? editorRevision(editor.baseRevisions, "project", current.id)
+              : data.revisions["project:" + current.id] || 0,
+          value: {
+            ...current,
+            milestones: current.milestones.filter(
+              (item) => item.id !== milestone.id,
+            ),
+          },
+        },
       ]);
       setEditor((active: PortalEditor | null) =>
         active?.kind === "milestone" && active.value?.id === milestone.id
@@ -207,6 +216,7 @@ export function usePortalEditor({
     void deleteMilestone(project, milestone);
   }
   function openResource(r?: Resource) {
+    if (!isAdmin || !data) return;
     setFormError("");
     const v = r
       ? resourceVersionForEdit(r, start)
@@ -224,6 +234,7 @@ export function usePortalEditor({
       !v.start && isWorkingStatus(v.status) ? currentYearStartDate() : v.start;
     setEditor({
       kind: "resource",
+      baseRevisions: captureEditorRevisions(data),
       isNew: !r,
       value: r
         ? structuredClone(r)
@@ -263,9 +274,11 @@ export function usePortalEditor({
     });
   }
   function openBulk() {
+    if (!isAdmin || !data) return;
     setFormError("");
     setEditor({
       kind: "bulkResources",
+      baseRevisions: captureEditorRevisions(data),
       effective: start,
       team: "",
       lead: "",

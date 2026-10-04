@@ -471,3 +471,42 @@ test("HTTP leadership rename and manager updates support __proto__, survive back
     await reopened.close();
   }
 });
+
+test("HTTP session identity is stable for one session, rotates on login without generation changes, and grants no authentication", async (t) => {
+  const { admin, request, user, state } = await setup(t);
+  const before = await state();
+  const me = await request("/auth/me", undefined, admin);
+  const marker = me.json.sessionIdentity;
+  assert.match(marker, /^[a-f0-9]{64}$/);
+  assert.equal(me.response.headers.get("X-Session-Identity"), marker);
+  assert.notEqual(marker, admin.csrf);
+  const version = await request("/version", undefined, admin);
+  assert.equal(version.json.sessionIdentity, marker);
+  assert.equal(version.json.generation, before.generation);
+  assert.equal(
+    (await request("/data", undefined, admin)).response.headers.get(
+      "X-Session-Identity",
+    ),
+    marker,
+  );
+  const next = await user("admin");
+  const nextVersion = await request("/version", undefined, next);
+  assert.notEqual(nextVersion.json.sessionIdentity, marker);
+  assert.equal(nextVersion.json.generation, before.generation);
+  const denied = await request(
+    "/changes",
+    { changes: [] },
+    { cookie: next.cookie, csrf: admin.csrf },
+  );
+  assert.equal(denied.status, 403);
+  assert.equal(
+    denied.response.headers.get("X-Session-Identity"),
+    nextVersion.json.sessionIdentity,
+  );
+  assert.deepEqual((await state()).data, before.data);
+  const forgery = await request("/auth/me", undefined, {
+    cookie: "kp_session=" + marker,
+  });
+  assert.equal(forgery.status, 401);
+  assert.equal(forgery.response.headers.get("X-Session-Identity"), null);
+});

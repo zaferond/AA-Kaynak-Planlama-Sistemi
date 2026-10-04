@@ -1,8 +1,17 @@
-import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import initSqlJs from "sql.js";
 import { z } from "zod";
 import { tables } from "../backend/tables.mjs";
+import {
+  assertMigrationHistory,
+  migrationFingerprint,
+  requiredVersions,
+  schemaVersion,
+} from "../backend/migration-catalog.mjs";
+import {
+  assertSchemaContract,
+  expectedSchemaContract,
+} from "./schema-contract.mjs";
 
 export const sha256 = (bytes) =>
   createHash("sha256").update(bytes).digest("hex");
@@ -38,21 +47,11 @@ export const auditRowSchema = z
   })
   .strict();
 export async function currentSchema() {
-  const dir = new URL("../backend/migrations/", import.meta.url);
-  const names = (await fs.readdir(dir))
-    .filter((name) => /^\d{3}_sqljs\.sql$/.test(name))
-    .sort();
-  const hash = createHash("sha256");
-  for (const name of names) {
-    hash.update(name + "\n");
-    hash.update(await fs.readFile(new URL(name, dir)));
-  }
   return {
-    version: Math.max(...names.map((name) => Number(name.slice(0, 3)))),
-    requiredVersions: names
-      .map((name) => Number(name.slice(0, 3)))
-      .filter((version) => version !== 2),
-    migrationsSha256: hash.digest("hex"),
+    version: schemaVersion,
+    requiredVersions: [...requiredVersions],
+    ...(await migrationFingerprint("sqljs")),
+    contract: await expectedSchemaContract(),
   };
 }
 export function cutoffDate(value) {
@@ -101,8 +100,8 @@ function inspect(db, schema) {
   const applied = db
     .exec("SELECT version FROM kp_schema_migrations")[0]
     .values.map(([value]) => Number(value));
-  if (schema.requiredVersions.some((value) => !applied.includes(value)))
-    throw Error("Veritabanının migration geçmişi eksik.");
+  assertMigrationHistory(applied);
+  assertSchemaContract(db, schema.contract);
   const tableCounts = Object.fromEntries(
     names.map((name) => [
       name,

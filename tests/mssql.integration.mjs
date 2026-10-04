@@ -32,7 +32,7 @@ test(
       const stores = Array.from({ length: 2 }, () => new Store({ env }));
       try {
         await checked.test(
-          "native legacy v2 upgrade to schema 29 preserves data and runs once",
+          "native legacy v2 upgrade to schema 30 preserves data and runs once",
           () => nativeUpgradeSuite(stores[0]),
         );
         await cleanupTestTables(stores[0].db);
@@ -69,6 +69,11 @@ test(
         const sourceHashes = {};
         const sourceFiles = [
           "backend/store.mjs",
+          "backend/identity-repository.mjs",
+          "backend/planning-reader.mjs",
+          "backend/planning-writer.mjs",
+          "backend/schema-migrations.mjs",
+          "backend/migration-catalog.mjs",
           "backend/adapters/mssql.mjs",
           "backend/rate-limits.mjs",
           "tests/rate-limit-suite.mjs",
@@ -97,7 +102,7 @@ test(
         return {
           checkedAt: new Date().toISOString(),
           node: process.version,
-          schema: 29,
+          schema: 30,
           server,
           load,
           sourceHashes,

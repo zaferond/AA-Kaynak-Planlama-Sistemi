@@ -1,3 +1,4 @@
+import { ROOT_ADMIN_ID } from "../shared/access.ts";
 import express from "express";
 import { z } from "zod";
 import path from "node:path";
@@ -85,6 +86,8 @@ export function createApp(
     secure,
     path: "/",
   };
+  // This opaque marker is not the cookie/session ID and cannot authenticate.
+  const sessionIdentity = (id) => digest("aa-session-view-v1:" + id);
   const cookie = (req) => {
     const m = (req.headers.cookie || "").match(
       /(?:^|;\s*)kp_session=([a-zA-Z0-9_-]+)/,
@@ -139,7 +142,9 @@ export function createApp(
         ...cookieOptions,
         ...(body.remember ? { maxAge: age } : {}),
       });
-      res.json({ user: publicUser(u), csrf });
+      const identity = sessionIdentity(digest(raw));
+      res.set("X-Session-Identity", identity);
+      res.json({ user: publicUser(u), csrf, sessionIdentity: identity });
     },
   );
   app.use("/api", async (req, res, next) => {
@@ -151,6 +156,8 @@ export function createApp(
       fail(401, "Oturum sona erdi. Yeniden giriş yapın.");
     req.user = u;
     req.session = s;
+    req.sessionIdentity = sessionIdentity(s._id);
+    res.set("X-Session-Identity", req.sessionIdentity);
     if (
       !["GET", "HEAD"].includes(req.method) &&
       req.headers["x-csrf-token"] !== s.csrf
@@ -173,7 +180,11 @@ export function createApp(
     parser(req, res, next);
   });
   app.get("/api/auth/me", (req, res) =>
-    res.json({ user: publicUser(req.user), csrf: req.session.csrf }),
+    res.json({
+      user: publicUser(req.user),
+      csrf: req.session.csrf,
+      sessionIdentity: req.sessionIdentity,
+    }),
   );
   app.post("/api/auth/logout", async (req, res) => {
     await store.deleteSession(req.session._id);
@@ -184,7 +195,10 @@ export function createApp(
     sendDataSnapshot(req, res, await store.view(req.user)),
   );
   app.get("/api/version", async (req, res) => {
-    res.json({ generation: await store.generation() });
+    res.json({
+      generation: await store.generation(),
+      sessionIdentity: req.sessionIdentity,
+    });
   });
   app.post("/api/changes", async (req, res) => {
     res.json(await changeAndView(store, req.user, req.body.changes, req.body));
@@ -271,7 +285,7 @@ export function createApp(
       ATTEMPT_LIMITS.userEdit,
     );
     const input = permissionInput.parse(req.body);
-    if (input.id === "root-admin")
+    if (input.id === ROOT_ADMIN_ID)
       fail(403, "Ana yönetici yetkileri değiştirilemez.");
     const view = await store.mutate(
       req.user,

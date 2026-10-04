@@ -226,7 +226,7 @@ test("Active job must have start, out of project allocations rejected", () => {
       ],
     },
   ];
-  assert.throws(() => validate(d), /başlangıç/);
+  assert.throws(() => validate(d), /İşbaşı Tarihi/);
   d.resources = [];
   assert.throws(
     () =>
@@ -608,7 +608,7 @@ test("Deleted record retains revision; stale reset cannot erase newer writes", (
         effective: "2026-01",
         status: "Aktif Çalışan",
         included: true,
-        start: "",
+        start: "2026-01-01",
         end: "",
         amount: 1,
       },

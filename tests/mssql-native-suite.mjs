@@ -82,7 +82,7 @@ export async function nativeUpgradeSuite(store) {
         )
       ).rows[0].n,
     ),
-    29,
+    30,
   );
   await store.close();
   await store.connect();
@@ -142,7 +142,7 @@ export async function nativePoolSuite(stores, t) {
         )
       ).rows[0].version,
     ),
-    29,
+    30,
   );
 
   await seedBenchmarkStore(first, 1000, {

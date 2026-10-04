@@ -1,18 +1,22 @@
-import { escapeXml, columnName as column } from "./xlsx-cells.ts";
-import type { Data, Project, Resource, Team } from "./model";
-import { visibleActualVersion } from "./model";
+import {
+  assertExcelRowCount,
+  escapeXml,
+  excelCellText,
+  columnName as column,
+} from "./xlsx-cells.ts";
+import type { Data, Project, Resource, Team } from "./model.ts";
+import { visibleActualVersion } from "./model.ts";
+import { visibleActualInScope } from "../../shared/actual-visibility.ts";
 import {
   actualInputToFte,
   personCalendarHoursInMonth,
   effectivePersonHoursInMonth,
   DEFAULT_MONTHLY_HOURS,
-} from "./actual-units";
-import { zipFiles } from "./project-export";
-import { SYSTEM_NAME } from "./settings";
+} from "./actual-units.ts";
+import { createWorkbook, downloadWorkbook } from "./xlsx-workbook.ts";
+import { SYSTEM_NAME } from "./settings.ts";
 
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-const mime =
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const yearColors = ["DFEBF4", "E7F1EA", "F6EEDF", "EFEAF5", "E6F0F1", "F5EAF0"];
 type Cell = string | number | null;
 type AllocationSheet = {
@@ -26,7 +30,7 @@ type AllocationSheet = {
 };
 
 function textCell(row: number, index: number, value: string, style: number) {
-  return `<c r="${column(index)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${escapeXml(value)}</t></is></c>`;
+  return `<c r="${column(index)}${row}" s="${style}" t="inlineStr"><is><t xml:space="preserve">${excelCellText(value)}</t></is></c>`;
 }
 function numberCell(row: number, index: number, value: number, style: number) {
   if (!Number.isFinite(value))
@@ -37,6 +41,7 @@ function blankCell(row: number, index: number, style: number) {
   return `<c r="${column(index)}${row}" s="${style}"/>`;
 }
 function row(index: number, height: number, cells: string[]) {
+  assertExcelRowCount(index);
   return `<row r="${index}" ht="${height}" customHeight="1">${cells.join("")}</row>`;
 }
 function monthLabel(month: string) {
@@ -180,18 +185,10 @@ function sheetXml(sheet: AllocationSheet) {
 function workbook(sheet: AllocationSheet) {
   validateMonths(sheet.months);
   if (!sheet.rows.length) throw Error("Dışa aktarılacak kayıt bulunamadı.");
-  const files: Record<string, string> = {
-    "[Content_Types].xml":
-      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>',
-    "_rels/.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',
-    "xl/workbook.xml": `<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="${namespace}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheet.name}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-    "xl/_rels/workbook.xml.rels":
-      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>',
-    "xl/styles.xml": stylesXml(),
-    "xl/worksheets/sheet1.xml": sheetXml(sheet),
-  };
-  return zipFiles(files);
+  return createWorkbook({
+    sheets: [{ name: sheet.name, xml: sheetXml(sheet) }],
+    styles: stylesXml(),
+  });
 }
 
 export function plannedAllocationWorkbook(
@@ -200,6 +197,7 @@ export function plannedAllocationWorkbook(
   projects: Project[],
   months: string[],
 ): Uint8Array {
+  assertExcelRowCount(4 + teams.length * projects.length);
   return workbook({
     name: "Planlanan Dağılım",
     title: "AA Mühendislik | Planlanan Kaynak Dağılımı",
@@ -229,28 +227,26 @@ export function actualAllocationWorkbook(
   months: string[],
   currentMonth: string,
   selectedPersonIds: string[],
+  ownResourceId?: string,
 ): Uint8Array {
   const allowedTeams = new Set(teams.map((team) => team.id)),
     selected = new Set(selectedPersonIds),
     teamNames = new Map(teams.map((team) => [team.id, team.name]));
+  const visible = (resource: Resource, month: string) =>
+    !!visibleActualInScope(
+      resource,
+      month,
+      currentMonth,
+      allowedTeams,
+      ownResourceId,
+    );
   const people = data.resources
     .filter(
       (resource) =>
         (!selected.size || selected.has(resource.id)) &&
-        months.some(
-          (month) =>
-            month <= currentMonth &&
-            allowedTeams.has(
-              visibleActualVersion(resource, month, currentMonth)?.team || "",
-            ),
-        ),
+        months.some((month) => visible(resource, month)),
     )
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
-  const visible = (resource: Resource, month: string) =>
-    month <= currentMonth &&
-    allowedTeams.has(
-      visibleActualVersion(resource, month, currentMonth)?.team || "",
-    );
   const contextFor = (resource: Resource): string[] => {
     const teamIds = [
       ...new Set(
@@ -333,6 +329,9 @@ export function actualAllocationWorkbook(
         return capacity > 0 ? training / capacity : 0;
       }),
     ]);
+  assertExcelRowCount(
+    4 + people.length * projects.length + trainingRows.length,
+  );
   return workbook({
     name: "Gerçekleşen Dağılım",
     title: "AA Mühendislik | Gerçekleşen Kaynak Dağılımı",
@@ -349,23 +348,13 @@ export function actualAllocationWorkbook(
   });
 }
 
-function download(bytes: Uint8Array, name: string) {
-  const url = URL.createObjectURL(
-    new Blob([bytes as BlobPart], { type: mime }),
-  );
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = name;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 export function downloadPlannedAllocations(
   data: Data,
   teams: Team[],
   projects: Project[],
   months: string[],
 ) {
-  download(
+  downloadWorkbook(
     plannedAllocationWorkbook(data, teams, projects, months),
     `AA-Planlanan-Kaynak-Dagilimi-${months[0]}-${months.at(-1)}.xlsx`,
   );
@@ -377,8 +366,9 @@ export function downloadActualAllocations(
   months: string[],
   currentMonth: string,
   selectedPersonIds: string[],
+  ownResourceId?: string,
 ) {
-  download(
+  downloadWorkbook(
     actualAllocationWorkbook(
       data,
       teams,
@@ -386,6 +376,7 @@ export function downloadActualAllocations(
       months,
       currentMonth,
       selectedPersonIds,
+      ownResourceId,
     ),
     `AA-Gerceklesen-Kaynak-Dagilimi-${months[0]}-${months.at(-1)}.xlsx`,
   );
