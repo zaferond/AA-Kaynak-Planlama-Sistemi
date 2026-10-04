@@ -23,7 +23,7 @@ Komutları kendiniz çalıştırmak isterseniz `package.json` bulunan klasörde 
 ```powershell
 node backend/setup.mjs
 npm.cmd ci --omit=dev
-npm.cmd --prefix frontend ci
+npm.cmd --prefix frontend ci --include=dev
 npm.cmd run build
 npm.cmd start
 ```
@@ -77,4 +77,4 @@ Eski tek HTML sürümünün şifreli yedeği için `IT-MSSQL-GECIS.md` dosyasın
 
 `.env.mssql.example` örneği ve `IT-MSSQL-GECIS.md` dosyası IT içindir. MSSQL modu seçilip bağlantı ayarları girildiğinde aynı arayüz MSSQL kullanır. Ancak IT'nin önce veritabanını, şemayı, erişim ve sertifika ayarlarını hazırlaması gerekir. Yereldeki veriler otomatik taşınmaz; yedek aktarması ayrıca yapılır.
 
-Bu teslimde yerel sql.js uçtan uca akışı ve 6 otomatik test grubu geçti. TypeScript ve arayüz derlemesi geçti. Gerçek şirket MSSQL bağlantısı ve Windows çift tıklama akışı bu ortamda çalıştırılamadı. MSSQL test komutu pakette mevcuttur.
+Güncel native MSSQL ve Windows sentetik CI kanıtları [CI raporunda](MSSQL-CI-DOGRULAMA-2026-10-04.md). Windows başlatıcısı testleri ile gerçek servis/ACL/çift tıklama kabulünün farkı [Windows kılavuzunda](WINDOWS-BASLATMA-VE-SERVIS-KILAVUZU.md) açıklanır. Gerçek kurum bağlantısı ve servis kabulü ayrıca doğrulanmalıdır.
