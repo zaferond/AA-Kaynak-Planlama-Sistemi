@@ -97,6 +97,7 @@ if (args[0] === "ci") {
     "SYSTEMROOT",
     "ComSpec",
     "WINDIR",
+    "PATHEXT",
     "TEMP",
     "TMP",
     "TMPDIR",
