@@ -763,7 +763,8 @@
   padding: 0;
   cursor: grab;
   touch-action: none;
-  z-index: 2;
+  /* Above bars and their hover/drag layers, within the isolated timeline cell. */
+  z-index: 6;
 }
 .milestone-diamond {
   display: inline-block;

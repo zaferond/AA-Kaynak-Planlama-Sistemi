@@ -12,6 +12,7 @@ import { checkImportRestore } from "./browser-checks/import-restore.mjs";
 import { checkProjectTables } from "./browser-checks/project-tables.mjs";
 import { checkRiskConcurrency } from "./browser-checks/risk-concurrency.mjs";
 import { checkTimelineLayers } from "./browser-checks/timeline-layers.mjs";
+import { checkMilestoneOverlap } from "./browser-checks/milestone-overlap.mjs";
 import { checkSessionConsistency } from "./browser-checks/session-consistency.mjs";
 import { checkEntityEditors } from "./browser-checks/entity-editors.mjs";
 import { checkTableStyles } from "./browser-checks/table-styles.mjs";
@@ -32,6 +33,7 @@ try {
   await checkImportRestore(f);
   await checkAccess(f);
   await checkProjectTables(f);
+  await checkMilestoneOverlap(f);
   await checkTimelineLayers(f);
   assert.deepEqual(f.errors, []);
   await f.report("passed");
