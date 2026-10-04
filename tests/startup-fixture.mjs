@@ -144,10 +144,11 @@ if (args[0] === "ci") {
     sentinel,
     runTool: (name) =>
       run(process.execPath, [path.join(root, "backend", name)]),
+    // cmd /s removes the outer quote pair; the path must remain quoted.
     runLauncher: () =>
       run(
         process.env.ComSpec || "cmd.exe",
-        ["/d", "/s", "/c", '"' + path.join(root, "baslat-windows.cmd") + '"'],
+        ["/d", "/s", "/c", '""' + path.join(root, "baslat-windows.cmd") + '""'],
         { windowsVerbatimArguments: true },
       ),
     fail: (stage) => fs.writeFile(failure, JSON.stringify(stage)),

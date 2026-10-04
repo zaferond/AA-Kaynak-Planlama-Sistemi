@@ -80,6 +80,7 @@ test("real Windows launcher rejects invalid .env before installing or building",
   await fs.mkdir(path.join(f.root, ".env"));
   const result = await f.runLauncher();
   assert.equal(result.code, 1, result.stdout + result.stderr);
+  assert.match(result.stderr, /\.env okunamıyor/);
   assert.deepEqual(await f.commands(), []);
   assert((await fs.stat(path.join(f.root, ".env"))).isDirectory());
   assert.deepEqual(
