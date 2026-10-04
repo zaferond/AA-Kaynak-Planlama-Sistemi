@@ -5,10 +5,11 @@ import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-for (const [directory, options] of [
-  [root, ["--omit=dev"]],
-  [path.join(root, "frontend"), []],
+for (const [directory, includeDev] of [
+  [root, false],
+  [path.join(root, "frontend"), true],
 ]) {
+  const options = includeDev ? ["--include=dev"] : ["--omit=dev"];
   const manifest = await fs.readFile(
     path.join(directory, "package.json"),
     "utf8",
@@ -34,7 +35,7 @@ for (const [directory, options] of [
   const dependencies = JSON.parse(manifest);
   const required = Object.keys({
     ...dependencies.dependencies,
-    ...(options.length ? {} : dependencies.devDependencies),
+    ...(includeDev ? dependencies.devDependencies : {}),
   });
   const installed = await Promise.all(
     required.map((name) =>

@@ -43,4 +43,4 @@ jobs:
         run: npm run check:domain && npm run build
         shell: cmd
       - name: Synthetic sessions, file locks, rollback, restart and concurrency
-        run: node --test tests/config.test.mjs tests/sqljs.test.mjs tests/concurrency.test.mjs tests/restore.test.mjs tests/storage-order.test.mjs tests/data-response.test.mjs tests/login-security.test.mjs tests/xlsx-workbook.test.mjs
+        run: node --test tests/config.test.mjs tests/sqljs.test.mjs tests/concurrency.test.mjs tests/restore.test.mjs tests/storage-order.test.mjs tests/data-response.test.mjs tests/login-security.test.mjs tests/xlsx-workbook.test.mjs tests/startup-tools.test.mjs tests/windows-launcher.integration.mjs

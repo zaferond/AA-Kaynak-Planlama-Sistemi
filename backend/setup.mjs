@@ -1,12 +1,23 @@
 import fs from "node:fs/promises";
+import { constants } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { Writable } from "node:stream";
 const file = new URL("../.env", import.meta.url);
+let exists = false;
 try {
-  await fs.access(file);
+  await fs.lstat(file);
+  exists = true;
+  if (!(await fs.stat(file)).isFile())
+    throw Error(".env normal bir dosya olmalı.");
+  await fs.access(file, constants.R_OK);
   console.log("Ayar dosyası zaten var; mevcut veriler ve ayarlar korunuyor.");
   process.exit(0);
-} catch {}
+} catch (error) {
+  if (exists || error.code !== "ENOENT")
+    throw Error(
+      ".env okunamıyor. Dosya türünü ve erişim izinlerini kontrol edin.",
+    );
+}
 if (!process.stdin.isTTY)
   throw Error("Kurulumu Terminal penceresinde çalıştırın.");
 if (Number(process.versions.node.split(".")[0]) < 24)
