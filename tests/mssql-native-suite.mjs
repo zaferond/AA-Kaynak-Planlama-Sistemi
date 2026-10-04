@@ -7,6 +7,7 @@ import { readCompositeMap, readRevisionMap } from "../backend/read-records.mjs";
 import { tables } from "../backend/tables.mjs";
 import { seedBenchmarkStore } from "../scripts/benchmark-fixture.mjs";
 import { createAttemptLimiter } from "../backend/rate-limits.mjs";
+import { migrationSql } from "../backend/migration-catalog.mjs";
 
 function deferred() {
   let resolve;
@@ -38,6 +39,51 @@ export function checkedNativeContext(t) {
   };
 }
 
+async function assertNativeLongTextUpgrade(c) {
+  // A minimal historical column fixture isolates the default-constraint dependency.
+  // The enclosing native-test lease owns this empty synthetic database only.
+  await c.batch(`
+    CREATE TABLE dbo.kp_project_milestones (
+      id int NOT NULL PRIMARY KEY,
+      bar_text nvarchar(200) NOT NULL CONSTRAINT [DF_legacy_bar_text]]name] DEFAULT N'Özel varsayılan'
+    );
+  `);
+  const previous = "Eski Türkçe açıklama • 'alıntı' 😀";
+  await c.query(
+    "INSERT INTO dbo.kp_project_milestones(id,bar_text) VALUES(1,@p0)",
+    [previous],
+  );
+  await c.batch(await migrationSql("mssql", 19));
+  await c.query("INSERT INTO dbo.kp_project_milestones(id) VALUES(2)");
+  const longer = "Yeni uzun açıklama 😀\n".repeat(2000);
+  await c.query(
+    "INSERT INTO dbo.kp_project_milestones(id,bar_text) VALUES(3,@p0)",
+    [longer],
+  );
+  const rows = (
+    await c.query(
+      "SELECT id,bar_text FROM dbo.kp_project_milestones ORDER BY id",
+    )
+  ).rows;
+  assert.deepEqual(rows, [
+    { id: 1, bar_text: previous },
+    { id: 2, bar_text: "Özel varsayılan" },
+    { id: 3, bar_text: longer },
+  ]);
+  assert.equal(
+    (
+      await c.query(
+        "SELECT name FROM sys.default_constraints WHERE parent_object_id=OBJECT_ID(N'dbo.kp_project_milestones')",
+      )
+    ).rows[0].name,
+    "DF_legacy_bar_text]name",
+  );
+  // Restore the v2 fixture before the normal complete legacy upgrade.
+  await c.batch(
+    "DROP TABLE dbo.kp_project_milestones; DELETE FROM dbo.kp_schema_migrations WHERE version=19;",
+  );
+}
+
 export async function nativeUpgradeSuite(store) {
   await store.db.open();
   await store.db.transaction(async (c) => {
@@ -51,6 +97,7 @@ export async function nativeUpgradeSuite(store) {
           "utf8",
         ),
       );
+    await assertNativeLongTextUpgrade(c);
     await c.batch(`
       INSERT INTO kp_settings VALUES(1,4,NULL);
       INSERT INTO kp_teams VALUES(N'legacy-t',N'Takım',NULL,0,1);
