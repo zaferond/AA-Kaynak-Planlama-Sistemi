@@ -42,7 +42,15 @@ Yerel komut/sonuç kayıtları geçici `aa-recovery-check-2026-10-04-sidoopvi` d
 
 ## CI kapsamı
 
-Ubuntu kalite kapısı `tests/*.test.mjs` üzerinden yeni testi çalıştırır. Windows kalite kapısının açık dosya listesine de `recovery-acceptance.test.mjs` eklendi. Bu raporun ilk yazıldığı anda yeni testin GitHub koşusu henüz çalıştırılmamıştı; yerel başarılı sonuç Windows başarı kanıtı olarak sunulmaz. Doğrulanan GitHub sonuçları commit ve koşu numarasıyla [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) ayrıca kayıt altına alınır.
+Ubuntu kalite kapısı `tests/*.test.mjs` üzerinden yeni testi çalıştırır. Windows kalite kapısının açık dosya listesine de `recovery-acceptance.test.mjs` eklendi.
+
+Test commit'i `73eb7caf8a0b652a8da267d54c8d1c3c91b1934a`, [GitHub kalite koşusu 37217903934](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37217903934) ile doğrulandı:
+
+- Ubuntu: **435/435** test; **69 başarılı Chromium kontrolü**.
+- Windows: **86/86** sentetik test; yeni iki kurtarma/migration senaryosu bu sayıya dahil.
+- Başarısız, atlanan veya iptal edilen test: **0**. TypeScript/build/dağıtım doğrulama ve Ubuntu audit adımları başarılı.
+
+Windows ve Ubuntu sayıları kısmen örtüşen test kümeleridir; toplamları bağımsız senaryo sayısı olarak toplanmaz. API iş/adım durumları, loglardan çıkarılan sayılar ve log SHA-256 değerleri [kalıcı CI kaydında](ci-evidence/quality-73eb7ca-receipt.json) saklanır; ham loglar veya hesap bilgileri arşivlenmez. Ayrıntılı kapsam sınırları [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) bulunur. Bu kayıt belirli test commit'ine aittir; kurum ortamı kabulü veya çalışan sürecin o commit'i yüklediği iddiası içermez.
 
 ## Kurum kabulü için açık kalanlar
 

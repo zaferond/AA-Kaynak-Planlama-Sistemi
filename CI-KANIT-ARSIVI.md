@@ -9,6 +9,7 @@ Bu arşiv belirli commit'lerin sentetik CI sonuçlarını saklar. Daha sonraki c
 | Ubuntu kalite | `9c5a378d0cba3d99f26c3669d0dcc3d062450092` | 433/433 test, 69 başarılı Chromium kontrolü; TypeScript/build/dağıtım doğrulama ve iki audit adımı başarılı | [37212096003](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37212096003) |
 | Windows kalite | `9c5a378d0cba3d99f26c3669d0dcc3d062450092` | 84/84 sentetik test; TypeScript/build/dağıtım doğrulama başarılı | Aynı kalite koşusu |
 | Windows test temizliği sonrası Ubuntu/Windows kalite | `fdce36ec0f440e3a5452ce2d315e79ef7c5274fa` | 433/433 genel ve 84/84 Windows testi, 69 başarılı Chromium kontrolü; TypeScript/build/dağıtım doğrulama/audit adımları başarılı | [37213183916](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37213183916) |
+| SQL.js CLI/HTTP kurtarma ve migration hata kontrolleri sonrası Ubuntu/Windows kalite | `73eb7caf8a0b652a8da267d54c8d1c3c91b1934a` | 435/435 genel ve 86/86 Windows testi, 69 başarılı Chromium kontrolü; TypeScript/build/dağıtım doğrulama/audit adımları başarılı | [37217903934](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37217903934) |
 | Native MSSQL | `63780fc4538829c16c7b14739f882a9851629f59` | 19/19 test; SQL Server 2022 Developer, şema 30, iki havuz, temizlik doğrulandı | [37186385433](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37186385433) |
 
 Tablodaki başarılı koşuların test toplamlarında fail/skipped/cancelled sayısı sıfırdır. Ubuntu'nun backend/frontend audit adımları bu koşularda bilinen açık bildirmedi; bu sonuç güvenlik garantisi değildir. Aşağıdaki başarısız ara koşu ayrıca korunmuştur. Windows başlatıcı testindeki npm/build/start stub'ları gerçek kurum servisi veya DB başlatmaz. Chromium kontrolleri geçici SQL.js ve sentetik hesaplar kullanır.
@@ -17,6 +18,7 @@ Tablodaki başarılı koşuların test toplamlarında fail/skipped/cancelled say
 
 - [Kalite CI kaydı](ci-evidence/quality-9c5a378-receipt.json): GitHub API'den alınan commit/koşu/iş/adım durumları, loglardan çıkarılan test toplamları ve indirilen logların SHA-256 değerleri. Ham loglar, geçici dosya yolları, bağlantı bilgileri veya hesap verileri arşivlenmez.
 - [Windows temizliği düzeltmesi sonrası kalite kaydı](ci-evidence/quality-fdce36e-receipt.json): aynı metadata/test toplamları ve başarısız önceki koşuyla ilişkisi.
+- [Kurtarma kabul kontrolü sonrası kalite kaydı](ci-evidence/quality-73eb7ca-receipt.json): aynı metadata/test toplamları; yeni sentetik SQL.js CLI/HTTP kurtarma ve migration hata testleri Ubuntu ve Windows koşularında başarılı. Yerel 28 hedefli testin sonucu da kapsam notuyla kayıtlıdır.
 - [Native CI kaydı](ci-evidence/native-mssql-63780fc-receipt.json): aynı metadata ve test toplamları, artifact kimliği/süresi, sonuç JSON'unun SHA-256 değeri ve 48 kaynak dosyasının karşılaştırması.
 - [Native sonuç JSON'u](ci-evidence/native-mssql-63780fc.json): CI artifact'indeki JSON **byte olarak korunmuştur**. Sentetik rol ölçümleri, Node/SQL sürümleri, şema ve kaynak hash'lerini içerir; gerçek kullanıcı verisi veya bağlantı bilgisi içermez.
 
@@ -47,6 +49,8 @@ Dokümantasyon/arşiv commit'i `d9619779019ad1a68dd47bcaeef13edc2a7013da` için 
 Düzeltme `fdce36e` commit'inde uygulanıp [37213183916 koşusunda](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37213183916) Ubuntu ve Windows başarılarıyla doğrulandı: 433/433 genel, 84/84 Windows ve 69 Chromium kontrolü. Yerelde gerçek ayarlar aktarılmayan geçici kopyada `node --test --test-reporter=tap tests/startup-tools.test.mjs` 5/5 geçti; seçili fixture'ın Prettier kontrolü de exit 0 döndü. Yerel Mac testi Windows sonucu yerine kullanılmadı. Bu başarı, olası tüm Windows dosya kilidi koşullarının ortadan kalktığının garantisi değildir.
 
 ## Bu kanıtlarla kapanmayan kurum kabul işleri
+
+SQL.js için CLI'den kurtarma kopyasının gerçek HTTP giriş/yetki/güncelleme akışına kadar sentetik kontrol tamamlandı. Eski oturumların kaldırılması, yedek anının korunması, revision ve yeniden açılış kalıcılığı ile son migration DDL'sinden sonra hata/yeniden deneme, `73eb7ca` koşusunda iki işletim sisteminde de sınandı. [Kurtarma kontrolünün kapsam ve sonuçları](KURTARMA-KABUL-KONTROLLERI-2026-10-04.md). Bu başarı aşağıdaki kurum kabul işlerini kapatmaz.
 
 1. Sentetik kopyada kurum yedek/restore/migration geri dönüşü, hesap/oturum temizliği, RPO/RTO ve geri kazanılan verinin doğrulanması.
 2. Asgari yetkili SQL hesabı, kurum CA/hostname/NTLM, firewall, gerçek HTTPS proxy adresleri ve çoklu proxy zinciri.
