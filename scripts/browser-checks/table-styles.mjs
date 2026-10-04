@@ -103,7 +103,7 @@ export async function checkTableStyles(f) {
           );
         }
         for (const selector of [".tab-plan", ".tab-actual", "#standalone"]) {
-          // Chrome quantizes small computed sizes under the app's 80% zoom.
+          // Chrome quantizes small computed sizes under the app's page zoom.
           assert(
             Math.abs(
               Number.parseFloat(

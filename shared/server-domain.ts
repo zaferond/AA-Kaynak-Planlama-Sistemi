@@ -21,8 +21,8 @@ import {
   MAX_RECORDED_MONTHLY_HOURS,
 } from "./actual-units.ts";
 import {
+  assertMilestoneBarSeparation,
   assertPointRange,
-  CRITICAL_DATE_OVERLAP_MESSAGE,
 } from "./milestone-ranges.ts";
 export {
   actualInputToFte,
@@ -360,7 +360,7 @@ export function validate(
         },
         ...(m.additionalRanges || []),
       ].sort((a, b) => a.start.localeCompare(b.start));
-      for (const [index, range] of ranges.entries()) {
+      for (const range of ranges) {
         try {
           assertPointRange(range);
         } catch (error) {
@@ -372,8 +372,6 @@ export function validate(
           range.end.slice(0, 7) > p.end
         )
           throw bad("Kilometre taşı proje dönemi içinde olmalı.");
-        if (index && range.start <= ranges[index - 1].end)
-          throw bad(CRITICAL_DATE_OVERLAP_MESSAGE);
         for (const note of range.notes || []) {
           const noteStart = note.start ?? range.start,
             noteEnd = note.end ?? range.end;
@@ -386,6 +384,11 @@ export function validate(
               "Açıklama tarihleri geçerli sırada ve proje dönemi içinde olmalı.",
             );
         }
+      }
+      try {
+        assertMilestoneBarSeparation(ranges);
+      } catch (error) {
+        throw bad((error as Error).message);
       }
     }
   }

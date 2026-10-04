@@ -14,6 +14,20 @@ export function visibleMilestoneBarStyle(
 export const CRITICAL_DATE_OVERLAP_MESSAGE =
   "Güncellemek istediğiniz tarih diğer kritik tarihlerin içerisindeki bir tarihtir. Tekrar kontrol ediniz.";
 
+/** Points may share a bar's dates; only duration bars must remain separate. */
+export function assertMilestoneBarSeparation(
+  ranges: Pick<MilestoneRange, "start" | "end" | "displayKind">[],
+): void {
+  const bars = ranges
+    .filter((range) => range.displayKind !== "milestone")
+    .sort(
+      (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
+    );
+  for (let index = 1; index < bars.length; index++)
+    if (bars[index].start <= bars[index - 1].end)
+      throw Error(CRITICAL_DATE_OVERLAP_MESSAGE);
+}
+
 export function rangeNotes(range: MilestoneRange): MilestoneNote[] {
   return (
     range.notes ??
@@ -143,7 +157,7 @@ export function assertMilestoneDateRanges(
   const sorted = [...ranges].sort(
     (a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end),
   );
-  for (const [index, range] of sorted.entries()) {
+  for (const range of sorted) {
     assertPointRange(range);
     if (!range.start || !range.end)
       throw Error("Tüm tarih aralıklarını doldurun.");
@@ -154,8 +168,6 @@ export function assertMilestoneDateRanges(
       range.end.slice(0, 7) > project.end
     )
       throw Error("Bilgi tarihleri proje dönemi içinde olmalı.");
-    if (index && range.start <= sorted[index - 1].end)
-      throw Error(CRITICAL_DATE_OVERLAP_MESSAGE);
     for (const note of rangeNotes(range)) {
       if (note.includeInReport && !note.text.trim())
         throw Error("Rapora eklenecek açıklama boş olamaz.");
@@ -173,6 +185,7 @@ export function assertMilestoneDateRanges(
         );
     }
   }
+  assertMilestoneBarSeparation(ranges);
 }
 
 function savedNotes(range: MilestoneRange): MilestoneNote[] {

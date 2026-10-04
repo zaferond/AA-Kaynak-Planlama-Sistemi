@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  assertMilestoneDateRanges,
+  CRITICAL_DATE_OVERLAP_MESSAGE,
   milestoneRanges,
   withMilestoneRanges,
   resizeMilestoneRange,
@@ -8,6 +10,7 @@ import {
   pointRangeAtDate,
   removeDraftMilestoneRange,
 } from "../shared/milestone-ranges.ts";
+import { applyChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
 import { prepareTimelineChange } from "../frontend/src/features/project-timeline-commands.ts";
 import { projectTimelinePeriods } from "../frontend/src/timeline-periods.ts";
@@ -88,6 +91,104 @@ const fixture = () => ({
     },
   ],
 });
+
+test("points can share a duration bar's interior, endpoints and another point's date in either storage order", () => {
+  for (const date of ["2026-01-10", "2026-01-12", "2026-01-15"]) {
+    const point = pointRangeAtDate(ranges()[0], date);
+    const secondPoint = {
+      ...point,
+      notes: [{ ...point.notes[0], text: "Second approval" }],
+    };
+    for (const details of [
+      [point, ranges()[1], secondPoint],
+      [ranges()[1], secondPoint, point],
+    ]) {
+      const data = fixture();
+      const project = data.projects[0];
+      assert.doesNotThrow(() => assertMilestoneDateRanges(project, details));
+      project.milestones[0] = withMilestoneRanges(
+        project.milestones[0],
+        details,
+      );
+      assert.doesNotThrow(() => validate(data));
+    }
+  }
+});
+
+test("dragging and report editing move a point inside a sibling bar; extending a bar past a point also saves", () => {
+  const data = fixture();
+  const originalBar = milestoneRanges(data.projects[0].milestones[0])[1];
+  const command = prepareTimelineChange(data, "p", "m", {
+    target: "range",
+    rangeIndex: 0,
+    mode: "move",
+    days: 7,
+  });
+  applyChanges(data, { _id: "root-admin", role: "admin", leaders: [] }, [
+    command,
+  ]);
+  validate(data);
+  const details = milestoneRanges(data.projects[0].milestones[0]);
+  const moved = details.find((range) => range.notes[0].text === "Review");
+  assert.equal(moved.start, "2026-01-12");
+  assert.equal(moved.end, moved.start);
+  assert.equal(moved.displayKind, "milestone");
+  assert.equal(moved.color, "purple");
+  assert.equal(moved.diamondStyle, "outline");
+  assert.deepEqual(
+    details.find((range) => range.notes[0].text === "Design"),
+    originalBar,
+  );
+
+  const original = fixture().projects[0];
+  const topic = buildProjectInfoReport([original])[0].infos[0].topics[0];
+  const reported = updateReportedTopic(original, "m", topic, {
+    text: "Review",
+    start: "2026-01-12",
+    end: "2026-01-12",
+  });
+  validate({ ...fixture(), projects: [reported] });
+  const reportedPoint = buildProjectInfoReport([
+    reported,
+  ])[0].infos[0].topics.find((item) => item.text === "Review");
+  assert.deepEqual(
+    [reportedPoint.start, reportedPoint.end],
+    ["2026-01-12", "2026-01-12"],
+  );
+
+  const extended = prepareTimelineChange(fixture(), "p", "m", {
+    target: "range",
+    rangeIndex: 1,
+    mode: "end",
+    days: 12,
+  });
+  validate({ ...fixture(), projects: [extended.value] });
+  assert.equal(
+    milestoneRanges(extended.value.milestones[0])[1].end,
+    "2026-01-27",
+  );
+});
+
+test("an interleaved point cannot conceal a collision between two duration bars", () => {
+  const data = fixture();
+  const project = data.projects[0];
+  const details = [
+    { ...ranges()[1], start: "2026-01-10", end: "2026-01-20" },
+    pointRangeAtDate(ranges()[0], "2026-01-12"),
+    { ...ranges()[1], start: "2026-01-15", end: "2026-01-18" },
+  ];
+  assert.throws(
+    () => assertMilestoneDateRanges(project, details),
+    (error) => error.message === CRITICAL_DATE_OVERLAP_MESSAGE,
+  );
+  project.milestones[0] = withMilestoneRanges(project.milestones[0], details);
+  assert.throws(
+    () => validate(data),
+    (error) =>
+      error.status === 400 && error.message === CRITICAL_DATE_OVERLAP_MESSAGE,
+  );
+});
+
 test("one critical topic holds independent point/range/point details; normal sibling resizing is allowed", () => {
   const data = fixture();
   validate(data);

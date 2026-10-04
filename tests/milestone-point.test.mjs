@@ -142,7 +142,7 @@ test("editor appends point, color paste preserves kind/date, empty or range-shap
     ),
   );
 });
-test("versions 27/28 preserve existing bars, default filled diamonds and persist point styles across reopen", async () => {
+test("versions 27/28 preserve bars and persist point styles inside overlapping bars across reopen", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-point-"));
   const env = {
     NODE_ENV: "test",
@@ -218,6 +218,17 @@ test("versions 27/28 preserve existing bars, default filled diamonds and persist
               },
             ],
           },
+          {
+            start: "2026-03-01",
+            end: "2026-05-31",
+            color: "blue",
+            notes: [
+              {
+                text: "Bar containing both milestones",
+                includeInReport: false,
+              },
+            ],
+          },
         ],
       });
     });
@@ -236,6 +247,10 @@ test("versions 27/28 preserve existing bars, default filled diamonds and persist
       "Independent approval",
     );
     assert.equal(saved.additionalRanges[0].color, "purple");
+    assert.deepEqual(
+      [saved.additionalRanges[1].start, saved.additionalRanges[1].end],
+      ["2026-03-01", "2026-05-31"],
+    );
     assert.equal(
       (
         await store.db.query(
