@@ -44,6 +44,10 @@ Kuruma ait servis hesabı, NTFS DACL, Explorer çift tıklama/ilk parola TTY'si,
 
 Uygulanacak adımlar ve kaydedilecek kanıtlar [Windows başlatma/servis kılavuzunda](WINDOWS-BASLATMA-VE-SERVIS-KILAVUZU.md). Servis kurmak veya kurum izinlerini değiştirmek bu turun kapsamına alınmadı.
 
+## Kopyalar ve Git kapanışı
+
+Git deposundaki kaynak ve kılavuzlar güncellendi; çalışan üst kopyaya başlatma araçları/testler/kılavuzlar yansıtıldı. Üst kopyadaki `ONCE-BUNU-OKUYUN.md` ve Windows başlatıcısı başlangıçta Git sürümünden farklıydı: frontend build adımı çıkarılmıştı. Bu farklılık kullanıcı çalışması kabul edilerek ezilmedi. Üst başlatıcıya aynı npm/cwd/ortam kontrolleri uygulanırken mevcut build yapmama davranışı korundu; farklı başlangıç belgesi korunur. Windows CI'ın doğruladığı `.cmd`, Git deposundaki build içeren sürümdür; üst no-build varyantı için ayrı Windows çalıştırma kanıtı iddia edilmez. Güncel dağıtım kılavuzları Git deposunda ve yeni Windows kılavuzunda bulunur.
+
 ## Sonraki adım
 
 Windows başlığının kalan kısmı, IT'nin ayrı sentetik Windows test ortamında **servis hesabı/ACL ve durdurma–yeniden başlatma kabulü**dür. Ortam sağlanana kadar yerel kod incelemesiyle devam edilebilecek sonraki başlık kurum proxy/TLS yapılandırmasının dağıtım gereksinimleridir. Gerçek proxy/sertifika zinciri için ayrıca kurum ortamı gerekir.
