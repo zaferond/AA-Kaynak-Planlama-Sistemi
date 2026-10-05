@@ -76,7 +76,7 @@ export default function TeamDirectory({
             onChange={(event) => setQuery(event.target.value)}
           />
           {canEdit && (
-            <>
+            <div className="directory-management-actions">
               <button
                 type="button"
                 className="button"
@@ -91,7 +91,7 @@ export default function TeamDirectory({
               >
                 <Users size={15} /> Takımları Yönet
               </button>
-            </>
+            </div>
           )}
         </div>
       </div>

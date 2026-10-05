@@ -88,6 +88,15 @@
   align-items: center;
   gap: 8px;
 }
+.team-directory .directory-management-actions {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+.team-directory .directory-management-actions .button {
+  white-space: nowrap;
+}
 .team-directory .directory-toolbar .button,
 .directory-dialog .button {
   display: inline-flex;
