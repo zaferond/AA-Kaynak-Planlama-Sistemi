@@ -1,12 +1,59 @@
 import type { Change } from "../../../shared/commands.ts";
-import type { Data } from "../../../shared/model.ts";
+import type { Data, Project } from "../../../shared/model.ts";
 import {
   changeMilestoneNoteDates,
   milestoneRanges,
+  rangeNotes,
   resizeMilestoneRange,
   shiftMilestoneRange,
   withMilestoneRanges,
 } from "../../../shared/milestone-ranges.ts";
+
+/** Keep the project and revision captured when the menu opened as one snapshot. */
+export function prepareMilestoneReportChange(
+  project: Project,
+  revision: number,
+  milestoneId: string,
+  rangeIndex: number,
+  noteIndex: number,
+  includeInReport: boolean,
+): Change<"project"> {
+  const milestone = project.milestones?.find((item) => item.id === milestoneId);
+  const range = milestone && milestoneRanges(milestone)[rangeIndex];
+  const notes = range ? rangeNotes(range) : [];
+  if (
+    !milestone ||
+    !Number.isInteger(rangeIndex) ||
+    !Number.isInteger(noteIndex) ||
+    !notes[noteIndex]
+  )
+    throw Error("Detay not bulunamadı. Menüyü yeniden açıp tekrar deneyin.");
+  if (includeInReport && !notes[noteIndex].text.trim())
+    throw Error("Rapora eklenecek detay not boş olamaz.");
+  const nextNotes = notes.map((note, index) =>
+    index === noteIndex ? { ...note, includeInReport } : note,
+  );
+  const changed =
+    rangeIndex === 0
+      ? { ...milestone, barNotes: nextNotes }
+      : {
+          ...milestone,
+          additionalRanges: milestone.additionalRanges?.map((item, index) =>
+            index === rangeIndex - 1 ? { ...item, notes: nextNotes } : item,
+          ),
+        };
+  return {
+    kind: "project",
+    id: project.id,
+    revision,
+    value: {
+      ...project,
+      milestones: project.milestones?.map((item) =>
+        item.id === milestoneId ? changed : item,
+      ),
+    },
+  };
+}
 
 /** Reorder only topics within one project; dates and nested notes stay intact. */
 export function prepareMilestoneReorder(

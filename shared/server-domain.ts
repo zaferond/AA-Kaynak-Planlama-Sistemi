@@ -66,6 +66,14 @@ const res = z.object({
   code: z.string().trim().max(100).optional(),
   versions: z.array(ver).min(1).max(200),
 });
+export const teamSchema = z.object({
+  id: z.string(),
+  name: z.string().trim().min(1).max(200),
+  lead: z.string(),
+  managerName: z.string().trim().max(200).optional(),
+  excelCapacity: z.number(),
+  catalog: z.boolean().optional(),
+});
 const milestoneNote = z.object({
   text: z.string().trim().min(1),
   includeInReport: z.boolean(),
@@ -175,18 +183,7 @@ const leaderManagersSchema = z
   .transform((entries) => Object.fromEntries(entries));
 
 const schema = z.object({
-  teams: z
-    .array(
-      z.object({
-        id: z.string(),
-        name: z.string().trim().min(1).max(200),
-        lead: z.string(),
-        managerName: z.string().trim().max(200).optional(),
-        excelCapacity: z.number(),
-        catalog: z.boolean().optional(),
-      }),
-    )
-    .min(1),
+  teams: z.array(teamSchema).min(1),
   resources: z.array(res),
   projects: z.array(proj),
   risks: z.array(risk).max(100000).default([]),

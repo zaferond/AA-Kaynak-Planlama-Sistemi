@@ -1,4 +1,12 @@
-import { Copy, ClipboardPaste, Palette, PaintBucket } from "lucide-react";
+import {
+  Copy,
+  ClipboardPaste,
+  Palette,
+  PaintBucket,
+  Square,
+  SquareCheck,
+} from "lucide-react";
+import { milestoneRanges, rangeNotes } from "../../../shared/milestone-ranges";
 import type { Data } from "../model";
 import { phasePalette } from "../model";
 import { monthLabel } from "../format";
@@ -33,7 +41,16 @@ export default function ProjectContextMenus({
     pastePhaseBundle,
     copyMilestoneColor,
     pasteMilestoneColor,
+    toggleMilestoneReport,
   } = menus;
+  const milestone = milestoneMenu?.project.milestones?.find(
+    (item) => item.id === milestoneMenu.milestoneId,
+  );
+  const range =
+    milestone && milestoneMenu
+      ? milestoneRanges(milestone)[milestoneMenu.rangeIndex]
+      : undefined;
+  const notes = range ? rangeNotes(range) : [];
   return (
     <>
       <>
@@ -163,22 +180,66 @@ export default function ProjectContextMenus({
               }}
             />
             <div
-              className="phase-menu"
+              className="phase-menu milestone-report-menu"
               role="menu"
-              aria-label="Kilometre taşı renk işlemleri"
+              aria-label="Bar ve Milestone işlemleri"
               tabIndex={-1}
               ref={menuRef}
               style={{ left: milestoneMenu.x, top: milestoneMenu.y }}
             >
-              <div className="phase-menu-title">
-                {
-                  data?.projects
-                    .find((p) => p.id === milestoneMenu.projectId)
-                    ?.milestones?.find(
-                      (m) => m.id === milestoneMenu.milestoneId,
-                    )?.name
-                }
+              <div className="phase-menu-title">{milestone?.name}</div>
+              <div className="milestone-report-heading">Rapor Durumu</div>
+              <div className="milestone-report-items">
+                {notes.length ? (
+                  notes.map((note, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      role="menuitemcheckbox"
+                      aria-checked={note.includeInReport}
+                      aria-label={
+                        (note.includeInReport
+                          ? "Rapordan çıkar: "
+                          : "Rapora ekle: ") + note.text
+                      }
+                      className="milestone-report-item"
+                      disabled={
+                        !isAdmin ||
+                        saving ||
+                        (!note.includeInReport && !note.text.trim())
+                      }
+                      onClick={() =>
+                        toggleMilestoneReport(index, !note.includeInReport)
+                      }
+                    >
+                      {note.includeInReport ? (
+                        <SquareCheck size={18} className="report-checked" />
+                      ) : (
+                        <Square size={18} />
+                      )}
+                      <span className="milestone-report-note">
+                        <span>{note.text || "(Boş detay not)"}</span>
+                        <small
+                          className={
+                            note.includeInReport
+                              ? "report-included"
+                              : "report-excluded"
+                          }
+                        >
+                          {note.includeInReport
+                            ? "Rapora Ekli"
+                            : "Rapora Ekli Değil"}
+                        </small>
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="milestone-report-empty">
+                    Rapora eklenebilecek detay not yok.
+                  </div>
+                )}
               </div>
+              <div className="phase-menu-divider" role="separator" />
               <button
                 type="button"
                 role="menuitem"

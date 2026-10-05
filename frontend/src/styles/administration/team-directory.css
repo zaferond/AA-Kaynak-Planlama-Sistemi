@@ -77,3 +77,214 @@
 .team-directory td:last-child {
   min-width: 130px;
 }
+.team-directory .directory-summary {
+  margin: 4px 0 0;
+  color: #607c95;
+  font-size: 11px;
+}
+.team-directory .directory-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.team-directory .directory-toolbar .button,
+.directory-dialog .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.directory-dialog[data-slot="dialog-content"] {
+  width: min(960px, calc(100vw - 36px));
+  max-width: min(960px, calc(100vw - 36px));
+  max-height: calc(100vh - 48px);
+  padding: 22px;
+  overflow: auto;
+  background: #f8fafc;
+}
+.directory-dialog [data-slot="dialog-title"] {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #244d6c;
+  font-size: 18px;
+}
+.directory-dialog [data-slot="dialog-description"] {
+  color: #61788d;
+  font-size: 12px;
+}
+.directory-manager-body {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.9fr) minmax(280px, 1.1fr);
+  min-height: 360px;
+  gap: 18px;
+}
+.directory-manager-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d8e3ed;
+  border-radius: 8px;
+  background: #eef4f9;
+}
+.directory-manager-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #325570;
+  font-size: 12px;
+}
+.directory-manager-list-header span {
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #dce8f3;
+  font-size: 11px;
+}
+.directory-dialog input,
+.directory-dialog select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 7px 10px;
+  border: 1px solid #c7d7e5;
+  border-radius: 5px;
+  background: #fff;
+  color: #29475f;
+  font-size: 12px;
+}
+.directory-dialog input:focus,
+.directory-dialog select:focus {
+  outline: 2px solid #81acd1;
+  outline-offset: 1px;
+}
+.directory-new-button {
+  width: 100%;
+}
+.directory-manager-records {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: min(430px, 48vh);
+  overflow: auto;
+}
+.directory-record {
+  flex: none;
+  width: 100%;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: #fff;
+  color: #35546e;
+  text-align: left;
+  cursor: pointer;
+}
+.directory-record:hover {
+  border-color: #bfd0df;
+}
+.directory-record.selected {
+  border-color: #6c9bbe;
+  background: #e0edf8;
+  box-shadow: inset 3px 0 #32698f;
+}
+.directory-record strong,
+.directory-record small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.directory-record strong {
+  font-size: 12px;
+}
+.directory-record small {
+  margin-top: 3px;
+  color: #6a8297;
+  font-size: 10px;
+}
+.directory-manager-details {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid #dce5ee;
+  border-radius: 8px;
+  background: #fff;
+}
+.directory-manager-details fieldset {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.directory-manager-details legend {
+  margin-bottom: 18px;
+  color: #2c5371;
+  font-size: 14px;
+  font-weight: 700;
+}
+.directory-manager-details label {
+  margin-top: 6px;
+  color: #4b667d;
+  font-size: 11px;
+  font-weight: 600;
+}
+.directory-manager-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 24px;
+  padding-top: 14px;
+  border-top: 1px solid #e0e8ef;
+}
+.directory-dialog .directory-remove {
+  margin-right: auto;
+  border-color: #e6c6c9;
+  background: #fff3f3;
+  color: #aa3d46;
+}
+.directory-manager-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  gap: 12px;
+  color: #66849c;
+  text-align: center;
+  font-size: 12px;
+}
+.directory-manager-empty {
+  padding: 18px 8px;
+  color: #6d8497;
+  font-size: 12px;
+}
+.directory-manager-error {
+  margin-top: 16px;
+}
+.directory-manager-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #dce5ee;
+}
+.directory-manager-footer span {
+  color: #73889a;
+  font-size: 10px;
+}
+@media (max-width: 700px) {
+  .team-directory .panelhead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .directory-manager-body {
+    grid-template-columns: 1fr;
+  }
+  .directory-manager-records {
+    max-height: 180px;
+  }
+}

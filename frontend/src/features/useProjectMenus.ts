@@ -8,6 +8,8 @@ import {
   type MilestoneTarget,
 } from "./project-clipboard";
 import { usePhaseGrid } from "./usePhaseGrid";
+import { milestoneRanges, rangeNotes } from "../../../shared/milestone-ranges";
+import { prepareMilestoneReportChange } from "./project-timeline-commands";
 type Position = { x: number; y: number };
 type Props = {
   data: Data | null;
@@ -24,6 +26,7 @@ type Props = {
 function menuPosition(
   event: MouseEvent<HTMLButtonElement>,
   height: number,
+  width = 220,
 ): Position {
   const rect = event.currentTarget.getBoundingClientRect();
   const zoom =
@@ -32,7 +35,7 @@ function menuPosition(
     x:
       Math.max(
         8,
-        Math.min(event.clientX || rect.left, window.innerWidth - 220 * zoom),
+        Math.min(event.clientX || rect.left, window.innerWidth - width * zoom),
       ) / zoom,
     y:
       Math.max(
@@ -73,8 +76,9 @@ export function useProjectMenus({
     null,
   );
   const [milestoneMenu, setMilestoneMenu] = useState<
-    (MilestoneTarget & Position) | null
+    (MilestoneTarget & Position & { project: Project; revision: number }) | null
   >(null);
+  const reportSaving = useRef(false);
   const copiedPhase = phaseGrid.clipboards.text || null;
   const copiedPhaseColor =
     phaseGrid.clipboards.color?.rowCount === 1 &&
@@ -112,13 +116,48 @@ export function useProjectMenus({
     rangeIndex: number,
   ) {
     event.preventDefault();
+    if (!data) return;
     setPhaseMenu(null);
+    const range = milestoneRanges(milestone)[rangeIndex];
+    const count = range ? rangeNotes(range).length : 0;
     setMilestoneMenu({
       projectId: project.id,
       milestoneId: milestone.id,
       rangeIndex,
-      ...menuPosition(event, 170),
+      project: structuredClone(project),
+      revision: data.revisions["project:" + project.id] || 0,
+      ...menuPosition(event, Math.min(480, 175 + count * 66), 380),
     });
+  }
+  async function toggleMilestoneReport(
+    noteIndex: number,
+    includeInReport: boolean,
+  ) {
+    if (!milestoneMenu || !isAdmin || saving || reportSaving.current) return;
+    const target = milestoneMenu;
+    reportSaving.current = true;
+    try {
+      await batch([
+        prepareMilestoneReportChange(
+          target.project,
+          target.revision,
+          target.milestoneId,
+          target.rangeIndex,
+          noteIndex,
+          includeInReport,
+        ),
+      ]);
+      setMilestoneMenu((current) => (current === target ? null : current));
+      setNotice(
+        includeInReport
+          ? "Detay not rapora eklendi."
+          : "Detay not rapordan çıkarıldı.",
+      );
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      reportSaving.current = false;
+    }
   }
   function copyPhase() {
     if (!phaseMenu) return;
@@ -221,5 +260,6 @@ export function useProjectMenus({
     pastePhaseBundle,
     copyMilestoneColor,
     pasteMilestoneColor,
+    toggleMilestoneReport,
   };
 }

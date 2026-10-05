@@ -21,6 +21,11 @@ import {
 } from "./domain/index.mjs";
 import { entityCollections as kinds } from "../shared/entity-kinds.ts";
 import { orderedProjects } from "../shared/project-order.ts";
+import { teamSchema } from "../shared/server-domain.ts";
+import {
+  assertUniqueLeaderName,
+  assertUniqueTeamName,
+} from "../shared/directory-policy.ts";
 const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
 const changesSchema = z
   .array(
@@ -347,14 +352,28 @@ export function stageChanges(d, u, input) {
         }
       } else {
         if (!value || value.id !== id) fail(400, "Kimlik eşleşmiyor.");
+        let nextValue = value;
         if (kind === "team") {
+          nextValue = teamSchema.parse(value);
           const previous = d.teams.find((t) => t.id === id);
-          if (previous && previous.lead !== value.lead) {
+          if (
+            !previous ||
+            previous.name !== nextValue.name ||
+            previous.lead !== nextValue.lead
+          ) {
+            try {
+              assertUniqueTeamName(d.teams, nextValue);
+            } catch (error) {
+              fail(400, error.message);
+            }
+          }
+          if (!previous) nextValue.catalog = true;
+          if (previous && previous.lead !== nextValue.lead) {
             for (const resource of d.resources) {
               let changed = false;
               for (const version of resource.versions)
                 if (version.team === id) {
-                  version.lead = value.lead;
+                  version.lead = nextValue.lead;
                   changed = true;
                 }
               if (changed)
@@ -363,7 +382,6 @@ export function stageChanges(d, u, input) {
             }
           }
         }
-        let nextValue = value;
         if (kind === "project" && value.sortOrder === undefined) {
           const previous = d.projects.find((p) => p.id === id);
           if (previous?.sortOrder !== undefined)
@@ -396,7 +414,7 @@ export function stageChanges(d, u, input) {
   return d;
 }
 const leaderChangeSchema = z.object({
-  action: z.enum(["rename", "update", "delete"]),
+  action: z.enum(["create", "rename", "update", "delete"]),
   name: z.string().trim().min(1).max(200),
   newName: z.string().trim().min(1).max(200).optional(),
   managerName: z.string().trim().max(200).optional(),
@@ -408,6 +426,21 @@ export async function applyLeaderChange(d, u, input, c, generation) {
   const change = leaderChangeSchema.parse(input);
   if (change.generation !== generation)
     fail(409, "Liderlik listesi değişti. Yenileyip tekrar deneyin.");
+  if (change.action === "create") {
+    try {
+      assertUniqueLeaderName(d.leaders || [], change.name);
+    } catch (error) {
+      fail(400, error.message);
+    }
+    d.leaders = [...(d.leaders || []), change.name];
+    if (change.managerName)
+      d.leaderManagers = {
+        ...d.leaderManagers,
+        [change.name]: change.managerName,
+      };
+    Object.assign(d, validate(d, { previousResources }));
+    return;
+  }
   if (!d.leaders?.includes(change.name)) fail(404, "Liderlik bulunamadı.");
   const linkedUsers = (
     await c.query("SELECT * FROM kp_user_leaders WHERE leader_name=@p0", [
@@ -421,8 +454,13 @@ export async function applyLeaderChange(d, u, input, c, generation) {
     const renamed = newName !== change.name;
     if (change.action === "rename" && !renamed)
       fail(400, "Farklı bir liderlik adı girin.");
-    if (renamed && d.leaders.includes(newName))
-      fail(400, "Benzersiz bir liderlik adı girin.");
+    if (renamed) {
+      try {
+        assertUniqueLeaderName(d.leaders, newName, change.name);
+      } catch (error) {
+        fail(400, error.message);
+      }
+    }
     if (!renamed && managerName === oldManager)
       fail(400, "Değiştirilecek liderlik bilgisi yok.");
     d.leaderManagers ??= {};

@@ -228,13 +228,20 @@ export async function writeLocal<K extends ChangeKind>(
   return writeBatch([{ kind, id, value, revision }]);
 }
 export async function changeLeader(input: {
-  action: "rename" | "update" | "delete";
+  action: "create" | "rename" | "update" | "delete";
   name: string;
   newName?: string;
   managerName?: string;
+  generation?: number;
 }): Promise<Data> {
-  return (await api("/leaders/change", { ...input, generation })).data;
+  return (
+    await api("/leaders/change", {
+      ...input,
+      generation: input.generation ?? generation,
+    })
+  ).data;
 }
+export const currentGeneration = () => generation;
 export async function resetAllocations(d: Data): Promise<Data> {
   return (
     await api("/allocations/reset", {

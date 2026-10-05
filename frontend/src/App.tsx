@@ -64,6 +64,7 @@ export default function Portal() {
   const riskLeaveGuard = useRef<RiskLeaveGuard | null>(null);
   const riskEditingRef = useRef(false);
   const [riskEditing, setRiskEditing] = useState(false);
+  const [directoryEditing, setDirectoryEditing] = useState(false);
   const onRiskEditingChange = useCallback((editing: boolean) => {
     riskEditingRef.current = editing;
     setRiskEditing(editing);
@@ -196,7 +197,7 @@ export default function Portal() {
   }
   usePortalRefresh({
     load,
-    editing: !!editor,
+    editing: !!editor || directoryEditing,
     saving,
     riskEditing,
     riskEditingRef,
@@ -678,6 +679,7 @@ export default function Portal() {
                   <TeamDirectory
                     data={data}
                     canEdit={!!isAdmin}
+                    onEditingChange={setDirectoryEditing}
                     onSaved={(next, message) => {
                       setData(next);
                       setLeads((old) =>

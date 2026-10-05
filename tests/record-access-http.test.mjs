@@ -115,6 +115,289 @@ const risk = (id) => ({
   residualImpact: null,
 });
 
+test("manual leadership and team HTTP CRUD survives reload/reopen and guards roles, duplicates and stale drafts", async (t) => {
+  const { store, env, admin, request, user, state, write } = await setup(t);
+  const normal = await user("directory-normal", "normal");
+  const manager = await user("directory-manager", "manager");
+  const changeLeader = async (input, auth = admin) =>
+    request(
+      "/leaders/change",
+      {
+        generation: (await state()).generation,
+        ...input,
+      },
+      auth,
+    );
+  const leader = {
+    action: "create",
+    name: "Manual Leadership",
+    managerName: "Synthetic manager",
+  };
+  for (const auth of [normal, manager]) {
+    assert.equal((await changeLeader(leader, auth)).status, 403);
+    assert.equal(
+      (
+        await write(
+          [
+            {
+              kind: "team",
+              id: "manual-t",
+              value: {
+                id: "manual-t",
+                name: "Manual Team",
+                lead: "",
+                excelCapacity: 0,
+              },
+            },
+          ],
+          auth,
+        )
+      ).status,
+      403,
+    );
+  }
+  assert.equal((await changeLeader(leader)).status, 200);
+  assert.equal(
+    (await changeLeader({ ...leader, name: "  manual leadership  " })).status,
+    400,
+  );
+  assert.equal(
+    (await changeLeader({ action: "create", name: "İLERİ" })).status,
+    200,
+  );
+  assert.equal(
+    (await changeLeader({ action: "create", name: "ileri" })).status,
+    400,
+  );
+  const value = {
+    id: "manual-t",
+    name: "Manual Team",
+    lead: leader.name,
+    managerName: "Synthetic team manager",
+    excelCapacity: 0,
+  };
+  assert.equal(
+    (await write([{ kind: "team", id: value.id, value }])).status,
+    200,
+  );
+  let current = await state();
+  assert.equal(current.data.teams.find((t) => t.id === value.id).catalog, true);
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "team",
+          id: "duplicate",
+          value: { ...value, id: "duplicate", name: "manual team" },
+        },
+      ])
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await changeLeader({
+        action: "update",
+        name: leader.name,
+        newName: "Renamed Leadership",
+        managerName: "Updated manager",
+      })
+    ).status,
+    200,
+  );
+  current = await state();
+  assert.equal(
+    current.data.teams.find((t) => t.id === value.id).lead,
+    "Renamed Leadership",
+  );
+  const pinned = current.data.revisions["team:" + value.id];
+  const updated = {
+    ...current.data.teams.find((t) => t.id === value.id),
+    name: "Renamed Team",
+  };
+  assert.equal(
+    (await write([{ kind: "team", id: value.id, value: updated }])).status,
+    200,
+  );
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "team",
+          id: value.id,
+          value: { ...updated, name: "Stale Team" },
+          revision: pinned,
+        },
+      ])
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await changeLeader({
+        action: "delete",
+        name: "Renamed Leadership",
+        generation: current.generation,
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await state()).data.leaderManagers["Renamed Leadership"],
+    "Updated manager",
+  );
+  assert.equal(
+    (await changeLeader({ action: "delete", name: "Renamed Leadership" }))
+      .status,
+    200,
+  );
+  current = await state();
+  assert(!current.data.teams.some((t) => t.id === value.id));
+  assert(!current.data.leaders.includes("Renamed Leadership"));
+  assert.equal((await store.read()).data.leaders.includes("İLERİ"), true);
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    const persisted = (await reopened.read()).data;
+    assert(persisted.leaders.includes("İLERİ"));
+    assert(!persisted.leaders.includes("Renamed Leadership"));
+    assert(!persisted.teams.some((t) => t.id === value.id));
+  } finally {
+    await reopened.close();
+  }
+});
+
+test("manual team moves preserve allocations and historical resource links; used records cannot be deleted", async (t) => {
+  const { store, env, admin, request, state, write } = await setup(t);
+  async function leader(input) {
+    return request(
+      "/leaders/change",
+      { generation: (await state()).generation, ...input },
+      admin,
+    );
+  }
+  for (const name of ["Manual A", "Manual B"])
+    assert.equal((await leader({ action: "create", name })).status, 200);
+  const team = {
+    id: "linked-team",
+    name: "Linked team",
+    lead: "Manual A",
+    excelCapacity: 0,
+  };
+  assert.equal(
+    (
+      await write([
+        { kind: "team", id: team.id, value: team },
+        {
+          kind: "project",
+          id: "linked-project",
+          value: {
+            id: "linked-project",
+            name: "Synthetic project",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        {
+          kind: "resource",
+          id: "linked-resource",
+          value: {
+            id: "linked-resource",
+            name: "Synthetic employee",
+            note: "",
+            versions: [
+              {
+                team: team.id,
+                lead: team.lead,
+                effective: "2026-01",
+                start: "2026-01-01",
+                end: "",
+                status: "Aktif Çalışan",
+                included: true,
+                amount: 1,
+              },
+            ],
+          },
+        },
+        {
+          kind: "allocation",
+          id: team.id + "|linked-project|2026-01",
+          value: 0.5,
+        },
+      ])
+    ).status,
+    200,
+  );
+  const before = await state();
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "team",
+          id: team.id,
+          value: { ...team, name: "Moved team", lead: "Manual B" },
+        },
+      ])
+    ).status,
+    200,
+  );
+  let after = await state();
+  assert.equal(
+    after.data.resources.find((r) => r.id === "linked-resource").versions[0]
+      .lead,
+    "Manual B",
+  );
+  assert.equal(
+    after.data.revisions["resource:linked-resource"],
+    before.data.revisions["resource:linked-resource"] + 1,
+  );
+  assert.deepEqual(after.data.allocations, before.data.allocations);
+  const snapshot = structuredClone(after);
+  assert.equal(
+    (
+      await write([
+        { kind: "team", id: team.id, operation: "delete", value: null },
+      ])
+    ).status,
+    409,
+  );
+  assert.equal(
+    (await leader({ action: "delete", name: "Manual B" })).status,
+    409,
+  );
+  after = await state();
+  assert.deepEqual(
+    after,
+    snapshot,
+    "rejected deletes must roll back all data and generation",
+  );
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    const persisted = (await reopened.read()).data;
+    assert.equal(
+      persisted.teams.find((t) => t.id === team.id).name,
+      "Moved team",
+    );
+    assert.equal(
+      persisted.teams.find((t) => t.id === team.id).lead,
+      "Manual B",
+    );
+    assert.equal(persisted.teams.find((t) => t.id === team.id).catalog, true);
+    assert.equal(
+      persisted.resources.find((r) => r.id === "linked-resource").versions[0]
+        .lead,
+      "Manual B",
+    );
+    assert.deepEqual(persisted.allocations, before.data.allocations);
+  } finally {
+    await reopened.close();
+  }
+});
+
 test("HTTP CRUD with prototype-like team/project/resource/risk IDs preserves permissions, cascade revisions and account links", async (t) => {
   const { store, admin, request, user, state, write } = await setup(t);
   const initial = await state();

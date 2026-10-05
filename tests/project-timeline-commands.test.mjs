@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   prepareTimelineChange,
   prepareMilestoneReorder,
+  prepareMilestoneReportChange,
 } from "../frontend/src/features/project-timeline-commands.ts";
 import { milestoneRanges } from "../shared/milestone-ranges.ts";
 import { applyChanges } from "../backend/operations.mjs";
@@ -65,6 +66,107 @@ test("topic ordering preserves dates, nested notes and project metadata with rev
       ),
     /bulunamadı/,
   );
+});
+
+test("report menu changes only the chosen bullet flag and retains dates, colors, completion, order and revision checks", () => {
+  const data = fixture();
+  const project = data.projects[0];
+  project.milestones[0].barNotes.push({
+    text: "Second bullet",
+    includeInReport: false,
+  });
+  project.milestones[0].additionalRanges = [
+    {
+      displayKind: "milestone",
+      diamondStyle: "outline",
+      color: "green",
+      start: "2026-10-15",
+      end: "2026-10-15",
+      notes: [
+        { text: "Point inside bar", completed: true, includeInReport: true },
+      ],
+    },
+  ];
+  const snapshot = structuredClone(project);
+  for (const [rangeIndex, noteIndex, included] of [
+    [0, 1, true],
+    [1, 0, false],
+  ]) {
+    const command = prepareMilestoneReportChange(
+      snapshot,
+      3,
+      "m",
+      rangeIndex,
+      noteIndex,
+      included,
+    );
+    const expected = structuredClone(snapshot);
+    const notes =
+      rangeIndex === 0
+        ? expected.milestones[0].barNotes
+        : expected.milestones[0].additionalRanges[rangeIndex - 1].notes;
+    notes[noteIndex].includeInReport = included;
+    assert.deepEqual(command.value, expected);
+    assert.deepEqual(project, snapshot);
+    assert.equal(command.revision, 3);
+    assert.throws(
+      () =>
+        applyChanges(
+          structuredClone(data),
+          { _id: "n", role: "normal", leaders: [] },
+          [command],
+        ),
+      (e) => e.status === 403,
+    );
+    const next = structuredClone(data);
+    applyChanges(next, admin, [command]);
+    validate(next);
+    assert.throws(
+      () => applyChanges(next, admin, [command]),
+      (e) => e.status === 409,
+    );
+  }
+});
+
+test("report menu supports legacy descriptions and rejects absent or invalid targets without mutation", () => {
+  const project = fixture().projects[0];
+  const milestone = project.milestones[0];
+  delete milestone.barNotes;
+  milestone.barText = "Legacy note";
+  milestone.additionalRanges = [
+    { start: "2026-11-01", end: "2026-11-02", description: "Legacy extra" },
+  ];
+  for (const index of [0, 1]) {
+    const command = prepareMilestoneReportChange(
+      project,
+      3,
+      "m",
+      index,
+      0,
+      true,
+    );
+    assert.equal(
+      milestoneRanges(command.value.milestones[0])[index].notes[0]
+        .includeInReport,
+      true,
+    );
+    assert.equal(
+      milestoneRanges(project.milestones[0])[index].notes[0].includeInReport,
+      false,
+    );
+  }
+  for (const [id, range, note] of [
+    ["missing", 0, 0],
+    ["m", -1, 0],
+    ["m", 0, -1],
+    ["m", 9, 0],
+    ["m", 0, 1],
+    ["m", 0.5, 0],
+  ])
+    assert.throws(
+      () => prepareMilestoneReportChange(project, 3, id, range, note, true),
+      /bulunamadı/,
+    );
 });
 
 test("topic moves support both insertion sides and skip no-op saves", () => {

@@ -16,12 +16,16 @@ import { checkMilestoneOverlap } from "./browser-checks/milestone-overlap.mjs";
 import { checkSessionConsistency } from "./browser-checks/session-consistency.mjs";
 import { checkEntityEditors } from "./browser-checks/entity-editors.mjs";
 import { checkTableStyles } from "./browser-checks/table-styles.mjs";
+import { checkDirectoryManagement } from "./browser-checks/directory-management.mjs";
+import { checkMilestoneReportMenu } from "./browser-checks/milestone-report-menu.mjs";
 
 const f = await fixture();
 try {
   await checkTableStyles(f);
   await checkSessionConsistency(f);
   await checkEntityEditors(f);
+  await checkDirectoryManagement(f);
+  await checkMilestoneReportMenu(f);
   await checkRisks(f);
   await checkRiskConcurrency(f);
   await checkWorkspaceFilters(f);
