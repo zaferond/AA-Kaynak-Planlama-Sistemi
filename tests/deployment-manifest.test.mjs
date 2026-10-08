@@ -44,7 +44,9 @@ async function fixture(t) {
   }
   const manifest = path.join(root, "deployment-manifest.json");
   const build = async () =>
-    writeDeploymentManifest(root, await deploymentSources(root));
+    writeDeploymentManifest(root, await deploymentSources(root), {
+      releaseFiles: ["site/index.html", "site/assets/app.js"],
+    });
   return { root, manifest, files, build };
 }
 
@@ -235,4 +237,115 @@ test("deployment packaging refuses existing installations, nested or stale sourc
     /Kaynak paket doğrulanamadı/,
   );
   await assert.rejects(fs.access(fresh), { code: "ENOENT" });
+});
+
+test("packaging excludes historical bundles, includes declared runtime assets and remains bounded across releases", async (t) => {
+  const f = await fixture(t);
+  const active = [
+    "site/index.html",
+    "site/index.html.gz",
+    "site/assets/app.js",
+    "site/assets/app.js.gz",
+    "site/assets/app.css",
+    "site/assets/app.css.gz",
+    "site/assets/otokar-logo.svg",
+  ];
+  for (const file of active.filter((file) => !f.files[file]))
+    await fs.writeFile(path.join(f.root, file), "synthetic " + file);
+  for (let release = 0; release < 3; release++) {
+    await fs.writeFile(
+      path.join(f.root, `site/assets/old-${release}.js`),
+      "old bundle",
+    );
+    await writeDeploymentManifest(f.root, await deploymentSources(f.root), {
+      releaseFiles: active,
+    });
+    const before = await fs.readFile(f.manifest);
+    const output = f.root + "-release-" + release;
+    t.after(() => fs.rm(output, { recursive: true, force: true }));
+    const result = await createDeploymentPackage(f.root, output);
+    assert.equal(result.artifactFiles, 7);
+    assert.equal(result.excludedHistoricalArtifacts, release + 1);
+    const packaged = JSON.parse(
+      await fs.readFile(path.join(output, "deployment-manifest.json"), "utf8"),
+    );
+    assert.deepEqual(Object.keys(packaged.artifacts).sort(), active.sort());
+    assert.deepEqual(packaged.releaseArtifacts, packaged.artifacts);
+    assert.equal((await verifyDeployment(output)).ok, true);
+    for (const file of active)
+      assert.deepEqual(
+        await fs.readFile(path.join(output, file)),
+        await fs.readFile(path.join(f.root, file)),
+      );
+    await assert.rejects(
+      fs.access(path.join(output, `site/assets/old-${release}.js`)),
+      { code: "ENOENT" },
+    );
+    assert.deepEqual(await fs.readFile(f.manifest), before);
+    assert.equal((await verifyDeployment(f.root)).ok, true);
+    await fs.access(path.join(f.root, `site/assets/old-${release}.js`));
+  }
+});
+
+test("legacy manifests still verify but cannot silently package unbounded history", async (t) => {
+  const f = await fixture(t);
+  await writeDeploymentManifest(f.root, await deploymentSources(f.root));
+  assert.equal((await verifyDeployment(f.root)).ok, true);
+  const output = f.root + "-legacy";
+  await assert.rejects(
+    createDeploymentPackage(f.root, output),
+    /Önce npm run build/,
+  );
+  await assert.rejects(fs.access(output), { code: "ENOENT" });
+});
+
+test("invalid release declarations preserve the manifest and cannot bypass inventory checks", async (t) => {
+  const f = await fixture(t);
+  await f.build();
+  const previous = await fs.readFile(f.manifest);
+  for (const releaseFiles of [
+    [],
+    ["site/assets/app.js"],
+    ["site/index.html", "site/missing.js"],
+    ["site/index.html", "../.env"],
+    ["site/index.html", "site/index.html"],
+    [null],
+  ]) {
+    await assert.rejects(
+      writeDeploymentManifest(f.root, await deploymentSources(f.root), {
+        releaseFiles,
+      }),
+      /Güncel derleme/,
+    );
+    assert.deepEqual(await fs.readFile(f.manifest), previous);
+  }
+  const good = JSON.parse(previous);
+  for (const releaseArtifacts of [
+    null,
+    [],
+    {},
+    { "site/index.html": "0".repeat(64) },
+    { ...good.releaseArtifacts, "site/unknown.js": "0".repeat(64) },
+    { "../.env": "0".repeat(64) },
+  ]) {
+    await fs.writeFile(
+      f.manifest,
+      JSON.stringify({ ...good, releaseArtifacts }),
+    );
+    await assert.rejects(verifyDeployment(f.root), /biçimi geçersiz/);
+  }
+});
+
+test("historical files are excluded from output but drift still refuses packaging before creating a target", async (t) => {
+  const f = await fixture(t);
+  const old = path.join(f.root, "site/assets/old.js");
+  await fs.writeFile(old, "old bundle");
+  await f.build();
+  await fs.writeFile(old, "changed old bundle");
+  const output = f.root + "-drift";
+  await assert.rejects(
+    createDeploymentPackage(f.root, output),
+    /Kaynak paket doğrulanamadı/,
+  );
+  await assert.rejects(fs.access(output), { code: "ENOENT" });
 });

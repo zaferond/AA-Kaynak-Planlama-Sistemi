@@ -25,7 +25,15 @@ export async function createDeploymentPackage(source, destination) {
   const verified = await verifyDeployment(source, { includeManifest: true });
   if (!verified.ok)
     throw Error("Kaynak paket doğrulanamadı. Önce npm run build çalıştırın.");
-  const manifest = verified.manifest;
+  if (!verified.manifest.releaseArtifacts)
+    throw Error(
+      "Güncel derleme dosyası listesi bulunamadı. Önce npm run build çalıştırın.",
+    );
+  // Keep the source inventory strict, but package only this build's declared outputs.
+  const manifest = {
+    ...verified.manifest,
+    artifacts: verified.manifest.releaseArtifacts,
+  };
   const manifestBytes = Buffer.from(JSON.stringify(manifest, null, 2) + "\n");
   // EEXIST aborts without touching any existing configuration or user data.
   await fs.mkdir(destination);
@@ -58,6 +66,9 @@ export async function createDeploymentPackage(source, destination) {
       version: manifest.version,
       sourceFiles: Object.keys(manifest.sources).length,
       artifactFiles: Object.keys(manifest.artifacts).length,
+      excludedHistoricalArtifacts:
+        Object.keys(verified.manifest.artifacts).length -
+        Object.keys(manifest.artifacts).length,
     };
   } catch (error) {
     // This invocation exclusively created the directory; existing targets never enter this block.

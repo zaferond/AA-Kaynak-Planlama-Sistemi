@@ -151,13 +151,34 @@ function commitAt(root) {
 }
 
 /** Called after a successful build with the input hashes captured BEFORE compilation. */
-export async function writeDeploymentManifest(root, beforeBuild) {
+export async function writeDeploymentManifest(
+  root,
+  beforeBuild,
+  { releaseFiles } = {},
+) {
   const sources = await deploymentSources(root);
   if (!same(sources, beforeBuild))
     throw Error(
       "Derleme sırasında kaynaklar değişti. Derlemeyi tekrar çalıştırın.",
     );
   const artifacts = await deploymentArtifacts(root);
+  // The build explicitly declares its outputs, including assets referenced from JS.
+  // Do not infer this list from HTML alone or silently include historical bundles.
+  let releaseArtifacts;
+  if (releaseFiles !== undefined) {
+    if (
+      !Array.isArray(releaseFiles) ||
+      releaseFiles.length > 10000 ||
+      releaseFiles.some((file) => typeof file !== "string") ||
+      new Set(releaseFiles).size !== releaseFiles.length
+    )
+      throw Error("Güncel derleme dosyası listesi geçersiz.");
+    releaseArtifacts = ordered(
+      releaseFiles.map((file) => [file, artifacts[file]]),
+    );
+    if (!validReleaseArtifacts(releaseArtifacts, artifacts))
+      throw Error("Güncel derleme dosyası listesi eksik veya geçersiz.");
+  }
   const { version } = JSON.parse(await normalFile(root, "package.json"));
   if (typeof version !== "string" || !versionPattern.test(version))
     throw Error("Paket sürümü geçersiz.");
@@ -167,6 +188,7 @@ export async function writeDeploymentManifest(root, beforeBuild) {
     commit: commitAt(root),
     sources,
     artifacts,
+    ...(releaseArtifacts ? { releaseArtifacts } : {}),
   };
   const stage = path.join(
     root,
@@ -210,6 +232,17 @@ function validFiles(files, select) {
   );
 }
 
+function validReleaseArtifacts(files, artifacts) {
+  return (
+    validFiles(
+      files,
+      (file) => file.startsWith("site/") && artifactExtensions.test(file),
+    ) &&
+    Object.hasOwn(files, "site/index.html") &&
+    Object.entries(files).every(([file, hash]) => artifacts[file] === hash)
+  );
+}
+
 function differences(expected, actual) {
   return {
     changed: Object.keys(expected).filter(
@@ -250,7 +283,9 @@ export async function verifyDeployment(root, { includeManifest = false } = {}) {
     !validFiles(
       manifest.artifacts,
       (file) => file.startsWith("site/") && artifactExtensions.test(file),
-    )
+    ) ||
+    (Object.hasOwn(manifest, "releaseArtifacts") &&
+      !validReleaseArtifacts(manifest.releaseArtifacts, manifest.artifacts))
   )
     throw Error("Dağıtım manifestinin biçimi geçersiz.");
   const sourceDifferences = differences(

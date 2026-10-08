@@ -21,7 +21,13 @@ Manifest yoksa paketi güvenilir kaynak kopyasından yeniden derleyin. Fark vars
 npm run deploy:package -- --output "../AA-dagitim"
 ```
 
-Çıktının üst dizini mevcut olmalı, hedef klasör henüz var olmamalıdır. Komut doğrulanmış manifestteki kaynak/build dosyalarını kopyalar, kopya hash'lerini ve kaynak paketini tekrar doğrular. Mevcut hedefi birleştirmez; kaynak içine çıktı oluşturmaz. Hata halinde yalnız kendisinin oluşturduğu yeni klasörü kaldırır. `.env`, `data`, `node_modules`, Git, test kayıtları ve kişisel dosyalar taşınmaz. Test/CI geliştirme deposunda çalıştırılır; paket çalışma ve yeniden derleme girdilerini içerir.
+Çıktının üst dizini mevcut olmalı, hedef klasör henüz var olmamalıdır. Komut doğrulanmış manifestteki kaynak/build girdilerini ve yalnız son derlemenin `releaseArtifacts` listesindeki site dosyalarını kopyalar. Eski hash'li bundle'lar yeni pakete aktarılmaz. Kopya hash'leri ve kaynak paketinin **tam envanteri** tekrar doğrulanır. Yeni paket manifestinin `artifacts` alanı yalnız kopyalanan güncel çıktıları içerir; kaynak manifesti değiştirilmez. Eski manifestler açılış doğrulamasında desteklenir; `releaseArtifacts` içermeyen bir manifestten paket üretmek için önce yeniden build gerekir.
+
+Mevcut hedef birleştirilmez; kaynak içine çıktı oluşturulmaz. Hata halinde yalnız komutun oluşturduğu yeni klasör kaldırılır. Manifest en son yazılır; dosya kopyalanırken klasör görünür olabilir. Bu işlem atomik canlı sürüm değişimi değildir; yalnız komut başarılı olduktan ve hedef doğrulandıktan sonra paket kullanılmalıdır. `.env`, `data`, `node_modules`, Git, test kayıtları ve kişisel dosyalar taşınmaz. Test/CI geliştirme deposunda çalıştırılır; paket çalışma ve yeniden derleme girdilerini içerir.
+
+Derleme mevcut `site/` içindeki eski dosyaları otomatik silmez. Açık sekmelerin eski bundle erişimini kesmemek için çalışan kurulumda temizlik uygulanmaz. Temiz paket ayrı bir sürüm klasörüne hazırlanır; kontrollü geçiş, eski sürüm saklama süresi ve sonrasında temizlik IT kabulünde ayrıca belirlenir. Canlı klasöre yeni paketi birleştirmek eski dosyaların birikmesini çözmez.
+
+`node scripts/check-deployment-package.mjs` gerçek build çıktısından yeni geçici bir paket oluşturup temizler. HTML'nin JS/CSS referansları, logo, gzip açılmış bayt eşitliği ve tam paket manifesti kontrol edilir. Ayar/veritabanı okunmaz; sunucu başlatılmaz. `TMPDIR` kaynak içinde ise geçici klasör kaynakla aynı üst dizinde açılır. Bu kontrol Ubuntu ve Windows kalite kapılarına eklenmiştir.
 
 Mac ve Windows başlatıcıları aynı setup → kilitli bağımlılık kurulumu → build → start sırasını kullanır. Mevcut `.env` setup tarafından korunur. Servis için hazırlanmış pakette `npm start` build çalıştırmaz; eksik manifest, değişmiş kaynak veya site çıktısı varsa Store oluşturulmadan önce çıkış yapar. Bu kontrol, veritabanı açılmasını engeller; geçerli paketin normal veritabanı işlemlerini değiştirmez.
 
