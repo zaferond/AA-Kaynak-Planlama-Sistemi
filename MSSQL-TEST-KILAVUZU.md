@@ -1,6 +1,8 @@
 # Native MSSQL doğrulaması — 31. adım
 
-**Güncel durum — 4 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `63780fc4538829c16c7b14739f882a9851629f59` commit'i 19/19 native testi geçti; şema 30 ve temizlik doğrulandı. Sonuç JSON'u, kaynak hash'leri ve koşu kimliği [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) saklanır. Bu koşu sonraki commit'lerin tamamını veya kurum SQL/TLS/Windows/proxy ortamını doğrulamaz.
+**Güncel durum — 8 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `731f5281f123f324628de7d0085508d2aaf54e48` commit'i **20/20** native testi geçti; **şema 31**, iki bağımsız havuz ve temizlik doğrulandı. Raporun **463 kaynak hash'i** aynı commit ile eşleşti. Aynı kaynak için Windows 143/143, Ubuntu 509/509 ve 133 Chromium kontrolü başarılı. [N4 yenileme kaydı](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md) ve [CI kanıt arşivi](CI-KANIT-ARSIVI.md). Bu sentetik koşular kurum SQL/TLS/Windows servis/proxy ve gerçek yük kabulü değildir.
+
+**Tarihsel durum — 4 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `63780fc4538829c16c7b14739f882a9851629f59` commit'i 19/19 native testi geçti; şema 30 ve temizlik doğrulandı. Önceki sonuç ve 48 kaynak hash'i arşivde korunur; yeni kaynak için bu eski kayıt kullanılmaz.
 
 **Tarihsel durum — 2 Ekim 2026:** bu bilgisayarda SQL Server/Docker veya ayrılmış test bağlantısı olmadığı için o tarihte native sonuç yoktu. Bu sınırlama 4 Ekim'de GitHub'ın geçici test ortamıyla giderildi; bu bilgisayarda veya kurumda native test yapılmış sayılmaz. Yerel güvenlik testleri gerçek MSSQL çalıştırması değildir.
 
@@ -26,7 +28,7 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 
 ## Native senaryolar
 
-1. Eski v2 kişi dağılımlarının şema 30'a taşınması, Türkçe veri ve toplamların korunması, yeniden bağlantıda dönüşümün tekrarlanmaması.
+1. Eski v2 kişi dağılımlarının güncel şemaya (8 Ekim: 31) taşınması, Türkçe veri ve toplamların korunması, yeniden bağlantıda dönüşümün tekrarlanmaması.
 2. Ortak HTTP suite: CRUD, yetki/CSRF/oturum iptali, FK/CHECK, toplu geri alma, içe aktarma sayaçları, generation/revision, restore ve liderlik işlemleri.
 3. Ortak eşzamanlılık suite: aynı hücrede tek kazanan, 24 bağımsız kayıt, çakışan batch, aylık sınır/takvim/izin/eğitim ve tutarlı okuyucular.
 4. **İki bağımsız native bağlantı havuzu:** aynı revision yarışı; ortak okuma kilitlerinin birlikte çalışması; yazmanın okuyucuya yarım veri göstermemesi; kilitlerin sıfır timeout ile doğrudan sınanması.
@@ -35,6 +37,7 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 7. BIN2 karşılaştırmalı revision kapsamı: büyük/küçük harf, Türkçe, wildcard karakterleri, özel/tombstone sürümler, 900 parametre ve 901/legacy fallback.
 8. Rol bazlı filtreli snapshot'ın bağımsız tam okuma referansıyla eşitliği; 24 bağımsız yazmanın kendi commit yanıtı; bağlantı yeniden açıldığında veri/şema eşitliği.
 9. İki bağımsız MSSQL havuzunda 40 eşzamanlı sayaç rezervasyonundan yalnız 15'inin kabulü; yeni hizmette kotanın korunması; iki HTTP hizmetinde ortak IP/kullanıcı adı sınırı. Kaynak verilerinin genel kilidi tutulurken sayaç kilidinin bağımsız çalışması. Bu senaryolar belirtilen 4 Ekim CI koşusunda geçti; kurum proxy topolojisi veya giriş kapasitesi ölçümü değildir.
+10. N1 silme regresyonu: normal kullanıcının 32 hayali kaydı ve bozuk anahtarı reddedilir; geçerli boş silme yeni revision üretmez. Gerçek silme, tekrar, eski revision, yeniden oluşturma ve batch geri alma doğrudan kalıcı revision tablosuyla doğrulanır. Bu ek kontrol 8 Ekim koşusunda başarılıdır.
 
 ## Ölçüm ve rapor
 

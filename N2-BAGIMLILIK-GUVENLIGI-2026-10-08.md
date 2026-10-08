@@ -56,3 +56,7 @@ Uygulama klasörünün önceki manifest hash'leri doğrulandı; yeni kilit, test
 - [sprintf-js güvenlik duyurusu](https://github.com/advisories/GHSA-hp3w-g68c-fv3c)
 
 Kaynaklarda yayımlanan durum 8 Ekim 2026 itibarıyla kontrol edilmiştir. Önceki N1 değişiklikleri korundu; bu tur commit/push yapılmadı.
+
+## Sonraki doğrulama — 8 Ekim N4 çalışması
+
+Bu notun ilk aşamasından sonra değişiklikler `56521c3` ile gönderildi. Son test edilen kaynak `731f528` için native MSSQL **20/20**, Windows **143/143**, genel **509/509** ve Chromium **133** kontrol başarılı. İki Yüksek eşikli audit kapısı geçti; backend'deki Orta `sprintf-js` uyarısı **hâlâ açık**. [Güncel N4 kanıtı](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md). Önceki kısmi giderilme kararı değişmedi.

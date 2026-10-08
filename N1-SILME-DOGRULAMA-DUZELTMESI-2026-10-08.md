@@ -39,3 +39,7 @@ node --import <geçici-loader> --test tests/record-access-http.test.mjs tests/pl
 - Native MSSQL/Windows üzerinde bu değişikliğin çalıştırıldığına dair yeni kanıt yok. SQL.js sonucu kurum kabulünün yerine geçmez.
 - Dağıtım dosyaları güncellense bile açık Node süreci eski backend modüllerini kullanır. Düzeltme uygulamanın sonraki yeniden başlatılmasında etkinleşir; bu çalışma gerçek sunucuyu yeniden başlatmaz.
 - Yeni commit/push yapılmadı. Sonraki öncelik **N2: bağımlılık uyarıları**.
+
+## Sonraki doğrulama — 8 Ekim N4 çalışması
+
+Yukarıdaki commit/native sınırlaması bu notun ilk yazıldığı aşamaya aittir. N1/N2 değişiklikleri `56521c3` ile gönderildi; son test edilen kaynak `731f528` için native MSSQL **20/20**, Windows **143/143**, genel testler **509/509** ve Chromium **133** kontrol başarılı. Native N1 silme/revision regresyonu da çalıştırıldı. [Güncel N4 kaydı ve kurum sınırları](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md). Çalışan backend yeniden başlatılmadı.

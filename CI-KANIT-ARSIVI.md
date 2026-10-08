@@ -1,5 +1,23 @@
 # CI kanıt arşivi
 
+## 8 Ekim 2026 — N4 / Y5 yenilemesi
+
+Test edilen kaynak: **`731f5281f123f324628de7d0085508d2aaf54e48`**. Sonraki arşiv/dokümantasyon commit'i test edilen kaynakla aynı değildir; kaynak kimliği ayrıca hash'lerden kontrol edilir. Önceki kayıtların üzerine yazılmadı.
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Ubuntu kalite | 509/509 kaynak testi, 133 başarılı Chromium kontrolü; biçim/domain/TypeScript/build/manifest ve iki audit kapısı başarılı | [37763521968](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37763521968) |
+| Windows kalite | 143/143 sentetik test; TypeScript/build/manifest başarılı | Aynı kalite koşusu |
+| Native MSSQL | 20/20, şema 31; SQL Server 16.0.4295.3 Developer, uyumluluk 160, iki havuz; temizlik doğrulandı | [37763546804](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37763546804) |
+
+- [Kalite kaydı](ci-evidence/quality-731f528-receipt.json), [native kaydı](ci-evidence/native-mssql-731f528-receipt.json), [byte olarak korunan native sonuç](ci-evidence/native-mssql-731f528.json).
+- Native JSON SHA-256: `cf14ea040122c8599702b4e7c4abbb4de32a21ab61192e3136506792ace4fb9b`. Artifact ZIP digest'i farklı bir girdiye aittir.
+- Native raporun **463 dosyası** aynı commit ile eşleşti; `.cmd` başlatıcısında `.gitattributes` CRLF baytları kullanıldı. Bu liste tam uygulama/derleme girdileri, doğrudan test modülleri ve iki workflow'u içerir. Hash eşitliği tüm UI/işlevlerin native test edildiğini kanıtlamaz.
+- Test toplamlarında hata/atlama/iptal yok. Windows genel testlerle örtüşür. Audit kapısı Yüksek eşiklidir: frontend uyarısı giderildi, backend'in `sprintf-js` kökünden gelen Orta uyarıları sürüyor.
+- [N4 kapsam, test düzeltmeleri ve kurum sınırları](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md). Asgari SQL yetkileri, kurum TLS/proxy/Windows servis/ACL, kurum kurtarma ve gerçek yük bu kayıtlarla kapanmaz.
+
+**Ara koşu korunmuştur:** `56521c3` için native [37734302765](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37734302765) 20/20, Windows 143/143 ve Ubuntu kaynak testi 509/509 geçti. Fakat Ubuntu browser eski seçicinin iki tablo bulması nedeniyle durdu; kalite koşusu **başarısızdır**. [Başarısız kalite kaydı](ci-evidence/quality-56521c3-receipt.json), [native kaydı](ci-evidence/native-mssql-56521c3-receipt.json), [native sonuç](ci-evidence/native-mssql-56521c3.json). Bu koşunun atlanan audit adımları geçmiş gibi gösterilmedi. Sonraki `731f528` iki tablo seçicisini daraltarak tam kalite koşusunu geçirdi.
+
 ## 4 Ekim 2026 kayıtları
 
 Bu arşiv belirli commit'lerin sentetik CI sonuçlarını saklar. Daha sonraki commit'ler, çalışan uygulama ve kurum ortamı için otomatik başarı iddiası oluşturmaz. Windows testleri genel testlerle kısmen örtüşür; sayıları bağımsız kapsam olarak toplamamak gerekir.
