@@ -4,7 +4,7 @@ import {
   riskStatuses,
   riskStrategyKeys,
 } from "../../../../shared/risk-policy.ts";
-import type { Risk } from "../../model";
+import type { Risk, RiskSystem } from "../../model";
 import type { RiskColumn } from "./columns";
 import type { RiskUpdate } from "./types";
 import RiskValue from "./RiskValue";
@@ -12,6 +12,7 @@ import RiskValue from "./RiskValue";
 export default function RiskCellEditor({
   column,
   risk,
+  systems,
   index,
   saving,
   isNew,
@@ -22,6 +23,7 @@ export default function RiskCellEditor({
 }: {
   column: RiskColumn;
   risk: Risk;
+  systems: RiskSystem[];
   index: number;
   saving: boolean;
   isNew: boolean;
@@ -39,6 +41,36 @@ export default function RiskCellEditor({
     "aria-label": column.label,
   };
   switch (column.editor) {
+    case "system": {
+      const selected = systems.find(
+        (item) =>
+          item.id === risk.systemId ||
+          (!risk.systemId && item.name === risk.system),
+      );
+      const legacyValue = "legacy:" + risk.system;
+      return (
+        <select
+          {...common}
+          value={selected?.id || (risk.system ? legacyValue : "")}
+          onChange={(event) => {
+            if (event.target.value === legacyValue) return;
+            const item = systems.find((item) => item.id === event.target.value);
+            update("systemId", item?.id);
+            update("system", item?.name || "");
+          }}
+        >
+          <option value="">Sistem / alt sistem seçin</option>
+          {!selected && risk.system && (
+            <option value={legacyValue}>{risk.system} (mevcut kayıt)</option>
+          )}
+          {systems.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      );
+    }
     case "strategy": {
       const strategy = riskStrategyKeys[column.key];
       return (

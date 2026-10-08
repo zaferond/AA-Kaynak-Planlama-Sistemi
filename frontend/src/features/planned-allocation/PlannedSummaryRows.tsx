@@ -17,7 +17,7 @@ export default function PlannedSummaryRows({
   const teamIds = ts.map((t) => t.id);
   const rows: [number, string][] = [
     [0, "Aktif Kaynak"],
-    [2, selectedReport ? "Dağıtılan Kaynak" : "Tüm Projelere Tahsis"],
+    [2, "Dağıtılan Kaynak"],
     [3, "Kalan Kaynak"],
   ];
   return rows.map(([kind, title]) => (

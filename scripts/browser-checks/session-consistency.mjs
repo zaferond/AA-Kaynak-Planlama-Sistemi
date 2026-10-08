@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { loginUI } from "./access.mjs";
-import { openRisks } from "./risk.mjs";
+import { openRisks, acceptRiskSaveConfirmations } from "./risk.mjs";
 
 const field = (page) =>
   page.locator('.risk-editing-row [data-risk-input="description"]');
@@ -284,6 +284,7 @@ export async function checkSessionConsistency(f) {
     "session: signing into the same account creates a fresh editor and refreshes its CSRF token",
     async () => {
       const c = await f.client("root-admin");
+      const stopConfirming = acceptRiskSaveConfirmations(c.page);
       try {
         await draft(c.page, "B6_OLD_SAME_ACCOUNT_DRAFT");
         const auth = await directLogin(c.context, "root-admin");
@@ -322,6 +323,7 @@ export async function checkSessionConsistency(f) {
           "B6_NEW_SAME_ACCOUNT_DRAFT",
         );
       } finally {
+        stopConfirming();
         await c.context.close();
       }
     },

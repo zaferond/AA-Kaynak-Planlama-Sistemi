@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { applyChanges } from "../../backend/operations.mjs";
-import { openRisks } from "./risk.mjs";
+import { openRisks, acceptRiskSaveConfirmations } from "./risk.mjs";
 
 const id = "concurrent-risk";
 const row = (page) => page.locator(`tr[data-risk-id="${id}"]`);
@@ -67,6 +67,7 @@ export async function checkRiskConcurrency(f) {
     ]),
   );
   const { page } = await f.client("root-admin");
+  const stopConfirming = acceptRiskSaveConfirmations(page);
   await openRisks(page);
   // Start the read BEFORE opening the row. It returns a newer snapshot AFTER
   // the draft is opened; merely pausing future refreshes cannot fix this race.
@@ -371,6 +372,7 @@ export async function checkRiskConcurrency(f) {
     await f.capture(page, "risk-concurrency-failed");
     throw error;
   } finally {
+    stopConfirming();
     await page.close();
   }
 }

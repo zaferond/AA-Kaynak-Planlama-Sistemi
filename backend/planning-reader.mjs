@@ -10,6 +10,9 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     teams: [],
     projects: [],
     risks: [],
+    riskSystems: (
+      await c.query("SELECT id,name FROM kp_risk_systems ORDER BY name,id")
+    ).rows,
     resources: [],
     allocations: {},
     actualAllocations: {},

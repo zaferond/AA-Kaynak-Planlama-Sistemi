@@ -312,7 +312,9 @@ export async function checkCalendar(f) {
       "calendar: reports reflect saved labels/dates; manager and unmapped user cannot edit personal records",
       async () => {
         await page.reload();
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
+          .click();
         const report = page.locator(".absence-report");
         await report.waitFor();
         assert((await report.innerText()).includes("PRIVATE_LEAVE_LABEL"));

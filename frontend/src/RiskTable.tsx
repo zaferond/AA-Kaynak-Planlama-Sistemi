@@ -58,7 +58,7 @@ export default function RiskTable(props: RiskTableProps) {
               : conflict
                 ? "Çakışma var · Düzenlemeleriniz korunuyor"
                 : draft
-                  ? "Enter veya satır dışına tıklayarak kaydedin · Shift+Enter yeni satır · Esc iptal"
+                  ? "Enter veya satır dışına tıklayarak kaydı onaylayın · Shift+Enter yeni satır · Esc iptal"
                   : "Düzenlemek için hücreye tıklayın · Tüm sütunlar yatay kaydırılabilir"}
           </span>
         </div>
@@ -196,6 +196,7 @@ export default function RiskTable(props: RiskTableProps) {
                           <RiskCellEditor
                             column={column}
                             risk={display}
+                            systems={props.systems}
                             index={index}
                             saving={saving}
                             isNew={isNew}

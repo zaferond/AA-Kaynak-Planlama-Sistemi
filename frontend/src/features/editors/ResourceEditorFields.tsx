@@ -1,6 +1,5 @@
 import { Switch } from "@/components/ui/switch";
 import { Single } from "../../components/FilterPicker";
-import { fullDateLabel } from "../../format";
 import { statuses, type Data, type Team, type Version } from "../../model";
 import type { EditorFieldProps } from "./editor-field-props";
 type Props = EditorFieldProps<"resource"> & {
@@ -17,6 +16,11 @@ export default function ResourceEditorFields({
   editTeams,
   chooseResourceStatus,
 }: Props) {
+  const startDateLabel =
+    editor.version.status === "Aktif İlan" ||
+    editor.version.status === "Pasif İlan"
+      ? "Tahmini İşbaşı Tarihi"
+      : "İşbaşı Tarihi";
   return (
     <>
       <label>
@@ -106,7 +110,7 @@ export default function ResourceEditorFields({
       </div>
       <div className="resource-date-grid">
         <label>
-          İşbaşı Tarihi
+          {startDateLabel}
           <input
             type="date"
             value={editor.version.start}
@@ -141,10 +145,10 @@ export default function ResourceEditorFields({
         )}
       </div>
       <small>
-        İlanlarda İşbaşı Tarihi boş başlar; diğer statülerde bu yılın 1 Ocak
-        günü önerilir. Tarihi değiştirebilirsiniz. İşten Ayrıldı için iki tarih,
-        dahil edilen Aktif İlan için İşbaşı Tarihi zorunludur. İşbaşı ve ayrılış
-        ayları gün oranıyla hesaplanır.
+        İlanlarda Tahmini İşbaşı Tarihi boş başlar; diğer statülerde bu yılın 1
+        Ocak günü önerilir. Tarihi değiştirebilirsiniz. İşten Ayrıldı için iki
+        tarih, dahil edilen Aktif İlan için Tahmini İşbaşı Tarihi zorunludur.
+        İşbaşı ve ayrılış ayları gün oranıyla hesaplanır.
       </small>
       <label className="switchrow">
         <Switch

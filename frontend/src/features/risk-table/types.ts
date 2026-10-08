@@ -1,10 +1,11 @@
 import type { RefObject } from "react";
-import type { Data, Risk } from "../../model";
+import type { Data, Risk, RiskSystem } from "../../model";
 export type RiskLeaveGuard = () => Promise<boolean>;
 export type RiskUpdate = <K extends keyof Risk>(key: K, value: Risk[K]) => void;
 export type RiskTableProps = {
   leaveGuardRef: RefObject<RiskLeaveGuard | null>;
   risks: Risk[];
+  systems: RiskSystem[];
   revisions: Record<string, number>;
   onEditingChange: (editing: boolean) => void;
   onReload: () => Promise<Data>;

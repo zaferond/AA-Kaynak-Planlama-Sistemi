@@ -14,6 +14,11 @@ import { publicUser, fail, admin } from "./auth.mjs";
 import { SqlJsAdapter } from "./adapters/sqljs.mjs";
 import { MssqlAdapter, sqlConfig } from "./adapters/mssql.mjs";
 import { ident } from "./tables.mjs";
+import {
+  DIRECTORY_REVISION_KEY,
+  directoryRevision,
+  directoryCatalogChanged,
+} from "../shared/directory-policy.ts";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export class Store {
   constructor(options = {}) {
@@ -174,6 +179,10 @@ export class Store {
       const beforeUsers = auditUsers ? await this.users(c) : [];
       const result = await fn(data, active, c, generation);
       const valid = validate(data, { previousResources: before.resources });
+      // Same transaction/lock as the command. Imports and cascading team edits
+      // participate too; unrelated risk/project/allocation writes do not.
+      if (directoryCatalogChanged(before, valid))
+        valid.revisions[DIRECTORY_REVISION_KEY] = directoryRevision(before) + 1;
       const changeSet = await this.persist(before, valid, c);
       const afterUsers = auditUsers ? await this.users(c) : [];
       await c.upsert(

@@ -80,9 +80,6 @@
   background: #315b7d;
   color: #f5f9fc;
 }
-.app.tab-plan .capacitystrip > summary:hover {
-  background: #294f70;
-}
 .app.tab-plan .capacitystrip[open] > summary {
   background: #274b6b;
   border-bottom: 1px solid #22415e;

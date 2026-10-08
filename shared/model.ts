@@ -1,6 +1,7 @@
 import type { RiskCategory, RiskStatus, RiskStrategy } from "./risk-policy.ts";
 import type { Account } from "./access.ts";
 import catalog from "./catalog.json" with { type: "json" };
+import { initialRiskSystems } from "./risk-system-seed.ts";
 import {
   normalizeResourceDate,
   resourceMonthFraction,
@@ -64,6 +65,7 @@ export type Risk = {
   category: RiskCategory;
   reportedAt: string;
   system: string;
+  systemId?: string;
   description: string;
   cause: string;
   actionPlan: string;
@@ -82,6 +84,7 @@ export type Risk = {
   createdAt: string;
   updatedAt: string;
 };
+export type RiskSystem = { id: string; name: string };
 export type Version = {
   effective: string;
   team: string;
@@ -103,6 +106,7 @@ export type Data = {
   teams: Team[];
   projects: Project[];
   risks?: Risk[];
+  riskSystems?: RiskSystem[];
   resources: Resource[];
   allocations: Record<string, number>;
   actualAllocations?: Record<string, number>;
@@ -195,6 +199,7 @@ export function migrate(data: Data): Data {
   d.actualWorkedHours ??= {};
   d.actualPercentEntries ??= {};
   d.risks ??= [];
+  d.riskSystems ??= structuredClone(initialRiskSystems) as RiskSystem[];
   if ((d.catalogVersion || 0) < 1) {
     for (const t of d.teams) t.catalog = false;
     for (const t of catalog.teams) {

@@ -126,14 +126,14 @@ export default function HeadcountTrend({
                 x2={width - 26}
                 y1={y(fraction * maxValue)}
                 y2={y(fraction * maxValue)}
-                stroke="#e4ebf2"
+                stroke="var(--report-grid-color, #e4ebf2)"
               />
               <text
                 x={47}
                 y={y(fraction * maxValue) + 4}
                 textAnchor="end"
                 fontSize={11}
-                fill="#6d8092"
+                fill="var(--report-label-color, #6d8092)"
               >
                 {fmt(fraction * maxValue)}
               </text>
@@ -158,7 +158,7 @@ export default function HeadcountTrend({
             <path
               d={path(actual)}
               fill="none"
-              stroke="#1766bd"
+              stroke="var(--report-current-color, #1766bd)"
               strokeWidth={3}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -185,7 +185,11 @@ export default function HeadcountTrend({
                   cx={x(index)}
                   cy={y(value ?? 0)}
                   r={4.5}
-                  fill={point.future ? "#bf772f" : "#1766bd"}
+                  fill={
+                    point.future
+                      ? "#bf772f"
+                      : "var(--report-current-color, #1766bd)"
+                  }
                   stroke="#fff"
                   strokeWidth={1.5}
                 >
@@ -204,7 +208,7 @@ export default function HeadcountTrend({
                     y={225}
                     textAnchor="middle"
                     fontSize={11}
-                    fill="#61758b"
+                    fill="var(--report-label-color, #61758b)"
                   >
                     {point.month.slice(5)}/{point.month.slice(2, 4)}
                   </text>
@@ -217,8 +221,9 @@ export default function HeadcountTrend({
       <p className="chartnote">
         Her nokta, seçili dönemin başlangıcından ilgili aya kadar aylık çalışan
         sayısının ortalamasıdır. İşbaşı ve ayrılış aylarında kişi sayısı
-        çalışılan gün oranında hesaplanır. Gelecek ay hesabına Aktif İlanlar
-        İşbaşı Tarihi’nden itibaren eklenir.
+        çalışılan gün oranında hesaplanır. Tahmini İşbaşı Tarihi girilmiş Aktif
+        İlanlar, kaynak planlamasına dahil seçiminden bağımsız olarak bu
+        tarihten itibaren gelecek ayların öngörüsüne eklenir.
       </p>
     </section>
   );

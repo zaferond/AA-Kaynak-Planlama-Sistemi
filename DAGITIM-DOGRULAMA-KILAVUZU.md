@@ -15,6 +15,20 @@ Paket başka bilgisayara taşınırken kaynak/build girdileri, iki package manif
 
 Manifest yoksa paketi güvenilir kaynak kopyasından yeniden derleyin. Fark varsa önce doğru proje klasörünü seçin; eski ve yeni kopyaları sessizce birleştirmeyin. Doğrulama komutu dosyaları düzeltmez. Geçerli eski manifest başarısız yeni build'de korunur; değişmiş kaynak veya çıktı ile birlikte doğrulamadan geçmez. Manifest Git'e eklenmez; dağıtım paketi ile saklanır.
 
+## Yeni paket üretme ve açılış koruması
+
+```sh
+npm run deploy:package -- --output "../AA-dagitim"
+```
+
+Çıktının üst dizini mevcut olmalı, hedef klasör henüz var olmamalıdır. Komut doğrulanmış manifestteki kaynak/build dosyalarını kopyalar, kopya hash'lerini ve kaynak paketini tekrar doğrular. Mevcut hedefi birleştirmez; kaynak içine çıktı oluşturmaz. Hata halinde yalnız kendisinin oluşturduğu yeni klasörü kaldırır. `.env`, `data`, `node_modules`, Git, test kayıtları ve kişisel dosyalar taşınmaz. Test/CI geliştirme deposunda çalıştırılır; paket çalışma ve yeniden derleme girdilerini içerir.
+
+Mac ve Windows başlatıcıları aynı setup → kilitli bağımlılık kurulumu → build → start sırasını kullanır. Mevcut `.env` setup tarafından korunur. Servis için hazırlanmış pakette `npm start` build çalıştırmaz; eksik manifest, değişmiş kaynak veya site çıktısı varsa Store oluşturulmadan önce çıkış yapar. Bu kontrol, veritabanı açılmasını engeller; geçerli paketin normal veritabanı işlemlerini değiştirmez.
+
+Kaynak deposu ile çalışma klasörünü ayırın. Yeni paketin doğrulanması mevcut çalışan klasörün otomatik güncellenmesi anlamına gelmez. Kurum güncellemesinde veri/ayar yedeği, kontrollü dosya aktarımı ve restart kabulü ayrıca uygulanır; `.env` veya veritabanını yeni paketle değiştirmeyin.
+
+7 Ekim 2026'da yeni geçici klasör, boş npm cache, gerçek kilitli kurulum/build ve sentetik SQL.js üzerinde Mac başlatıcı kabulü, yeniden açılışta ayar/veri koruma ve eski paket reddi başarılıdır. Güncel Windows/Native MSSQL ve kurum ortamı kabulü ayrıca beklemektedir.
+
 ## Kanıtın sınırları
 
 - Git commit alanı bilgi amaçlıdır; Git bulunmayan paketlerde `null` olabilir. Kaynakta commit edilmemiş değişiklik olabilir; kabul sürümü için temiz Git ağacı ve CI kaydı ayrıca kontrol edilir.

@@ -119,6 +119,49 @@ export async function checkTimelineLayers(f) {
         exact: true,
       })
       .click();
+    await f.check(
+      "projects: selected and keyboard-focused phases stay behind frozen labels in monthly and weekly views",
+      async () => {
+        const heading = page.locator('[data-project-heading="p-a"]');
+        for (const weekly of [false, true]) {
+          await page
+            .getByRole("switch", {
+              name: "Haftalık proje görünümü",
+              exact: true,
+            })
+            .setChecked(weekly);
+          const phase = heading
+            .locator('td[data-phase-cell="p-a|2026-01"] .phasebutton')
+            .first();
+          await page
+            .locator(".projectmatrix")
+            .locator("..")
+            .evaluate((c) => {
+              c.scrollLeft = 0;
+              c.scrollTop = 0;
+            });
+          await phase.click();
+          assert.equal(await phase.getAttribute("aria-pressed"), "true");
+          await phase.evaluate((el) => el.setAttribute("data-layer-probe", ""));
+          await coveredByFrozenLabel(page, heading, phase);
+          assert.equal(await phase.getAttribute("aria-pressed"), "true");
+          await phase.focus();
+          await coveredByFrozenLabel(page, heading, phase);
+          await phase.evaluate((el) => el.removeAttribute("data-layer-probe"));
+          await heading.locator(".project-expand").focus();
+          assert.equal(
+            await heading
+              .locator("td")
+              .first()
+              .evaluate((el) => getComputedStyle(el).position),
+            "sticky",
+          );
+        }
+        await page
+          .getByRole("switch", { name: "Haftalık proje görünümü", exact: true })
+          .uncheck();
+      },
+    );
     await page
       .getByRole("switch", { name: "Detayları Göster", exact: true })
       .check();

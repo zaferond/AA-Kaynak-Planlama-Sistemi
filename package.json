@@ -30,7 +30,8 @@
     "db:verify-backup": "node scripts/data-maintenance.mjs verify",
     "db:prepare-recovery": "node scripts/data-maintenance.mjs prepare-recovery",
     "audit:archive": "node scripts/data-maintenance.mjs archive",
-    "audit:retention": "node scripts/data-maintenance.mjs retention"
+    "audit:retention": "node scripts/data-maintenance.mjs retention",
+    "deploy:package": "node scripts/package-deployment.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",
@@ -39,6 +40,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "playwright": "1.63.0"
+    "playwright": "1.63.0",
+    "typescript": "5.9.3"
   }
 }

@@ -5,6 +5,7 @@ import {
 } from "../../../../shared/planning-dates.ts";
 import { monthLabel } from "../../format.ts";
 import type { WorkspaceDensity } from "../WorkspaceNavigation";
+
 export type WorkspaceFilterValues = {
   leads: string[];
   teamIds: string[];

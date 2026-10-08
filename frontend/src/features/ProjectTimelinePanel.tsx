@@ -1,18 +1,23 @@
-import { useMemo, type MouseEvent } from "react";
+import { useMemo, useState, useLayoutEffect, type MouseEvent } from "react";
+import { Switch } from "@/components/ui/switch";
 import { Table, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   TimelineMonthHead,
   TimelineYearRow,
   yearBandClass,
 } from "../components/TimelineHeaders";
-import Pager from "../Pager";
 import ProjectTimelineRows from "../ProjectTimelineRows";
 import type { Project, Milestone } from "../model";
 import { projectTimelinePeriods } from "../timeline-periods";
 
 import type { usePhaseGrid } from "./usePhaseGrid";
 import { useProjectRowOrder } from "./useProjectRowOrder";
-type DragMode = "move" | "start" | "end";
+import type { ProjectTimelineRowProps } from "./project-timeline-types";
+import WorkspaceFilterSummary, {
+  type SummaryFilter,
+} from "./workspace/WorkspaceFilterSummary";
+import { useWindowedSections } from "./workspace/useWindowedSections";
+import { useViewportWorkspace } from "./workspace/useViewportWorkspace";
 export type ProjectTimelineActions = {
   onReorderProject: (
     sourceId: string,
@@ -42,24 +47,13 @@ export type ProjectTimelineActions = {
     milestone: Milestone,
     rangeIndex: number,
   ) => void;
-  onChangeMilestoneRange: (
-    project: Project,
-    milestone: Milestone,
-    rangeIndex: number,
-    mode: DragMode,
-    days: number,
-  ) => Promise<void>;
-  onChangeMilestoneNote: (
-    project: Project,
-    milestone: Milestone,
-    rangeIndex: number,
-    noteIndex: number,
-    mode: DragMode,
-    days: number,
-  ) => Promise<void>;
+  onChangeMilestoneRange: ProjectTimelineRowProps["onChangeMilestoneRange"];
+  onChangeMilestoneNote: ProjectTimelineRowProps["onChangeMilestoneNote"];
 };
 type Props = {
+  filters: SummaryFilter[];
   projects: Project[];
+  revisions: Record<string, number>;
   months: string[];
   weekly: boolean;
   todayDate: string;
@@ -67,6 +61,8 @@ type Props = {
   monthWidth: number;
   density: "detail" | "compact" | "overview";
   expandAllDetails: boolean;
+  onDetailsChange: (show: boolean) => void;
+  onWeeklyChange: (show: boolean) => void;
   isAdmin: boolean;
   saving: boolean;
   page: number;
@@ -76,7 +72,9 @@ type Props = {
 };
 
 export default function ProjectTimelinePanel({
+  filters,
   projects,
+  revisions,
   months,
   weekly,
   todayDate,
@@ -84,6 +82,8 @@ export default function ProjectTimelinePanel({
   monthWidth,
   density,
   expandAllDetails,
+  onDetailsChange,
+  onWeeklyChange,
   isAdmin,
   saving,
   page,
@@ -91,6 +91,11 @@ export default function ProjectTimelinePanel({
   actions,
   selection,
 }: Props) {
+  const viewportRef = useViewportWorkspace();
+  const [expandedProjects, setExpandedProjects] = useState<
+    Record<string, boolean>
+  >({});
+  useLayoutEffect(() => setExpandedProjects({}), [expandAllDetails]);
   const ordering = useProjectRowOrder(
     projects,
     isAdmin,
@@ -105,24 +110,90 @@ export default function ProjectTimelinePanel({
     () => [...new Set(projectPeriods.map((period) => period.year))],
     [projectPeriods],
   );
-  return (
-    <section className="panel">
-      <Pager
-        total={projects.length}
-        page={page}
-        size={20}
-        onChange={onPageChange}
-        label="Proje"
+  const sections = projects.map((p) => ({
+    key: p.id,
+    height:
+      82 +
+      ((expandedProjects[p.id] ?? expandAllDetails)
+        ? 44 + (p.milestones || []).length * 100
+        : 0),
+    render: () => (
+      <ProjectTimelineRows
+        key={p.id}
+        windowKey={p.id}
+        expanded={expandedProjects[p.id] ?? expandAllDetails}
+        onExpandedChange={(value) =>
+          setExpandedProjects((old) => ({ ...old, [p.id]: value }))
+        }
+        project={p}
+        projectRevision={revisions["project:" + p.id] || 0}
+        ordering={ordering.rowProps(p.id)}
+        phaseSelection={selection}
+        periods={projectPeriods}
+        density={density}
+        expandAllDetails={expandAllDetails}
+        isAdmin={!!isAdmin}
+        saving={saving}
+        onProjectInfo={() => actions.onProjectInfo(p)}
+        onPhaseClick={(m) => actions.onPhaseClick(p, m)}
+        onPhaseContextMenu={(event, m) =>
+          actions.onPhaseContextMenu(event, p, m)
+        }
+        onAddMilestone={() => actions.onAddMilestone(p)}
+        onEditMilestone={(milestone) => actions.onEditMilestone(p, milestone)}
+        onDeleteMilestone={(milestone) =>
+          void actions.onDeleteMilestone(p, milestone)
+        }
+        onReorderMilestone={(sourceId, targetId, after) =>
+          void actions.onReorderMilestone(p, sourceId, targetId, after)
+        }
+        onMilestoneContextMenu={(event, milestone, rangeIndex) =>
+          actions.onMilestoneContextMenu(event, p, milestone, rangeIndex)
+        }
+        onChangeMilestoneRange={actions.onChangeMilestoneRange}
+        onChangeMilestoneNote={actions.onChangeMilestoneNote}
       />
-      <div className="phase-selection-hint">
-        Sürükleyerek ayları seçin · Sağ tık: metin / renk kopyala ve yapıştır ·
-        Çift tık veya Enter: düzenle
-        {isAdmin && <span>Proje sırası: soldaki tutamacı sürükleyin</span>}
-        {weekly && " · Aşama bilgileri ay bazında seçilir"}
-        {!!selection.cells.length && (
-          <strong>{selection.cells.length} hücre seçili</strong>
-        )}
+    ),
+  }));
+  const windowedRows = useWindowedSections(
+    selection.tableRef,
+    sections,
+    projectPeriods.length + 1,
+    `${weekly}|${density}|${months.join("|")}|${expandAllDetails}`,
+  );
+  return (
+    <section className="panel workspace-dock" ref={viewportRef}>
+      <WorkspaceFilterSummary filters={filters} />
+      <div
+        className="workspace-view-options"
+        role="group"
+        aria-label="Görünüm seçenekleri"
+      >
+        <label>
+          <Switch
+            size="sm"
+            checked={expandAllDetails}
+            onCheckedChange={onDetailsChange}
+          />
+          Detayları Göster
+        </label>
+        <label
+          title={
+            isAdmin
+              ? "Detay kutusunu basılı tutup taşıyın; uçlarından günlük adımlarla genişletip daraltın."
+              : "Detay açıklamalar kendi haftalarında gösterilir; gerçek tarihleri kutularda görünür."
+          }
+        >
+          <Switch
+            size="sm"
+            checked={weekly}
+            onCheckedChange={onWeeklyChange}
+            aria-label="Haftalık proje görünümü"
+          />
+          Haftalık Görünüm
+        </label>
       </div>
+      <div className="workspace-record-count">{projects.length} proje</div>
       <Table
         stickyProjectRows
         ref={selection.tableRef}
@@ -174,62 +245,7 @@ export default function ProjectTimelinePanel({
             )}
           </TableRow>
         </TableHeader>
-        {projects.slice(page * 20, (page + 1) * 20).map((p) => (
-          <ProjectTimelineRows
-            key={p.id}
-            project={p}
-            ordering={ordering.rowProps(p.id)}
-            phaseSelection={selection}
-            periods={projectPeriods}
-            density={density}
-            expandAllDetails={expandAllDetails}
-            isAdmin={!!isAdmin}
-            saving={saving}
-            onProjectInfo={() => actions.onProjectInfo(p)}
-            onPhaseClick={(m) => actions.onPhaseClick(p, m)}
-            onPhaseContextMenu={(event, m) =>
-              actions.onPhaseContextMenu(event, p, m)
-            }
-            onAddMilestone={() => actions.onAddMilestone(p)}
-            onEditMilestone={(milestone) =>
-              actions.onEditMilestone(p, milestone)
-            }
-            onDeleteMilestone={(milestone) =>
-              void actions.onDeleteMilestone(p, milestone)
-            }
-            onReorderMilestone={(sourceId, targetId, after) =>
-              void actions.onReorderMilestone(p, sourceId, targetId, after)
-            }
-            onMilestoneContextMenu={(event, milestone, rangeIndex) =>
-              actions.onMilestoneContextMenu(event, p, milestone, rangeIndex)
-            }
-            onChangeMilestoneRange={(milestone, rangeIndex, mode, days) =>
-              actions.onChangeMilestoneRange(
-                p,
-                milestone,
-                rangeIndex,
-                mode,
-                days,
-              )
-            }
-            onChangeMilestoneNote={(
-              milestone,
-              rangeIndex,
-              noteIndex,
-              mode,
-              days,
-            ) =>
-              actions.onChangeMilestoneNote(
-                p,
-                milestone,
-                rangeIndex,
-                noteIndex,
-                mode,
-                days,
-              )
-            }
-          />
-        ))}
+        {windowedRows}
       </Table>
       {!projects.length && (
         <p className="emptymsg">Seçili filtrelere uygun proje bulunamadı.</p>

@@ -343,7 +343,9 @@
   text-overflow: clip;
   outline: 2px solid #b5d5fc;
 }
-.app .planning-grid td:focus-within {
+/* Only numeric allocation editors need an elevated focus layer.
+   Project buttons must stay behind the frozen identification column. */
+.app .planning-grid td:has(.cell input:focus) {
   position: relative;
   z-index: 9;
 }

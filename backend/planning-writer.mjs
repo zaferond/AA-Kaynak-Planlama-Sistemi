@@ -2,6 +2,7 @@ import { dataChanges } from "./change-set.mjs";
 import { table, tables, ident } from "./tables.mjs";
 import { entityCollections as kinds } from "../shared/entity-kinds.ts";
 import { fail } from "./auth.mjs";
+import { DIRECTORY_REVISION_KEY } from "../shared/directory-policy.ts";
 
 // SQL persistence only; Store.mutate owns validation, revisions, audit and commit.
 export async function persistPlanningSnapshot(before, next, c) {
@@ -32,6 +33,13 @@ export async function persistPlanningSnapshot(before, next, c) {
   );
   const up = (kind) =>
     changed[kind].filter((x) => x.value !== undefined).map((x) => x.value);
+  await c.upsert("risk_systems", up("riskSystem"));
+  await c.remove(
+    "risk_systems",
+    changed.riskSystem
+      .filter((x) => x.value === undefined)
+      .map((x) => ({ id: x.id })),
+  );
   await c.upsert(
     "teams",
     up("team").map((t) => ({
@@ -245,38 +253,50 @@ export async function persistPlanningSnapshot(before, next, c) {
       )
       .map((k) => {
         const revision = next.revisions[k];
+        if (k === DIRECTORY_REVISION_KEY)
+          return {
+            kind: "allocation",
+            record_id: "@directory:shared",
+            revision,
+          };
         const i = k.indexOf(":");
-        return k.startsWith("risk:")
-          ? { kind: "allocation", record_id: "@risk:" + k.slice(5), revision }
-          : k.startsWith("actual:")
-            ? {
-                kind: "allocation",
-                record_id: "@actual:" + k.slice(7),
-                revision,
-              }
-            : k.startsWith("workedHours:")
+        return k.startsWith("riskSystem:")
+          ? {
+              kind: "allocation",
+              record_id: "@riskSystem:" + k.slice(11),
+              revision,
+            }
+          : k.startsWith("risk:")
+            ? { kind: "allocation", record_id: "@risk:" + k.slice(5), revision }
+            : k.startsWith("actual:")
               ? {
                   kind: "allocation",
-                  record_id: "@worked:" + k.slice(12),
+                  record_id: "@actual:" + k.slice(7),
                   revision,
                 }
-              : k.startsWith("calendar:")
+              : k.startsWith("workedHours:")
                 ? {
                     kind: "allocation",
-                    record_id: "@calendar:" + k.slice(9),
+                    record_id: "@worked:" + k.slice(12),
                     revision,
                   }
-                : k.startsWith("personDay:")
+                : k.startsWith("calendar:")
                   ? {
                       kind: "allocation",
-                      record_id: "@person:" + k.slice(10),
+                      record_id: "@calendar:" + k.slice(9),
                       revision,
                     }
-                  : {
-                      kind: k.slice(0, i),
-                      record_id: k.slice(i + 1),
-                      revision,
-                    };
+                  : k.startsWith("personDay:")
+                    ? {
+                        kind: "allocation",
+                        record_id: "@person:" + k.slice(10),
+                        revision,
+                      }
+                    : {
+                        kind: k.slice(0, i),
+                        record_id: k.slice(i + 1),
+                        revision,
+                      };
       }),
   );
   await c.remove(

@@ -1,5 +1,6 @@
 import type { usePortalData } from "../usePortalData";
-import type { Project, Milestone } from "../../model";
+import type { Project } from "../../model";
+import type { ProjectSnapshot } from "../project-snapshot";
 import { prepareProjectReorder } from "../project-order-commands";
 import {
   prepareMilestoneReorder,
@@ -64,8 +65,8 @@ export function createProjectActions({
     }
   }
   async function changeMilestoneRange(
-    project: Project,
-    milestone: Milestone,
+    snapshot: ProjectSnapshot,
+    milestoneId: string,
     rangeIndex: number,
     mode: "move" | "start" | "end",
     days: number,
@@ -73,7 +74,7 @@ export function createProjectActions({
     if (!data || !isAdmin || saving || days === 0) return;
     try {
       await batch([
-        prepareTimelineChange(data, project.id, milestone.id, {
+        prepareTimelineChange(snapshot, milestoneId, {
           target: "range",
           rangeIndex,
           mode,
@@ -96,8 +97,8 @@ export function createProjectActions({
     }
   }
   async function changeMilestoneNote(
-    project: Project,
-    milestone: Milestone,
+    snapshot: ProjectSnapshot,
+    milestoneId: string,
     rangeIndex: number,
     noteIndex: number,
     mode: "move" | "start" | "end",
@@ -106,7 +107,7 @@ export function createProjectActions({
     if (!data || !isAdmin || saving || days === 0) return;
     try {
       await batch([
-        prepareTimelineChange(data, project.id, milestone.id, {
+        prepareTimelineChange(snapshot, milestoneId, {
           target: "note",
           rangeIndex,
           noteIndex,

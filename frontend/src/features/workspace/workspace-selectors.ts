@@ -1,9 +1,9 @@
 import type { Data, Team, Project } from "../../model.ts";
 import type { Principal } from "../../access.ts";
 import { visibleActualInScope } from "../../../../shared/actual-visibility.ts";
-import { groupPage, type Metric } from "../../metrics.ts";
+import { groupPage, sumCapacityMetrics, type Metric } from "../../metrics.ts";
 import { monthLabel } from "../../format.ts";
-import type { WorkspaceFilterValues } from "./workspace-options.ts";
+import { type WorkspaceFilterValues } from "./workspace-options.ts";
 export function selectWorkspaceScope(
   data: Data | null,
   user: Principal | null,
@@ -90,16 +90,7 @@ export function workspaceMetric(
   tids: string[],
   month: string,
 ): Metric {
-  return tids.reduce(
-    (sum, id) => {
-      const cell = cache[id + "|" + month] || { current: 0, total: 0 };
-      return {
-        current: sum.current + cell.current,
-        total: sum.total + cell.total,
-      };
-    },
-    { current: 0, total: 0 },
-  );
+  return sumCapacityMetrics(cache, tids, month);
 }
 export function selectWorkspacePages(
   teams: Team[],
@@ -111,21 +102,15 @@ export function selectWorkspacePages(
     projectPage,
   }: { count: number; view: string; planPage: number; projectPage: number },
 ) {
-  const planPageSize = Math.max(20, Math.min(100, Math.floor(1200 / count)));
-  const effectivePlanPage = Math.min(
-    planPage,
-    Math.max(0, Math.ceil((teams.length * projects.length) / planPageSize) - 1),
-  );
+  const planPageSize = Math.max(1, teams.length * projects.length);
+  const effectivePlanPage = 0;
   const planGroups = groupPage(
     view === "team" ? teams.length : projects.length,
     view === "team" ? projects.length : teams.length,
-    effectivePlanPage,
+    0,
     planPageSize,
   );
-  const effectiveProjectPage = Math.min(
-    projectPage,
-    Math.max(0, Math.ceil(projects.length / 20) - 1),
-  );
+  const effectiveProjectPage = 0;
   const visiblePlanRows = planGroups.flatMap((group) =>
     group.inners.map((index) =>
       view === "team"

@@ -8,6 +8,10 @@ import { Store } from "../backend/store.mjs";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 import { activeTeamMembers } from "../shared/model.ts";
+import {
+  DIRECTORY_REVISION_KEY,
+  directoryRevision,
+} from "../shared/directory-policy.ts";
 
 async function setup(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-record-http-"));
@@ -266,6 +270,191 @@ test("manual leadership and team HTTP CRUD survives reload/reopen and guards rol
   } finally {
     await reopened.close();
   }
+});
+
+test("leadership catalog revision ignores unrelated writes but rejects concurrent catalog drafts and survives reopen", async (t) => {
+  const { store, env, admin, request, user, state, write } = await setup(t);
+  const change = (body, auth = admin) => request("/leaders/change", body, auth);
+  const initial = await state();
+  assert.equal(directoryRevision(initial.data), 0);
+  const create = { action: "create", name: "Catalog test", catalogRevision: 0 };
+  for (const role of ["normal", "manager"]) {
+    const auth = await user("catalog-" + role, role);
+    assert.equal((await change(create, auth)).status, 403);
+  }
+  assert.equal(
+    (await change({ action: "create", name: "Missing token" })).status,
+    400,
+  );
+  assert.equal((await change({ ...create, catalogRevision: -1 })).status, 400);
+  assert.equal((await change(create)).status, 200);
+  const opened = await state();
+  assert.equal(directoryRevision(opened.data), 1);
+  const project = {
+    id: "catalog-project",
+    name: "Unrelated project",
+    start: "2026-01",
+    end: "2026-12",
+    phases: {},
+    phaseColors: {},
+    milestones: [],
+  };
+  assert.equal(
+    (await write([{ kind: "project", id: project.id, value: project }])).status,
+    200,
+  );
+  assert.equal(
+    (await write([{ kind: "risk", id: project.id, value: risk(project.id) }]))
+      .status,
+    200,
+  );
+  const team = opened.data.teams.find((team) => team.lead);
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "allocation",
+          id: team.id + "|" + project.id + "|2026-01",
+          value: 1,
+        },
+      ])
+    ).status,
+    200,
+  );
+  assert.equal(directoryRevision((await state()).data), 1);
+  const draft = {
+    action: "update",
+    name: create.name,
+    managerName: "Saved manager",
+    generation: opened.generation,
+    catalogRevision: 1,
+  };
+  const legacy = { ...draft };
+  delete legacy.catalogRevision;
+  const legacyConflict = await change(legacy);
+  assert.equal(legacyConflict.status, 409);
+  assert.match(legacyConflict.json.error, /Uygulama verileri değişti/);
+  assert.equal((await change(draft)).status, 200);
+  assert.equal(directoryRevision((await state()).data), 2);
+  const teamOpened = await state();
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "team",
+          id: team.id,
+          value: { ...team, name: team.name + " updated" },
+        },
+      ])
+    ).status,
+    200,
+  );
+  assert.equal(directoryRevision((await state()).data), 3);
+  const stale = await change({
+    ...draft,
+    managerName: "Stale manager",
+    catalogRevision: directoryRevision(teamOpened.data),
+  });
+  assert.equal(stale.status, 409);
+  assert.match(stale.json.error, /Liderlik veya takım listesi değişti/);
+  assert.equal(
+    (await state()).data.leaderManagers[create.name],
+    "Saved manager",
+  );
+  const revision = directoryRevision((await state()).data);
+  const secondAdmin = await user("second-admin");
+  const results = await Promise.all([
+    change({
+      action: "create",
+      name: "Concurrent A",
+      catalogRevision: revision,
+    }),
+    change(
+      { action: "create", name: "Concurrent B", catalogRevision: revision },
+      secondAdmin,
+    ),
+  ]);
+  assert.deepEqual(results.map((result) => result.status).sort(), [200, 409]);
+  const current = await state();
+  assert.equal(directoryRevision(current.data), revision + 1);
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    assert.equal(directoryRevision((await reopened.read()).data), revision + 1);
+  } finally {
+    await reopened.close();
+  }
+});
+
+test("catalog revisions resist failed batches, delete/recreate ABA and identical JSON restore", async (t) => {
+  const { admin, request, state, write } = await setup(t);
+  const change = (body) => request("/leaders/change", body, admin);
+  const start = await state();
+  const team = start.data.teams.find((team) => team.lead);
+  const failed = await write([
+    { kind: "team", id: team.id, value: { ...team, name: "Must roll back" } },
+    { kind: "project", id: "invalid", value: { id: "wrong" } },
+  ]);
+  assert.equal(failed.status, 400);
+  assert.deepEqual(await state(), start);
+  const create = { action: "create", name: "ABA catalog", catalogRevision: 0 };
+  assert.equal((await change(create)).status, 200);
+  assert.equal(
+    (await change({ action: "delete", name: create.name, catalogRevision: 1 }))
+      .status,
+    200,
+  );
+  assert.equal((await change({ ...create, catalogRevision: 2 })).status, 200);
+  assert.equal(
+    (
+      await change({
+        action: "update",
+        name: create.name,
+        managerName: "Old draft",
+        catalogRevision: 1,
+      })
+    ).status,
+    409,
+  );
+  const before = await state();
+  const backup = (await request("/backup", undefined, admin)).json.data;
+  backup.revisions[DIRECTORY_REVISION_KEY] = 999999;
+  assert.equal(
+    (
+      await request(
+        "/restore",
+        { data: backup, generation: before.generation },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  const after = await state();
+  assert.equal(
+    directoryRevision(after.data),
+    directoryRevision(before.data) + 1,
+  );
+  assert.equal(
+    (
+      await change({
+        action: "delete",
+        name: create.name,
+        catalogRevision: directoryRevision(before.data),
+      })
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await change({
+        action: "delete",
+        name: create.name,
+        catalogRevision: directoryRevision(after.data),
+      })
+    ).status,
+    200,
+  );
 });
 
 test("manual team moves preserve allocations and historical resource links; used records cannot be deleted", async (t) => {

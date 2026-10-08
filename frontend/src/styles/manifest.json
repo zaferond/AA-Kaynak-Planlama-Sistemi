@@ -10,6 +10,7 @@
   "planning/grid.css",
   "resources/toolbar.css",
   "reports/topics-and-charts.css",
+  "reports/resource-planning.css",
   "projects/timeline.css",
   "resources/editors.css",
   "workspace/navigation-layout.css",
@@ -28,5 +29,7 @@
   "shared/member-badges.css",
   "shared/today-line-and-entries.css",
   "calendar/work-calendar.css",
-  "shared/project-groups.css"
+  "shared/project-groups.css",
+  "workspace/military-theme.css",
+  "workspace/viewport-tables.css"
 ]

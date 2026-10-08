@@ -3,9 +3,27 @@ import { httpConfig } from "./http-config.mjs";
 import { Store } from "./store.mjs";
 import { createApp } from "./app.mjs";
 import { hashPassword } from "./auth.mjs";
+import { fileURLToPath } from "node:url";
+import { verifyDeployment } from "../scripts/deployment-manifest.mjs";
 const env = process.env;
 // Validate public HTTP settings before opening or bootstrapping any database.
 const { origin, port, host, trustedProxies } = httpConfig(env);
+// Reject mixed/stale packages before constructing or opening the database.
+try {
+  const verification = await verifyDeployment(
+    fileURLToPath(new URL("../", import.meta.url)),
+  );
+  if (!verification.ok)
+    throw Error(
+      "Kaynaklar ve derleme eşleşmiyor. Doğru paketi seçip npm run build çalıştırın.",
+    );
+} catch (error) {
+  console.error(
+    "Başlatılamadı: dağıtım doğrulanamadı. " +
+      (error.code ? "Paket dosyaları okunamadı." : error.message),
+  );
+  process.exit(1);
+}
 const store = new Store();
 try {
   await store.connect();

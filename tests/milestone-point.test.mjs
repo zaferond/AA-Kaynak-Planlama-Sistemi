@@ -1,5 +1,6 @@
 import { captureEditorRevisions } from "../frontend/src/features/editor-revisions.ts";
 import test from "node:test";
+import { captureProjectSnapshot } from "../frontend/src/features/project-snapshot.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -120,7 +121,7 @@ test("editor appends point, color paste preserves kind/date, empty or range-shap
   );
   assert.equal(c.value.milestones[1].displayKind, "milestone");
   const colored = prepareMilestoneColorPaste(
-    data,
+    captureProjectSnapshot(data.projects[0], data.revisions["project:p"] || 0),
     { projectId: "p", milestoneId: "m", rangeIndex: 0 },
     "purple",
   ).value.milestones[0];

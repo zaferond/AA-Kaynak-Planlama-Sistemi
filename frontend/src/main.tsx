@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { ArrowRight, Eye, EyeOff, LockKeyhole, UserRound } from "lucide-react";
-import { SYSTEM_NAME } from "./settings";
+import { SYSTEM_NAME, UI_THEME } from "./settings";
 import Portal from "./App";
 import { login, observeSessionChanges, resumeRemembered } from "./storage";
-
-const LOGIN_NAME = "Askeri Araçlar Kaynak Yönetimi Sistemi";
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -78,8 +76,8 @@ function App() {
     };
   }, []);
   useEffect(() => {
-    document.title = ready ? SYSTEM_NAME : LOGIN_NAME;
-  }, [ready]);
+    document.title = SYSTEM_NAME;
+  }, []);
 
   if (ready) return <Portal key={sessionKey} />;
 
@@ -115,7 +113,7 @@ function App() {
             alt="Otokar"
           />
           <div className="auth-brand-content">
-            <h1>{LOGIN_NAME}</h1>
+            <h1>{SYSTEM_NAME}</h1>
             <p>
               Proje, takım ve çalışan kaynaklarını tek çalışma alanında yönetin.
             </p>
@@ -210,4 +208,5 @@ function App() {
   );
 }
 
+document.documentElement.dataset.theme = UI_THEME;
 createRoot(document.getElementById("root")!).render(<App />);

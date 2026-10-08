@@ -1,6 +1,9 @@
 import { useMemo } from "react";
 import type { Metric } from "./metrics";
-import { buildMonthlyShortageTrend } from "./monthly-shortage-trend";
+import {
+  buildMonthlyShortageTrend,
+  summarizeMonthlyShortage,
+} from "./monthly-shortage-trend";
 
 const numberFormat = new Intl.NumberFormat("tr-TR", {
   maximumFractionDigits: 2,
@@ -31,10 +34,8 @@ export default function MonthlyShortageTrend({
     () => buildMonthlyShortageTrend(capacity, teamIds, months),
     [capacity, teamKey, months],
   );
-  const periodAverage = points.length
-    ? points.reduce((sum, point) => sum + point.average, 0) / points.length
-    : 0;
-  const top = Math.max(1, ...points.map((point) => point.average));
+  const summary = summarizeMonthlyShortage(points);
+  const top = Math.max(1, ...points.map((point) => point.total));
   const step = Math.pow(10, Math.floor(Math.log10(top / 4)));
   const tick = Math.ceil(top / (4 * step)) * step;
   const maxValue = tick * 4;
@@ -60,28 +61,39 @@ export default function MonthlyShortageTrend({
     <section className="panel trend monthly-shortage-trend">
       <div className="panelhead">
         <div>
-          <h2>Aylık Ortalama Eksik Kaynaklar</h2>
+          <h2>Aylık Eksik Kaynak Sayısı</h2>
           <p>
             {filterLabel} · {teamIds.length} takım
+            {points.length > 0 && (
+              <>
+                {" "}
+                · {monthLabel(points[0].month)} –{" "}
+                {monthLabel(points[points.length - 1].month)} ·{" "}
+                {summary.monthCount} ay
+              </>
+            )}
           </p>
         </div>
         <div className="shortage-summary">
-          <span>Dönem Ortalaması</span>
+          <span>Aylık Ortalama Eksik Kaynak</span>
           <strong>
-            {fmt(periodAverage)} <small>kişi eşdeğeri / takım</small>
+            {fmt(summary.average)} <small>kişi eşdeğeri</small>
           </strong>
+          <small>
+            {fmt(summary.total)} kişi-ay / {summary.monthCount} ay
+          </small>
         </div>
       </div>
       {teamIds.length && points.length ? (
         <div className="chartscroll">
           <svg
             role="img"
-            aria-label="Aylık ortalama eksik kaynaklar"
+            aria-label="Aylık eksik kaynak sayısı"
             width={width}
             height={height}
             viewBox={`0 0 ${width} ${height}`}
           >
-            <title>Aylık ortalama eksik kaynaklar</title>
+            <title>Aylık eksik kaynak sayısı</title>
             {[0, 1, 2, 3, 4].map((index) => (
               <g key={index}>
                 <line
@@ -89,14 +101,14 @@ export default function MonthlyShortageTrend({
                   x2={right}
                   y1={y(index * tick)}
                   y2={y(index * tick)}
-                  stroke="#e4ebf2"
+                  stroke="var(--report-grid-color, #e4ebf2)"
                 />
                 <text
                   x={left - 10}
                   y={y(index * tick) + 4}
                   textAnchor="end"
                   fontSize={11}
-                  fill="#6d8092"
+                  fill="var(--report-label-color, #6d8092)"
                 >
                   {fmt(index * tick)}
                 </text>
@@ -109,16 +121,15 @@ export default function MonthlyShortageTrend({
                 <g key={point.month}>
                   <rect
                     x={x - barWidth / 2}
-                    y={y(point.average)}
+                    y={y(point.total)}
                     width={barWidth}
-                    height={Math.max(0, baseline - y(point.average))}
+                    height={Math.max(0, baseline - y(point.total))}
                     rx={3}
-                    fill="#527ca9"
+                    fill="var(--report-shortage-color, #527ca9)"
                   >
                     <title>
-                      {label} · Ortalama eksik kaynak: {fmt(point.average)} ·
-                      Toplam eksik kaynak: {fmt(point.total)} · Takım sayısı:{" "}
-                      {point.teamCount}
+                      {label} · Eksik kaynak: {fmt(point.total)} kişi eşdeğeri ·
+                      Takım sayısı: {point.teamCount}
                     </title>
                   </rect>
                   {(index % tickStep === 0 || index === points.length - 1) && (
@@ -127,7 +138,7 @@ export default function MonthlyShortageTrend({
                       y={239}
                       textAnchor="middle"
                       fontSize={11}
-                      fill="#61758b"
+                      fill="var(--report-label-color, #61758b)"
                     >
                       {point.month.slice(5)}/{point.month.slice(2, 4)}
                     </text>
@@ -143,9 +154,11 @@ export default function MonthlyShortageTrend({
         </p>
       )}
       <p className="chartnote">
-        Her takımın aylık eksik kaynağı, planlanan tahsislerin aktif kaynağı
-        aşan kısmıdır. Seçili takımların eksikleri toplanıp takım sayısına
-        bölünür; bir takımın fazlası başka takımın açığını kapatmaz.
+        Sütunlar, seçili liderlik ve takımların aylık net eksik kaynağını kişi
+        eşdeğeri olarak gösterir: toplam dağıtılan kaynak − toplam aktif kaynak.
+        Sonuç sıfırın altındaysa eksik kaynak 0 gösterilir. Dönem ortalaması,
+        aylık eksik kaynakların toplamının seçilen ay sayısına bölünmesiyle
+        hesaplanır; eksik olmayan aylar da hesaba katılır.
       </p>
     </section>
   );

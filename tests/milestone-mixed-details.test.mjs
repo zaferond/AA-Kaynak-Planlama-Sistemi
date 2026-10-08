@@ -12,6 +12,9 @@ import {
 } from "../shared/milestone-ranges.ts";
 import { applyChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
+import { captureProjectSnapshot } from "../frontend/src/features/project-snapshot.ts";
+const snapshot = (data) =>
+  captureProjectSnapshot(data.projects[0], data.revisions["project:p"] || 0);
 import { prepareTimelineChange } from "../frontend/src/features/project-timeline-commands.ts";
 import { projectTimelinePeriods } from "../frontend/src/timeline-periods.ts";
 import { weeklyNoteLayout } from "../frontend/src/weekly-note-bars.ts";
@@ -118,7 +121,7 @@ test("points can share a duration bar's interior, endpoints and another point's 
 test("dragging and report editing move a point inside a sibling bar; extending a bar past a point also saves", () => {
   const data = fixture();
   const originalBar = milestoneRanges(data.projects[0].milestones[0])[1];
-  const command = prepareTimelineChange(data, "p", "m", {
+  const command = prepareTimelineChange(snapshot(data), "m", {
     target: "range",
     rangeIndex: 0,
     mode: "move",
@@ -156,7 +159,7 @@ test("dragging and report editing move a point inside a sibling bar; extending a
     ["2026-01-12", "2026-01-12"],
   );
 
-  const extended = prepareTimelineChange(fixture(), "p", "m", {
+  const extended = prepareTimelineChange(snapshot(fixture()), "m", {
     target: "range",
     rangeIndex: 1,
     mode: "end",
@@ -218,7 +221,7 @@ test("one critical topic holds independent point/range/point details; normal sib
 });
 test("dragging a first point past a range preserves each kind/name/color and moves the column storage kind", () => {
   const data = fixture();
-  const c = prepareTimelineChange(data, "p", "m", {
+  const c = prepareTimelineChange(snapshot(data), "m", {
     target: "range",
     rangeIndex: 0,
     mode: "move",

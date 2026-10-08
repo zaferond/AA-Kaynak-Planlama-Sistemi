@@ -21,10 +21,14 @@ import { monthLabel, dateLabel } from "./features/timeline-labels";
 
 export default function ProjectTimelineRows({
   project,
+  projectRevision,
   ordering,
   periods,
   density,
   expandAllDetails,
+  windowKey,
+  expanded: controlledExpanded,
+  onExpandedChange,
   isAdmin,
   saving,
   onProjectInfo,
@@ -39,7 +43,12 @@ export default function ProjectTimelineRows({
   onChangeMilestoneRange,
   onChangeMilestoneNote,
 }: ProjectTimelineRowProps) {
-  const [expanded, setExpanded] = useState(expandAllDetails);
+  const [localExpanded, setLocalExpanded] = useState(expandAllDetails);
+  const expanded = controlledExpanded ?? localExpanded;
+  const setExpanded = (value: boolean) => {
+    setLocalExpanded(value);
+    onExpandedChange?.(value);
+  };
   const [hoveredPhase, setHoveredPhase] = useState("");
   const [draggedTopic, setDraggedTopic] = useState("");
   const [dropTarget, setDropTarget] = useState<{
@@ -53,7 +62,7 @@ export default function ProjectTimelineRows({
   useEffect(clearTopicDrag, [project.milestones, expanded, saving]);
   const phaseTooltipRef = useRef<HTMLDivElement>(null);
   const phasePointerRef = useRef({ x: 0, y: 0 });
-  useLayoutEffect(() => setExpanded(expandAllDetails), [expandAllDetails]);
+  useLayoutEffect(() => setLocalExpanded(expandAllDetails), [expandAllDetails]);
   useEffect(() => setHoveredPhase(""), [periods]);
   useLayoutEffect(() => {
     if (hoveredPhase)
@@ -74,7 +83,11 @@ export default function ProjectTimelineRows({
   }
   const milestones = project.milestones || [];
   return (
-    <TableBody className="project-row-group" data-project-group={project.id}>
+    <TableBody
+      className="project-row-group"
+      data-project-group={project.id}
+      data-window-key={windowKey}
+    >
       <TableRow
         data-project-heading={project.id}
         className={
@@ -113,7 +126,7 @@ export default function ProjectTimelineRows({
                 (expanded ? "gizle" : "göster")
               }
               aria-expanded={expanded}
-              onClick={() => setExpanded((value) => !value)}
+              onClick={() => setExpanded(!expanded)}
             >
               {expanded ? <ChevronDown size={14} /> : <Plus size={14} />}
             </button>
@@ -451,6 +464,7 @@ export default function ProjectTimelineRows({
                   {ranges.length ? (
                     <MilestoneTrack
                       project={project}
+                      projectRevision={projectRevision}
                       milestone={milestone}
                       ranges={ranges}
                       bars={bars}

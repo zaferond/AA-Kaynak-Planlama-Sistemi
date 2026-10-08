@@ -31,9 +31,9 @@ export const riskColumns = [
   },
   {
     key: "system",
-    editor: "text",
+    editor: "system",
     label: "Sistem / alt sistem",
-    width: 175,
+    width: 240,
     group: "record",
     text: true,
   },

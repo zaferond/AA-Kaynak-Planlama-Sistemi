@@ -15,6 +15,7 @@ import WorkspaceHeader, { FullPlanHeader } from "./features/WorkspaceHeader";
 import WorkspaceNavigation from "./features/WorkspaceNavigation";
 import WorkspaceFilters from "./features/WorkspaceFilters";
 import PlannedAllocationPanel from "./features/PlannedAllocationPanel";
+import WorkspaceFilterSummary from "./features/workspace/WorkspaceFilterSummary";
 import { useProjectMenus } from "./features/useProjectMenus";
 import ProjectContextMenus from "./features/ProjectContextMenus";
 import {
@@ -28,6 +29,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ClipboardPaste, Copy, Info } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import AbsenceReport from "./AbsenceReport";
+import ResourcePlanningCharts from "./features/resource-reports/ResourcePlanningCharts";
 import AccessPanel from "./AccessPanel";
 import PortalEditorDialog from "./features/PortalEditorDialog";
 import RemainingResourceTable, {
@@ -323,10 +325,7 @@ export default function Portal() {
   const projectMenus = useProjectMenus({
     data,
     months,
-    visibleProjects: projects.slice(
-      effectiveProjectPage * 20,
-      (effectiveProjectPage + 1) * 20,
-    ),
+    visibleProjects: projects,
     active: tab === "projects" && !editor && !phaseDetail,
     selectionKey: JSON.stringify([
       effectiveProjectPage,
@@ -459,12 +458,36 @@ export default function Portal() {
       setError((e as Error).message);
     }
   }
-  const editTeams =
-    data?.teams.filter(
-      (t) =>
-        t.catalog ||
-        (editor?.kind === "resource" && t.id === editor.version.team),
-    ) || [];
+  const editTeams = data?.teams || [];
+  const workspaceFilters = data && (
+    <WorkspaceFilters
+      data={data}
+      user={user}
+      tab={tab}
+      leads={leads}
+      setLeads={setLeads}
+      teamIds={teamIds}
+      setTeamIds={setTeamIds}
+      projectIds={projectIds}
+      setProjectIds={setProjectIds}
+      personIds={personIds}
+      setPersonIds={setPersonIds}
+      leaderItems={leaderItems}
+      availableTeams={availableTeams}
+      availablePeople={availablePeople}
+      start={start}
+      setStart={setStart}
+      count={count}
+      setCount={setCount}
+      density={density}
+      setDensity={setDensity}
+      filterResetKey={filterResetKey}
+      resetFilters={resetFilters}
+      saving={saving}
+      resetAll={resetAll}
+      notice={notice}
+    />
+  );
   return (
     <div
       className={
@@ -529,40 +552,33 @@ export default function Portal() {
             </div>
           ) : (
             <>
-              <WorkspaceFilters
-                data={data}
-                user={user}
-                tab={tab}
-                leads={leads}
-                setLeads={setLeads}
-                teamIds={teamIds}
-                setTeamIds={setTeamIds}
-                projectIds={projectIds}
-                setProjectIds={setProjectIds}
-                personIds={personIds}
-                setPersonIds={setPersonIds}
-                leaderItems={leaderItems}
-                availableTeams={availableTeams}
-                availablePeople={availablePeople}
-                start={start}
-                setStart={setStart}
-                count={count}
-                setCount={setCount}
-                density={density}
-                setDensity={setDensity}
-                filterResetKey={filterResetKey}
-                resetFilters={resetFilters}
-                saving={saving}
-                resetAll={resetAll}
-                showAllActual={showAllActual}
-                setShowAllActual={setShowAllActual}
-                setExpandedActualTeams={setExpandedActualTeams}
-                showProjectDetails={showProjectDetails}
-                setShowProjectDetails={setShowProjectDetails}
-                projectWeekly={projectWeekly}
-                setProjectWeekly={setProjectWeekly}
-                notice={notice}
-              />
+              {tab === "overview" ? (
+                <div className="reports-filter-dock">
+                  {workspaceFilters}
+                  <WorkspaceFilterSummary
+                    title="Uygulanan Filtreler"
+                    ariaLabel="Raporlarda uygulanan filtreler"
+                    className="reports-filter-summary"
+                    filters={[
+                      ...capacityFilters.filter(
+                        (filter) => filter.label !== "Proje",
+                      ),
+                      {
+                        label: "Bitiş Ayı",
+                        values: [monthLabel(months.at(-1)!)],
+                        active: true,
+                      },
+                      {
+                        label: "Dönem",
+                        values: [months.length + " ay"],
+                        active: true,
+                      },
+                    ]}
+                  />
+                </div>
+              ) : (
+                workspaceFilters
+              )}
               {(isAdmin || isManager) && tab === "plan" && (
                 <TabsContent value="plan">
                   <PlannedAllocationPanel
@@ -588,6 +604,10 @@ export default function Portal() {
                     projectTotals={projectTotals}
                     actualTotals={actualTotals}
                     showAllActual={showAllActual}
+                    onShowAllActualChange={(show) => {
+                      setShowAllActual(show);
+                      setExpandedActualTeams([]);
+                    }}
                     expandedActualTeams={expandedActualTeams}
                     onExpandedTeamsChange={setExpandedActualTeams}
                     currentTeamMembers={currentTeamMembers}
@@ -610,8 +630,31 @@ export default function Portal() {
               {tab === "projects" && (
                 <TabsContent value="projects">
                   <ProjectTimelinePanel
+                    filters={[
+                      ...capacityFilters.filter(
+                        (filter) =>
+                          filter.label === "Proje" ||
+                          filter.label === "Başlangıç Ayı",
+                      ),
+                      {
+                        label: "Bitiş Ayı",
+                        values: [monthLabel(months.at(-1)!)],
+                        active: true,
+                      },
+                      {
+                        label: "Dönem",
+                        values: [months.length + " ay"],
+                        active: true,
+                      },
+                      {
+                        label: "Görünüm",
+                        values: [projectWeekly ? "Haftalık" : "Aylık"],
+                        active: true,
+                      },
+                    ]}
                     selection={projectMenus.phaseGrid}
                     projects={projects}
+                    revisions={data.revisions}
                     months={months}
                     weekly={projectWeekly}
                     todayDate={todayDate}
@@ -619,6 +662,8 @@ export default function Portal() {
                     monthWidth={monthWidth}
                     density={density}
                     expandAllDetails={showProjectDetails}
+                    onDetailsChange={setShowProjectDetails}
+                    onWeeklyChange={setProjectWeekly}
                     isAdmin={!!isAdmin}
                     saving={saving}
                     page={effectiveProjectPage}
@@ -649,6 +694,11 @@ export default function Portal() {
                     data={data}
                     user={user!}
                     onEditingChange={onRiskEditingChange}
+                    onDirectoryEditingChange={setDirectoryEditing}
+                    onCatalogSaved={(next, message) => {
+                      setData(next);
+                      setNotice(message);
+                    }}
                     onReload={async () => {
                       const latest = await readLocal();
                       setData(latest);
@@ -764,6 +814,7 @@ export default function Portal() {
                       setResourceIds([]);
                     }}
                   />
+                  <AbsenceReport data={data} teamIds={ids} months={months} />
                 </TabsContent>
               )}
               {(isAdmin || isManager) && tab === "critical" && (
@@ -819,13 +870,19 @@ export default function Portal() {
                           : "Tümü")
                     }
                   />
+                  <ResourcePlanningCharts
+                    actualTotals={actualTotals}
+                    data={data}
+                    capacity={cache}
+                    teamIds={ids}
+                    months={months}
+                  />
                   <HeadcountTrend
                     data={data}
                     teamIds={ids}
                     leads={leads}
                     months={months}
                   />
-                  <AbsenceReport data={data} teamIds={ids} months={months} />
                 </TabsContent>
               )}
               {isAdmin && tab === "access" && (

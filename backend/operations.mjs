@@ -21,10 +21,16 @@ import {
 } from "./domain/index.mjs";
 import { entityCollections as kinds } from "../shared/entity-kinds.ts";
 import { orderedProjects } from "../shared/project-order.ts";
-import { teamSchema } from "../shared/server-domain.ts";
+import { teamSchema, riskSystemSchema } from "../shared/server-domain.ts";
+import {
+  assertUniqueRiskSystemName,
+  riskUsesSystem,
+} from "../shared/risk-system-policy.ts";
 import {
   assertUniqueLeaderName,
   assertUniqueTeamName,
+  DIRECTORY_REVISION_KEY,
+  directoryRevision,
 } from "../shared/directory-policy.ts";
 const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
 const changesSchema = z
@@ -34,6 +40,7 @@ const changesSchema = z
         "team",
         "project",
         "risk",
+        "riskSystem",
         "resource",
         "allocation",
         "actual",
@@ -178,7 +185,42 @@ export function stageChanges(d, u, input) {
       id.split("|")[2] > currentPlanningMonth()
     )
       fail(400, "Gelecek aylara gerçekleşen kaynak dağılımı girilemez.");
-    if (kind === "risk") {
+    if (kind === "riskSystem") {
+      d.riskSystems ??= [];
+      const previous = d.riskSystems.find((item) => item.id === id);
+      if (operation) {
+        if (!previous) fail(404, "Sistem / alt sistem bulunamadı.");
+        if ((d.risks || []).some((risk) => riskUsesSystem(risk, previous)))
+          fail(
+            409,
+            "Risk kayıtlarında kullanılan sistem / alt sistem silinemez. Önce ilgili risklerin seçimini değiştirin.",
+          );
+        d.riskSystems = d.riskSystems.filter((item) => item.id !== id);
+      } else {
+        const next = riskSystemSchema.parse(value);
+        if (next.id !== id)
+          fail(400, "Sistem / alt sistem kimliği eşleşmiyor.");
+        try {
+          assertUniqueRiskSystemName(d.riskSystems, next);
+        } catch (error) {
+          fail(400, error.message);
+        }
+        if (previous && previous.name !== next.name) {
+          for (const risk of d.risks || [])
+            if (riskUsesSystem(risk, previous)) {
+              risk.system = next.name;
+              risk.systemId = id;
+              risk.updatedAt = new Date().toISOString();
+              d.revisions["risk:" + risk.id] =
+                (d.revisions["risk:" + risk.id] || 0) + 1;
+            }
+        }
+        d.riskSystems = [
+          ...d.riskSystems.filter((item) => item.id !== id),
+          next,
+        ];
+      }
+    } else if (kind === "risk") {
       d.risks ??= [];
       if (operation) {
         if (!existingRisk) fail(404, "Risk kaydı bulunamadı.");
@@ -413,19 +455,37 @@ export function stageChanges(d, u, input) {
     d.projects = orderedProjects(d.projects);
   return d;
 }
-const leaderChangeSchema = z.object({
-  action: z.enum(["create", "rename", "update", "delete"]),
-  name: z.string().trim().min(1).max(200),
-  newName: z.string().trim().min(1).max(200).optional(),
-  managerName: z.string().trim().max(200).optional(),
-  generation: z.number().int().nonnegative(),
-});
+const leaderChangeSchema = z
+  .object({
+    action: z.enum(["create", "rename", "update", "delete"]),
+    name: z.string().trim().min(1).max(200),
+    newName: z.string().trim().min(1).max(200).optional(),
+    managerName: z.string().trim().max(200).optional(),
+    generation: z.number().int().nonnegative().optional(),
+    catalogRevision: z.number().int().nonnegative().optional(),
+  })
+  .refine(
+    (change) =>
+      change.catalogRevision !== undefined || change.generation !== undefined,
+    "Sürüm bilgisi eksik.",
+  );
 export async function applyLeaderChange(d, u, input, c, generation) {
   admin(u);
   const previousResources = structuredClone(d.resources);
   const change = leaderChangeSchema.parse(input);
-  if (change.generation !== generation)
-    fail(409, "Liderlik listesi değişti. Yenileyip tekrar deneyin.");
+  if (change.catalogRevision !== undefined) {
+    if (change.catalogRevision !== directoryRevision(d))
+      fail(
+        409,
+        "Liderlik veya takım listesi değişti. Taslağınız korundu; güncel listeyi yükleyip tekrar deneyin.",
+      );
+  } else if (change.generation !== generation) {
+    // Older open clients keep their broader guard during rollout.
+    fail(
+      409,
+      "Uygulama verileri değişti. Taslağınız korundu; sayfayı yenileyip tekrar deneyin.",
+    );
+  }
   if (change.action === "create") {
     try {
       assertUniqueLeaderName(d.leaders || [], change.name);
@@ -648,6 +708,8 @@ export function restore(d, u, backup) {
       next.revisions[prefix + id] = (d.revisions[prefix + id] || 0) + 1;
   }
   next.revisions["calendar:shared"] = (d.revisions["calendar:shared"] || 0) + 1;
+  // Even an identical JSON restore invalidates previously opened catalog drafts.
+  next.revisions[DIRECTORY_REVISION_KEY] = directoryRevision(d) + 1;
   // An absent optional archive in the backup must clear the current archive.
   if (!Object.hasOwn(next, "legacyArchive")) delete d.legacyArchive;
   Object.assign(d, next);

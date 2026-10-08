@@ -1,4 +1,5 @@
 import { readWorkspaceStyles } from "./styles.mjs";
+import { SYSTEM_NAME, UI_THEME } from "./src/branding.ts";
 import { build } from "vite";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -67,7 +68,7 @@ const css = [
 ].join("\n");
 const cssName = await asset("app", "css", Buffer.from(css));
 
-const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Askeri Araçlar Kaynak Yönetimi Sistemi</title><link rel="stylesheet" href="/assets/${cssName}"><script defer src="/assets/${jsName}"></script></head><body><div id="root"></div><noscript>JavaScript etkin olmalıdır.</noscript></body></html>`;
+const html = `<!doctype html><html lang="tr" data-theme="${UI_THEME}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${SYSTEM_NAME}</title><link rel="stylesheet" href="/assets/${cssName}"><script defer src="/assets/${jsName}"></script></head><body><div id="root"></div><noscript>JavaScript etkin olmalıdır.</noscript></body></html>`;
 await fs.writeFile(path.join(site, "index.html"), html);
 await fs.writeFile(path.join(site, "index.html.gz"), gzipSync(html));
 await writeDeploymentManifest(packageRoot, sourceHashes);

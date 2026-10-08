@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import {
   Popover,
@@ -22,7 +22,9 @@ export function Picker({
   empty?: string;
 }) {
   const [open, setOpen] = useState(false),
-    [query, setQuery] = useState("");
+    [query, setQuery] = useState(""),
+    [modal, setModal] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const closePicker = () => {
     setOpen(false);
     setQuery("");
@@ -30,11 +32,18 @@ export function Picker({
   const shown = items.filter((i) => fold(i.name).includes(fold(query)));
   const selected = items.filter((i) => value.includes(i.id));
   return (
-    <div className={"pick" + (value.length ? " filter-active" : "")}>
+    <div
+      ref={pickerRef}
+      className={"pick" + (value.length ? " filter-active" : "")}
+    >
       <span>{label}</span>
       <Popover
         open={open}
+        modal={modal}
         onOpenChange={(v) => {
+          // A dialog locks scrolling outside itself. Its portalled picker needs
+          // its own modal scroll boundary so wheel/touch scrolling stays usable.
+          if (v) setModal(!!pickerRef.current?.closest('[role="dialog"]'));
           setOpen(v);
           if (!v) setQuery("");
         }}
@@ -56,7 +65,12 @@ export function Picker({
             <ChevronDown size={15} />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="pickerpanel" align="start">
+        <PopoverContent
+          className={"pickerpanel" + (single ? " pickerpanel-single" : "")}
+          align="start"
+          side="bottom"
+          collisionPadding={12}
+        >
           <div className="pickersearch">
             <Search size={16} />
             <input

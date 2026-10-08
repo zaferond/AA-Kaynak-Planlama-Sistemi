@@ -74,8 +74,10 @@ function Table({ className, todayDate, todayMonthsKey, stickyProjectRows, ...pro
       const progress=start&&end?((Date.parse(todayDate+'T12:00:00Z')-Date.parse(start+'T12:00:00Z'))/86400000+0.5)/((Date.parse(end+'T12:00:00Z')-Date.parse(start+'T12:00:00Z'))/86400000+1):todayMonthProgress(todayDate)
       const zoom=Number.parseFloat(getComputedStyle(document.documentElement).zoom)||1
       marker.style.left = `${(headerRect.left - containerRect.left + headerRect.width * progress)/zoom + container.scrollLeft}px`
-      marker.style.top = `${container.scrollTop}px`
-      marker.style.height = `${container.clientHeight}px`
+      // Keep the marker inside the content bounds. Following scrollTop would
+      // retain obsolete scroll space when rows are collapsed or filtered out.
+      marker.style.top = "0px"
+      marker.style.height = `${table.offsetHeight}px`
       marker.style.display = "block"
     }
     update()

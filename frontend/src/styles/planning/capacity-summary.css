@@ -23,9 +23,6 @@
 .app .capacitystrip > summary::-webkit-details-marker {
   display: none;
 }
-.app .capacitystrip > summary:hover {
-  background: #eaf3fd;
-}
 .app .capacitystrip > summary:focus-visible {
   outline: 2px solid #2674c2;
   outline-offset: -3px;

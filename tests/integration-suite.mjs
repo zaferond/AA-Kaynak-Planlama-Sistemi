@@ -69,6 +69,66 @@ export async function integrationSuite(store) {
       (await request("/data", undefined, 200, auth)).json;
     let state = await get();
     assert.equal(state.data.teams.length, 54);
+    assert.equal(state.data.riskSystems.length, 75);
+    const testSystem = {
+      id: "native-system-test",
+      name: "Test 'Sistem' & Alt Sistem",
+    };
+    await request("/changes", {
+      changes: [
+        {
+          kind: "riskSystem",
+          id: testSystem.id,
+          value: testSystem,
+          revision: 0,
+        },
+      ],
+    });
+    await request("/changes", {
+      changes: [
+        {
+          kind: "riskSystem",
+          id: testSystem.id,
+          value: { ...testSystem, name: "Güncel Alt Sistem" },
+          revision: 1,
+        },
+      ],
+    });
+    const catalog = (await get()).data;
+    assert.equal(
+      catalog.riskSystems.find((item) => item.id === testSystem.id).name,
+      "Güncel Alt Sistem",
+    );
+    assert.equal(catalog.revisions["riskSystem:" + testSystem.id], 2);
+    await request(
+      "/changes",
+      {
+        changes: [
+          {
+            kind: "riskSystem",
+            id: testSystem.id,
+            value: testSystem,
+            revision: 1,
+          },
+        ],
+      },
+      409,
+    );
+    await request("/changes", {
+      changes: [
+        {
+          kind: "riskSystem",
+          id: testSystem.id,
+          value: null,
+          operation: "delete",
+          revision: 2,
+        },
+      ],
+    });
+    assert.equal(
+      (await get()).data.riskSystems.some((item) => item.id === testSystem.id),
+      false,
+    );
     assert.equal(JSON.stringify(state).includes('"hash"'), false);
     const team = state.data.teams.find((t) => t.lead),
       other = state.data.teams.find((t) => t.lead && t.lead !== team.lead);

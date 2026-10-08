@@ -8,7 +8,7 @@ bash baslat-mac.sh
 
 Windows'ta `baslat-windows.cmd` dosyasını çalıştırın. Başlatıcı ilk giriş hesabını oluşturur, gerekli paketleri kurar ve arayüzü derler. Sonraki açılışlarda da aynı dosyayı kullanın.
 
-Dağıtım öncesinde `npm run build` ve `npm run deploy:verify` ile kaynak/derleme paketini doğrulayın. Komut veri tabanına bağlanmaz; ayrıntılar [dağıtım doğrulama kılavuzunda](DAGITIM-DOGRULAMA-KILAVUZU.md).
+Dağıtım öncesinde `npm run build` ve `npm run deploy:verify` ile kaynak/derleme paketini doğrulayın. Yeni, boş bir dağıtım klasörü üretmek için `npm run deploy:package -- --output "../AA-dagitim"` kullanın. Mevcut hedefe veya kaynak klasörüne paket yazılmaz; ayarlar, veritabanı ve bağımlılıklar pakete eklenmez. Doğrudan `npm start` da kaynak/derleme eşleşmesini veritabanını açmadan önce denetler. Doğrulama komutu veri tabanına bağlanmaz; ayrıntılar [dağıtım doğrulama kılavuzunda](DAGITIM-DOGRULAMA-KILAVUZU.md).
 
 Uygulama varsayılan olarak `http://127.0.0.1:3000` adresinde açılır. Aynı anda başka bir kopyası çalışıyorsa önce onu durdurun. Kurulum ve veritabanı seçenekleri için [başlangıç kılavuzuna](ONCE-BUNU-OKUYUN.md) ve [MSSQL geçiş notlarına](IT-MSSQL-GECIS.md) bakın.
 
@@ -17,3 +17,7 @@ Uygulama varsayılan olarak `http://127.0.0.1:3000` adresinde açılır. Aynı a
 Giriş denemesi sınırı yerelde bellekte, MSSQL'de ortak veritabanında tutulur. Şema 29 geçişi, çok sunuculu kullanım ve güvenilen proxy ayarları için [giriş koruması kılavuzuna](GIRIS-KORUMASI-VE-PROXY.md) bakın. Native MSSQL ve Windows sentetik CI sonuçları [doğrulama raporunda](MSSQL-CI-DOGRULAMA-2026-10-04.md). Windows başlatma/servis ayrımı ve kalan kurum kabul işleri [Windows kılavuzunda](WINDOWS-BASLATMA-VE-SERVIS-KILAVUZU.md); adres/HTTPS koruması ve sentetik proxy testlerinin kapsamı [proxy/TLS raporunda](PROXY-TLS-DOGRULAMA-2026-10-04.md). Kurumun gerçek proxy/sertifika/ağ kabulü ayrı ortamda bekliyor.
 
 Commit'e bağlı Ubuntu/Windows kalite sonuçları ve kalıcı native MSSQL sonuç JSON'u [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) bulunur. Kurulum kılavuzlarındaki 2 Ekim native bekleme notları tarihsel kayıttır; 4 Ekim'de sentetik GitHub native koşusu başarılıdır, kurum kabulü ise ayrıdır.
+
+`npm run check:domain`, `shared/` altındaki kaynakların bağımlılık sınırlarını sözdizimi ağacıyla denetler. Root `npm ci` bu araç için TypeScript geliştirme bağımlılığını kurar; frontend kurulumu bu komut için gerekmez. İhlal varsa domain smoke testi yüklenmeden işlem durur. Kapsam ve sınırlar [5 Ekim düzeltme kaydında](MIMARI-GUVENLIK-DUZELTMELER-2026-10-05.md).
+
+Risk Sistem / Alt Sistem kataloğu, yönetim yetkileri, şema 31 ve doğrulamalar [özellik kaydında](RISK-SISTEM-KATALOGU-2026-10-05.md) açıklanır.

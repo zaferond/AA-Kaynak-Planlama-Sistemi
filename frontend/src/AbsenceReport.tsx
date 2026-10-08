@@ -1,3 +1,4 @@
+import { monthLabel } from "./format";
 import type { Data } from "./model";
 import { actualVersionAt } from "./model";
 import {
@@ -52,6 +53,11 @@ export default function AbsenceReport({
           <p>
             İzin aylık çalışma saatinden düşer; eğitim dağıtılan kaynak
             yüzdesine eklenir.
+          </p>
+          <p>
+            {months.length
+              ? `${monthLabel(months[0])} – ${monthLabel(months.at(-1)!)} · ${teamIds.length} takım · Üstteki liderlik, takım ve dönem filtreleri uygulanır.`
+              : "Dönem seçilmedi."}
           </p>
         </div>
         <div className="absence-report-summary">

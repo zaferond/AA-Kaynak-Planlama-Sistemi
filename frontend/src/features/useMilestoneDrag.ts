@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PointerEvent } from "react";
 import {
   changeMilestoneNoteDates,
+  milestoneRanges,
   noteDates,
   rangeNotes,
   resizeMilestoneRange,
@@ -11,9 +12,21 @@ import {
 import { calendarDayDifference, dateAtPeriodPosition } from "../milestone-bars";
 import { daysForWeekDrag, type WeeklyNoteBar } from "../weekly-note-bars";
 import type { MilestoneTrackProps } from "./project-timeline-types";
+import {
+  captureProjectSnapshot,
+  type ProjectSnapshot,
+} from "./project-snapshot";
+import type { Milestone } from "../model";
+import type { TimelinePeriod } from "../timeline-periods";
 
 type DragMode = "move" | "start" | "end";
+type DragInteraction = {
+  snapshot: ProjectSnapshot;
+  milestone: Milestone;
+  periods: TimelinePeriod[];
+};
 type DragState = {
+  interaction: DragInteraction;
   pointerId: number;
   rangeIndex: number;
   mode: DragMode;
@@ -37,6 +50,7 @@ type DragPreview = {
   y: number;
 };
 type NoteDragState = {
+  interaction: DragInteraction;
   pointerId: number;
   rangeIndex: number;
   noteIndex: number;
@@ -53,8 +67,8 @@ type NoteDragPreview = DragPreview & { noteIndex: number };
 type Props = Pick<
   MilestoneTrackProps,
   | "project"
+  | "projectRevision"
   | "milestone"
-  | "ranges"
   | "periods"
   | "isAdmin"
   | "saving"
@@ -66,8 +80,8 @@ type Props = Pick<
 };
 export function useMilestoneDrag({
   project,
+  projectRevision,
   milestone,
-  ranges,
   periods,
   isAdmin,
   saving,
@@ -80,6 +94,7 @@ export function useMilestoneDrag({
   const dragRef = useRef<DragState | null>(null);
   const noteDragRef = useRef<NoteDragState | null>(null);
   const suppressClickRef = useRef(false);
+  const [interaction, setInteraction] = useState<DragInteraction | null>(null);
   const [dragging, setDragging] = useState(false);
   const [preview, setPreview] = useState<DragPreview | null>(null);
   const [notePreview, setNotePreview] = useState<NoteDragPreview | null>(null);
@@ -90,6 +105,19 @@ export function useMilestoneDrag({
     },
     [],
   );
+  function captureInteraction() {
+    const snapshot = captureProjectSnapshot(project, projectRevision);
+    const capturedMilestone = snapshot.project.milestones?.find(
+      (item) => item.id === milestone.id,
+    );
+    return capturedMilestone
+      ? {
+          snapshot,
+          milestone: capturedMilestone,
+          periods: structuredClone(periods),
+        }
+      : null;
+  }
   function beginDrag(
     event: PointerEvent<HTMLElement>,
     rangeIndex: number,
@@ -98,21 +126,28 @@ export function useMilestoneDrag({
     if (
       !isAdmin ||
       saving ||
+      dragRef.current ||
+      noteDragRef.current ||
       event.pointerType !== "mouse" ||
       event.button !== 0 ||
       !trackRef.current
     )
       return;
+    const opening = captureInteraction();
+    if (!opening) return;
+    const range = milestoneRanges(opening.milestone)[rangeIndex];
+    if (!range) return;
     const rect = trackRef.current.getBoundingClientRect();
     const startDate = dateAtPeriodPosition(
       event.clientX,
       rect.left,
       rect.width,
-      periods,
+      opening.periods,
     );
     onBeginRange();
-    const range = ranges[rangeIndex];
+    setInteraction(opening);
     const drag: DragState = {
+      interaction: opening,
       pointerId: event.pointerId,
       rangeIndex,
       mode,
@@ -172,6 +207,11 @@ export function useMilestoneDrag({
     }
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const {
+      snapshot: { project },
+      milestone,
+      periods,
+    } = drag.interaction;
     const date = dateAtPeriodPosition(
       event.clientX,
       rect.left,
@@ -181,7 +221,7 @@ export function useMilestoneDrag({
     const days = calendarDayDifference(drag.startDate, date);
     drag.days = days;
     if (days) drag.moved = true;
-    const range = ranges[drag.rangeIndex];
+    const range = milestoneRanges(milestone)[drag.rangeIndex];
     const start =
       drag.mode === "end" ? range.start : shiftCalendarDate(range.start, days);
     const end =
@@ -227,7 +267,7 @@ export function useMilestoneDrag({
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.timer) clearTimeout(drag.timer);
-    if (drag.moved) {
+    if (drag.moved || projectRevision !== drag.interaction.snapshot.revision) {
       suppressClickRef.current = true;
       setTimeout(() => {
         suppressClickRef.current = false;
@@ -235,12 +275,14 @@ export function useMilestoneDrag({
     }
     if (drag.active && drag.days !== 0 && drag.valid)
       void onChangeMilestoneRange(
-        milestone,
+        drag.interaction.snapshot,
+        drag.interaction.milestone.id,
         drag.rangeIndex,
         drag.mode,
         drag.days,
       );
     dragRef.current = null;
+    setInteraction(null);
     setDragging(false);
     setPreview(null);
   }
@@ -250,6 +292,7 @@ export function useMilestoneDrag({
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.timer) clearTimeout(drag.timer);
     dragRef.current = null;
+    setInteraction(null);
     setDragging(false);
     setPreview(null);
   }
@@ -262,13 +305,21 @@ export function useMilestoneDrag({
     if (
       !isAdmin ||
       saving ||
+      dragRef.current ||
+      noteDragRef.current ||
       event.pointerType !== "mouse" ||
       event.button !== 0 ||
       !trackRef.current
     )
       return;
+    const opening = captureInteraction();
+    if (!opening) return;
+    const range = milestoneRanges(opening.milestone)[note.rangeIndex];
+    if (!range || !rangeNotes(range)[note.noteIndex]) return;
     onBeginNote();
+    setInteraction(opening);
     const drag: NoteDragState = {
+      interaction: opening,
       pointerId: event.pointerId,
       rangeIndex: note.rangeIndex,
       noteIndex: note.noteIndex,
@@ -316,6 +367,12 @@ export function useMilestoneDrag({
     if (Math.abs(event.clientX - drag.startX) > 5) drag.moved = true;
     const rect = trackRef.current?.getBoundingClientRect();
     if (!rect) return;
+    const {
+      snapshot: { project },
+      milestone,
+      periods,
+    } = drag.interaction;
+    const ranges = milestoneRanges(milestone);
     const days = daysForWeekDrag(
       drag.startX,
       event.clientX,
@@ -376,7 +433,7 @@ export function useMilestoneDrag({
     const drag = noteDragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.timer) clearTimeout(drag.timer);
-    if (drag.moved) {
+    if (drag.moved || projectRevision !== drag.interaction.snapshot.revision) {
       suppressClickRef.current = true;
       setTimeout(() => {
         suppressClickRef.current = false;
@@ -384,13 +441,15 @@ export function useMilestoneDrag({
     }
     if (drag.active && drag.days !== 0 && drag.valid)
       void onChangeMilestoneNote(
-        milestone,
+        drag.interaction.snapshot,
+        drag.interaction.milestone.id,
         drag.rangeIndex,
         drag.noteIndex,
         drag.mode,
         drag.days,
       );
     noteDragRef.current = null;
+    setInteraction(null);
     setNotePreview(null);
   }
 
@@ -399,10 +458,13 @@ export function useMilestoneDrag({
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.timer) clearTimeout(drag.timer);
     noteDragRef.current = null;
+    setInteraction(null);
     setNotePreview(null);
   }
 
   return {
+    interaction,
+    isInteracting: () => !!(dragRef.current || noteDragRef.current),
     isNoteDragging: () => !!noteDragRef.current,
     trackRef,
     suppressClickRef,

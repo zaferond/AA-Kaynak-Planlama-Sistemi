@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { applyChanges } from "../../backend/operations.mjs";
+import { applyChanges, applyLeaderChange } from "../../backend/operations.mjs";
 
 export async function checkDirectoryManagement(f) {
   const c = await f.client("root-admin"),
@@ -7,7 +7,69 @@ export async function checkDirectoryManagement(f) {
   const original = (await f.state()).projects.find((p) => p.id === "p-a");
   const leaderName = "QA Manual Leadership",
     teamName = "QA Manual Team";
-  const dialog = () => page.getByRole("dialog");
+  const dialog = () => page.locator('[data-slot="dialog-content"]');
+  const picker = () => page.locator('.pickerpanel[data-state="open"]');
+  async function openPicker(label) {
+    const trigger = dialog().getByRole("button", {
+      name: label,
+      exact: true,
+      includeHidden: true,
+    });
+    await trigger.click();
+    await picker().waitFor();
+    // Wait for the popup animation and Floating UI's first measurement.
+    await f.wait(async () => {
+      const anchor = await trigger.boundingBox(),
+        popup = await picker().boundingBox();
+      return (
+        anchor &&
+        popup &&
+        Math.abs(popup.x - anchor.x) <= 2 &&
+        Math.abs(popup.width - anchor.width) <= 2 &&
+        popup.y >= anchor.y + anchor.height &&
+        popup.y <= anchor.y + anchor.height + 8
+      );
+    }, label + " popup below its trigger");
+  }
+  async function choose(label, name) {
+    await openPicker(label);
+    await picker().getByRole("textbox").fill(name);
+    await picker().getByRole("button", { name, exact: true }).click();
+  }
+  async function scrollPicker(label) {
+    await openPicker(label);
+    const options = picker().locator(".pickeroptions");
+    assert(
+      await options.evaluate(
+        (element) => element.scrollHeight > element.clientHeight,
+      ),
+    );
+    await options.hover();
+    await page.mouse.wheel(0, 700);
+    await f.wait(
+      async () => (await options.evaluate((element) => element.scrollTop)) > 0,
+      label + " options scroll with the mouse wheel",
+    );
+    await page.mouse.wheel(0, 100000);
+    await f.wait(
+      async () =>
+        options.evaluate(
+          (element) =>
+            element.scrollTop >=
+            element.scrollHeight - element.clientHeight - 1,
+        ),
+      label + " final option is reachable",
+    );
+    const viewport = await options.boundingBox(),
+      last = await options.locator(".option").last().boundingBox();
+    assert(
+      last.y >= viewport.y &&
+        last.y + last.height <= viewport.y + viewport.height + 2,
+    );
+    await f.capture(page, "resource-picker-scroll-" + label);
+    await page.keyboard.press("Escape");
+    await picker().waitFor({ state: "hidden" });
+  }
   async function save(path, name, status = 200) {
     const response = page.waitForResponse(
       (r) => r.url().endsWith(path) && r.request().method() === "POST",
@@ -67,10 +129,86 @@ export async function checkDirectoryManagement(f) {
         assert.equal(team.catalog, true);
         await f.capture(page, "directory-team-management");
         await close();
+        await page
+          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
+          .click();
+        await page
+          .getByRole("button", { name: "Kaynak Ekle", exact: true })
+          .click();
+        await scrollPicker("Liderlik");
+        await scrollPicker("Takım");
+        await choose("Liderlik", leaderName);
+        await choose("Takım", teamName);
+        await dialog()
+          .getByRole("button", { name: "Close", exact: true })
+          .click();
+        await page.reload();
+        await page
+          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
+          .click();
+        await page
+          .getByRole("button", { name: "Kaynak Ekle", exact: true })
+          .click();
+        await choose("Liderlik", leaderName);
+        await choose("Takım", teamName);
+        await dialog()
+          .getByRole("button", { name: "Close", exact: true })
+          .click();
+        await page
+          .getByRole("tab", { name: "Liderlik ve Takımlar", exact: true })
+          .click();
       },
     );
     await f.check(
-      "directory: leader draft retains opening generation, explains conflict and reloads explicitly",
+      "directory: bulk resource pickers align below their triggers at 90 percent scale and retain keyboard/scroll behavior",
+      async () => {
+        await page
+          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
+          .click();
+        await page.getByLabel("Browser Employee seç", { exact: true }).check();
+        for (const width of [1800, 1280]) {
+          await page.setViewportSize({ width, height: 1050 });
+          await page
+            .getByRole("button", {
+              name: "Seçilenleri Toplu Düzenle",
+              exact: true,
+            })
+            .click();
+          await scrollPicker("Yeni takım");
+          await choose("Liderlik filtresi", leaderName);
+          await choose("Yeni takım", teamName);
+          await openPicker("Yeni statü");
+          await page.keyboard.press("Escape");
+          await picker().waitFor({ state: "hidden" });
+          assert.equal(await dialog().count(), 1);
+          await openPicker("Liderlik filtresi");
+          await page.evaluate(() => window.scrollBy(0, 40));
+          const trigger = await dialog()
+            .getByRole("button", {
+              name: "Liderlik filtresi",
+              exact: true,
+              includeHidden: true,
+            })
+            .boundingBox();
+          const popup = await picker().boundingBox();
+          assert(Math.abs(trigger.x - popup.x) <= 2);
+          await page.keyboard.press("Escape");
+          await f.capture(page, "resource-bulk-pickers-" + width);
+          await dialog()
+            .getByRole("button", { name: "Vazgeç", exact: true })
+            .click();
+        }
+        await page
+          .getByLabel("Browser Employee seç", { exact: true })
+          .uncheck();
+        await page.setViewportSize({ width: 1800, height: 1050 });
+        await page
+          .getByRole("tab", { name: "Liderlik ve Takımlar", exact: true })
+          .click();
+      },
+    );
+    await f.check(
+      "directory: unrelated project writes do not block a leader draft; catalog edits still require explicit reload",
       async () => {
         await page
           .getByRole("button", { name: "Liderlikleri Yönet", exact: true })
@@ -79,8 +217,8 @@ export async function checkDirectoryManagement(f) {
           .getByRole("button", { name: "Liderlik: " + leaderName, exact: true })
           .click();
         await dialog()
-          .getByLabel("Liderlik Adı", { exact: true })
-          .fill(leaderName + " Renamed");
+          .getByLabel("Liderlik Yöneticisi", { exact: true })
+          .fill("Local manager after project edit");
         const state = await f.state();
         await f.store.mutate(f.actor, (d, u) =>
           applyChanges(d, u, [
@@ -97,7 +235,60 @@ export async function checkDirectoryManagement(f) {
             new StorageEvent("storage", { key: "kaynak-planlama-offline-v1" }),
           ),
         );
-        await save("/api/leaders/change", "Değişiklikleri Kaydet", 409);
+        const unrelated = await save(
+          "/api/leaders/change",
+          "Değişiklikleri Kaydet",
+        );
+        const sent = unrelated.request().postDataJSON();
+        assert.equal(
+          sent.catalogRevision,
+          state.revisions["directory:shared"] || 0,
+        );
+        assert.equal(
+          (await f.state()).leaderManagers[leaderName],
+          "Local manager after project edit",
+        );
+        await f.wait(
+          async () =>
+            !(await dialog()
+              .getByRole("button", {
+                name: "Değişiklikleri Kaydet",
+                exact: true,
+              })
+              .isEnabled()),
+          "saved leader draft settled",
+        );
+        await dialog()
+          .getByLabel("Liderlik Adı", { exact: true })
+          .fill(leaderName + " Renamed");
+        const catalogState = await f.state();
+        await f.store.mutate(f.actor, (d, u, c, generation) =>
+          applyLeaderChange(
+            d,
+            u,
+            {
+              action: "update",
+              name: leaderName,
+              managerName: "Remote catalog manager",
+              catalogRevision: catalogState.revisions["directory:shared"] || 0,
+            },
+            c,
+            generation,
+          ),
+        );
+        const conflicted = await save(
+          "/api/leaders/change",
+          "Değişiklikleri Kaydet",
+          409,
+        );
+        assert.equal(
+          conflicted.request().postDataJSON().catalogRevision,
+          catalogState.revisions["directory:shared"],
+        );
+        assert.equal(
+          (await f.state()).leaderManagers[leaderName],
+          "Remote catalog manager",
+        );
         assert.equal(
           await dialog()
             .getByLabel("Liderlik Adı", { exact: true })

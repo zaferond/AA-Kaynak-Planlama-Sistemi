@@ -7,7 +7,7 @@ import compatibleFingerprints from "./compatible-migration-fingerprints.json" wi
 export const migrationCatalog = Object.freeze(
   [
     1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-    22, 24, 23, 25, 26, 27, 28, 29, 30,
+    22, 24, 23, 25, 26, 27, 28, 29, 30, 31,
   ].map((version) =>
     Object.freeze({
       version,
@@ -92,6 +92,7 @@ export async function migrationFingerprint(provider) {
     "schema-migrations.mjs",
     "../shared/actual-units.ts",
     "../shared/catalog.json",
+    "../shared/risk-system-seed.ts",
   ]) {
     full
       .update("\n" + name + "\n")

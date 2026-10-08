@@ -84,6 +84,15 @@ test("included active posting enters Active Resource at its start date and leave
     ),
   );
   assert.deepEqual(values(d).slice(0, 3), [0, 0, 0]);
+  const excludedForecast = buildHeadcountTrend(
+    d,
+    ["t"],
+    [],
+    ["2026-10"],
+    "2026-09",
+  );
+  assert.equal(excludedForecast[0].postings, 1);
+  assert.equal(excludedForecast[0].actualCount, 0);
   r = save(d, { ...r, versions: [{ ...r.versions[0], included: true }] });
   close(values(d)[1], (1.5 * 15) / 30);
   close(values(d)[2], 1.5);
@@ -95,6 +104,10 @@ test("included active posting enters Active Resource at its start date and leave
   );
   r = save(d, { ...r, versions: [{ ...r.versions[0], included: false }] });
   assert.deepEqual(values(d).slice(0, 3), [0, 0, 0]);
+  assert.deepEqual(
+    buildHeadcountTrend(d, ["t"], [], ["2026-10"], "2026-09"),
+    excludedForecast,
+  );
   assert.equal(buildCapacityIndex(d, ["2026-09"])["t|2026-09"].total, 0.25);
   r = save(d, { ...r, versions: [{ ...r.versions[0], included: true }] });
   close(values(d)[1], 0.75);

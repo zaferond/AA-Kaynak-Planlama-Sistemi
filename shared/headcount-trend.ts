@@ -49,8 +49,10 @@ export function buildHeadcountTrend(
       )
         resource.index++;
       const version = resource.versions[resource.index];
-      if (!version || !version.included || !selectedTeams.has(version.team))
-        continue;
+      if (!version || !selectedTeams.has(version.team)) continue;
+      // A dated active posting is a forecast even when excluded from planning.
+      // Working headcount keeps the existing planning-inclusion requirement.
+      if (!version.included && version.status !== "Aktif İlan") continue;
       if (
         selectedLeads.size &&
         !selectedLeads.has(version.lead || teamLeads.get(version.team) || "")

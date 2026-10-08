@@ -1,4 +1,4 @@
-import type { Project, Risk, Resource, Team } from "./model.ts";
+import type { Project, Risk, RiskSystem, Resource, Team } from "./model.ts";
 import type { ActualUnit, WorkCalendar, PersonDay } from "./actual-units.ts";
 export type ChangeValues = {
   allocation: number;
@@ -8,6 +8,7 @@ export type ChangeValues = {
   personDay: PersonDay;
   project: Project;
   risk: Risk;
+  riskSystem: RiskSystem;
   resource: Resource;
   team: Team;
 };

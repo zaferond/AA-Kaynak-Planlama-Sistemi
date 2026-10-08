@@ -1,6 +1,5 @@
 import type { Dispatch, SetStateAction } from "react";
 import { SlidersHorizontal } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 import {
   PLANNING_PERIODS as periods,
   MIN_PLANNING_MONTH,
@@ -37,13 +36,6 @@ type Props = {
   resetFilters: () => void;
   saving: boolean;
   resetAll: () => Promise<void>;
-  showAllActual: boolean;
-  setShowAllActual: (show: boolean) => void;
-  setExpandedActualTeams: SelectionSetter;
-  showProjectDetails: boolean;
-  setShowProjectDetails: (show: boolean) => void;
-  projectWeekly: boolean;
-  setProjectWeekly: (show: boolean) => void;
   notice: string;
 };
 export default function WorkspaceFilters({
@@ -71,13 +63,6 @@ export default function WorkspaceFilters({
   resetFilters,
   saving,
   resetAll,
-  showAllActual,
-  setShowAllActual,
-  setExpandedActualTeams,
-  showProjectDetails,
-  setShowProjectDetails,
-  projectWeekly,
-  setProjectWeekly,
   notice,
 }: Props) {
   const isAdmin = user?.role === "admin",
@@ -159,28 +144,23 @@ export default function WorkspaceFilters({
                   }}
                 />
               </label>
-              {tab !== "resources" && (
-                <label className="pick period">
-                  <span>Görünür Dönem</span>
-                  <select
-                    value={count}
-                    onChange={(e) => {
-                      setCount(Number(e.target.value));
-                      if (
-                        Number(e.target.value) !== 60 &&
-                        density === "overview"
-                      )
-                        setDensity("detail");
-                    }}
-                  >
-                    {periods.map((n) => (
-                      <option key={n} value={n}>
-                        {n < 12 ? "6 ay" : n / 12 + " yıl (" + n + " ay)"}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
+              <label className="pick period">
+                <span>Görünür Dönem</span>
+                <select
+                  value={count}
+                  onChange={(e) => {
+                    setCount(Number(e.target.value));
+                    if (Number(e.target.value) !== 60 && density === "overview")
+                      setDensity("detail");
+                  }}
+                >
+                  {periods.map((n) => (
+                    <option key={n} value={n}>
+                      {n < 12 ? "6 ay" : n / 12 + " yıl (" + n + " ay)"}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="filteractions">
               <button
@@ -204,46 +184,6 @@ export default function WorkspaceFilters({
               )}
             </div>
           </div>
-          {tab === "plan" && (
-            <div className="filteractions plan-filter-options">
-              <label className="bulk-toggle">
-                <Switch
-                  checked={showAllActual}
-                  onCheckedChange={(v) => {
-                    setShowAllActual(v);
-                    setExpandedActualTeams([]);
-                  }}
-                />
-                Gerçekleşen Dağılım Göster
-              </label>
-            </div>
-          )}
-          {tab === "projects" && (
-            <div className="project-details-toolbar">
-              <label className="project-details-toggle">
-                <Switch
-                  checked={showProjectDetails}
-                  onCheckedChange={setShowProjectDetails}
-                />
-                Detayları Göster
-              </label>
-              <label className="project-details-toggle project-week-toggle">
-                <Switch
-                  checked={projectWeekly}
-                  onCheckedChange={setProjectWeekly}
-                  aria-label="Haftalık proje görünümü"
-                />
-                Haftalık Görünüm
-              </label>
-              {projectWeekly && (
-                <span className="project-week-hint">
-                  {isAdmin
-                    ? "Detay kutusunu basılı tutup taşıyın; uçlarından günlük adımlarla genişletip daraltın."
-                    : "Detay açıklamalar kendi haftalarında gösterilir; gerçek tarihleri kutularda görünür."}
-                </span>
-              )}
-            </div>
-          )}
           {notice && (
             <div className="filterline">
               <span role="status">{notice}</span>

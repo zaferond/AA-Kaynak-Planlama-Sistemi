@@ -96,6 +96,18 @@ export function useRiskDraft(
       setError("");
       return Promise.resolve(true);
     }
+    if (
+      !confirm("Yaptığınız Değişiklikler Kaydedilecektir. Onaylıyor musunuz ?")
+    ) {
+      // Mouse-down and focus may both request the same tab change. Keep the
+      // declined result for this event turn so cancellation cannot prompt twice.
+      const declined = Promise.resolve(false);
+      saveInFlight.current = declined;
+      setTimeout(() => {
+        if (saveInFlight.current === declined) saveInFlight.current = null;
+      }, 0);
+      return declined;
+    }
     setSaving(true);
     setError("");
     const revision = editBase.current.revision;

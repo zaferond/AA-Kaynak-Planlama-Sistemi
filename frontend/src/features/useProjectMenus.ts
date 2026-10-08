@@ -10,6 +10,10 @@ import {
 import { usePhaseGrid } from "./usePhaseGrid";
 import { milestoneRanges, rangeNotes } from "../../../shared/milestone-ranges";
 import { prepareMilestoneReportChange } from "./project-timeline-commands";
+import {
+  captureProjectSnapshot,
+  type ProjectSnapshot,
+} from "./project-snapshot";
 type Position = { x: number; y: number };
 type Props = {
   data: Data | null;
@@ -76,7 +80,7 @@ export function useProjectMenus({
     null,
   );
   const [milestoneMenu, setMilestoneMenu] = useState<
-    (MilestoneTarget & Position & { project: Project; revision: number }) | null
+    (MilestoneTarget & Position & ProjectSnapshot) | null
   >(null);
   const reportSaving = useRef(false);
   const copiedPhase = phaseGrid.clipboards.text || null;
@@ -124,8 +128,10 @@ export function useProjectMenus({
       projectId: project.id,
       milestoneId: milestone.id,
       rangeIndex,
-      project: structuredClone(project),
-      revision: data.revisions["project:" + project.id] || 0,
+      ...captureProjectSnapshot(
+        project,
+        data.revisions["project:" + project.id] || 0,
+      ),
       ...menuPosition(event, Math.min(480, 175 + count * 66), 380),
     });
   }
@@ -189,20 +195,6 @@ export function useProjectMenus({
     );
     setPhaseMenu(null);
   }
-  async function paste(
-    prepare: (data: Data) => Change<"project">,
-    notice: string,
-  ) {
-    if (!data || !isAdmin || saving) return;
-    setPhaseMenu(null);
-    setMilestoneMenu(null);
-    try {
-      await batch([prepare(data)]);
-      setNotice(notice);
-    } catch (error) {
-      setError((error as Error).message);
-    }
-  }
   async function pastePhase() {
     if (!phaseMenu) return;
     const key = phaseGrid.key(phaseMenu.projectId, phaseMenu.month);
@@ -222,9 +214,11 @@ export function useProjectMenus({
     setPhaseMenu(null);
   }
   function copyMilestoneColor() {
-    if (!milestoneMenu || !data) return;
+    if (!milestoneMenu) return;
     try {
-      phaseGrid.copyColor(milestoneClipboardColor(data, milestoneMenu));
+      phaseGrid.copyColor(
+        milestoneClipboardColor(milestoneMenu.project, milestoneMenu),
+      );
       setMilestoneMenu(null);
       setNotice("Bar rengi kopyalandı");
     } catch (error) {
@@ -232,13 +226,26 @@ export function useProjectMenus({
     }
   }
   async function pasteMilestoneColor() {
-    if (!milestoneMenu || copiedPhaseColor === null) return;
+    if (
+      !milestoneMenu ||
+      copiedPhaseColor === null ||
+      !isAdmin ||
+      saving ||
+      reportSaving.current
+    )
+      return;
     const target = milestoneMenu,
       color = copiedPhaseColor;
-    await paste(
-      (data) => prepareMilestoneColorPaste(data, target, color),
-      "Bar rengi yapıştırıldı",
-    );
+    reportSaving.current = true;
+    try {
+      await batch([prepareMilestoneColorPaste(target, target, color)]);
+      setMilestoneMenu((current) => (current === target ? null : current));
+      setNotice("Bar rengi yapıştırıldı");
+    } catch (error) {
+      setError((error as Error).message);
+    } finally {
+      reportSaving.current = false;
+    }
   }
   return {
     phaseGrid,

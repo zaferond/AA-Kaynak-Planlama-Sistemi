@@ -4,6 +4,8 @@ import { personDaySchema } from "./calendar-rules.ts";
 export { personDaySchema } from "./calendar-rules.ts";
 const bad = (message: string) => Object.assign(Error(message), { status: 400 });
 import { z } from "zod";
+import { initialRiskSystems } from "./risk-system-seed.ts";
+import { riskSystemNameKey } from "./risk-system-policy.ts";
 import type { Data, Resource } from "./model.ts";
 import {
   assertResourceDates,
@@ -74,6 +76,12 @@ export const teamSchema = z.object({
   excelCapacity: z.number(),
   catalog: z.boolean().optional(),
 });
+export const riskSystemSchema = z
+  .object({
+    id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
+    name: z.string().trim().min(1).max(200),
+  })
+  .strict();
 const milestoneNote = z.object({
   text: z.string().trim().min(1),
   includeInReport: z.boolean(),
@@ -133,6 +141,10 @@ const risk = z
     category: z.enum(riskCategories),
     reportedAt: day,
     system: z.string().trim().max(200),
+    systemId: z
+      .string()
+      .regex(/^[a-zA-Z0-9_-]{1,120}$/)
+      .optional(),
     description: z.string().trim().min(1).max(5000),
     cause: z.string().trim().max(5000),
     actionPlan: z.string().trim().max(5000),
@@ -187,6 +199,10 @@ const schema = z.object({
   resources: z.array(res),
   projects: z.array(proj),
   risks: z.array(risk).max(100000).default([]),
+  riskSystems: z
+    .array(riskSystemSchema)
+    .max(5000)
+    .default(() => initialRiskSystems.map((item) => ({ ...item }))),
   allocations: z.record(z.number().min(0).max(10000)),
   actualAllocations: z.record(z.number().min(0).max(100)).optional(),
   actualWorkedHours: z
@@ -245,9 +261,14 @@ export function validate(
       throw bad("Çalışma takviminde geçersiz tarih var.");
   if (Object.keys(d.personCalendar || {}).length > 100000)
     throw bad("Kişisel takvimde çok fazla kayıt var.");
-  for (const list of [d.teams, d.projects, d.resources])
+  for (const list of [d.teams, d.projects, d.resources, d.riskSystems || []])
     if (new Set(list.map((x) => x.id)).size !== list.length)
       throw bad("Tekrarlanan kayıt kimliği.");
+  const systemNames = (d.riskSystems || []).map((item) =>
+    riskSystemNameKey(item.name),
+  );
+  if (new Set(systemNames).size !== systemNames.length)
+    throw bad("Tekrarlanan sistem / alt sistem adı.");
   const teamIds = new Set(d.teams.map((team) => team.id));
   const projectRanks = d.projects.flatMap((p) =>
     p.sortOrder === undefined ? [] : [p.sortOrder],
@@ -262,7 +283,18 @@ export function validate(
     (d.risks || []).length
   )
     throw bad("Tekrarlanan risk kimliği.");
+  const systemsById = new Map(
+    (d.riskSystems || []).map((item) => [item.id, item]),
+  );
   for (const item of d.risks || []) {
+    if (item.systemId) {
+      const system = systemsById.get(item.systemId);
+      if (!system)
+        throw bad(
+          "Sistem / alt sistem bulunamadı. Güncel listeden tekrar seçim yapın.",
+        );
+      item.system = system.name;
+    }
     if (!projectsById.has(item.projectId))
       throw bad("Risk projesi bulunamadı.");
     if ((item.residualLikelihood === null) !== (item.residualImpact === null))

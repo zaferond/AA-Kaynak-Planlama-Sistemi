@@ -7,7 +7,7 @@ import { readCompositeMap, readRevisionMap } from "../backend/read-records.mjs";
 import { tables } from "../backend/tables.mjs";
 import { seedBenchmarkStore } from "../scripts/benchmark-fixture.mjs";
 import { createAttemptLimiter } from "../backend/rate-limits.mjs";
-import { migrationSql } from "../backend/migration-catalog.mjs";
+import { migrationSql, schemaVersion } from "../backend/migration-catalog.mjs";
 
 function deferred() {
   let resolve;
@@ -129,7 +129,7 @@ export async function nativeUpgradeSuite(store) {
         )
       ).rows[0].n,
     ),
-    30,
+    schemaVersion,
   );
   await store.close();
   await store.connect();
@@ -189,7 +189,7 @@ export async function nativePoolSuite(stores, t) {
         )
       ).rows[0].version,
     ),
-    30,
+    schemaVersion,
   );
 
   await seedBenchmarkStore(first, 1000, {

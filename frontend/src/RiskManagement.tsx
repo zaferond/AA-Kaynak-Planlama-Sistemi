@@ -7,7 +7,9 @@ import {
   type RefObject,
   type SetStateAction,
 } from "react";
-import { Plus, ShieldAlert, Download, ChevronDown } from "lucide-react";
+import { Plus, ShieldAlert, Download, ChevronDown, Layers } from "lucide-react";
+import RiskSystemDialog from "./features/risk-table/RiskSystemDialog";
+import { useDirectoryEditor } from "./features/team-directory/useDirectoryEditor";
 import type { Data, Risk } from "./model";
 import type { Principal } from "./access";
 import { riskAssessment } from "./risk-score";
@@ -87,6 +89,8 @@ export default function RiskManagement({
   onReload,
   onSave,
   onDelete,
+  onCatalogSaved,
+  onDirectoryEditingChange,
 }: {
   leaveGuardRef: RefObject<RiskLeaveGuard | null>;
   data: Data;
@@ -95,6 +99,8 @@ export default function RiskManagement({
   onReload: () => Promise<Data>;
   onSave: (risk: Risk, revision: number) => Promise<void>;
   onDelete: (risk: Risk, revision: number) => Promise<void>;
+  onCatalogSaved: (data: Data, message: string) => void;
+  onDirectoryEditingChange: (editing: boolean) => void;
 }) {
   const [selection, setSelection] = useState<string[] | "all">([]),
     [projectMenuOpen, setProjectMenuOpen] = useState(false),
@@ -103,6 +109,15 @@ export default function RiskManagement({
     [exportError, setExportError] = useState(""),
     [exporting, setExporting] = useState(false),
     [editing, setEditing] = useState(false);
+  const systemEditor = useDirectoryEditor({
+    data,
+    onSaved: onCatalogSaved,
+    onEditingChange: onDirectoryEditingChange,
+  });
+  async function openSystemEditor() {
+    if (leaveGuardRef.current && !(await leaveGuardRef.current())) return;
+    systemEditor.open("riskSystem");
+  }
   const reportEditing = useCallback(
     (editing: boolean) => {
       setEditing(editing);
@@ -208,6 +223,7 @@ export default function RiskManagement({
   ).length;
   return (
     <section className="risk-workspace panel">
+      <RiskSystemDialog data={data} editor={systemEditor} />
       <div className="risk-header">
         <div className="risk-toolbar">
           <div className="risk-field risk-project-field">
@@ -300,6 +316,16 @@ export default function RiskManagement({
             <Plus size={16} />
             Risk Ekle
           </button>
+          {user.role === "admin" && (
+            <button
+              type="button"
+              className="button"
+              data-risk-leave
+              onClick={() => void openSystemEditor()}
+            >
+              <Layers size={16} /> Sistem / Alt Sistem Ekle
+            </button>
+          )}
         </div>
       </div>
       {selectedProjects.length === 0 && !editing ? (
@@ -336,6 +362,9 @@ export default function RiskManagement({
           <RiskTable
             leaveGuardRef={leaveGuardRef}
             risks={risks}
+            systems={(data.riskSystems || [])
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name, "tr"))}
             revisions={data.revisions}
             onEditingChange={reportEditing}
             onReload={onReload}

@@ -1,5 +1,22 @@
 import { resourceCapacity, type Data } from "./model.ts";
 export type Metric = { current: number; total: number };
+/** Aggregate the selected scope before calculating its remaining capacity or shortage. */
+export function sumCapacityMetrics(
+  cache: Record<string, Metric>,
+  teamIds: string[],
+  month: string,
+): Metric {
+  return teamIds.reduce(
+    (sum, id) => {
+      const cell = cache[id + "|" + month] || { current: 0, total: 0 };
+      return {
+        current: sum.current + cell.current,
+        total: sum.total + cell.total,
+      };
+    },
+    { current: 0, total: 0 },
+  );
+}
 export function buildCapacityIndex(d: Data, months: string[]) {
   const out: Record<string, Metric> = {};
   for (const t of d.teams)

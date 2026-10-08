@@ -2,6 +2,22 @@ import assert from "node:assert/strict";
 import path from "node:path";
 import { download, zipEntries, validateXml } from "./files.mjs";
 
+export const riskSaveConfirmation =
+  "Yaptığınız Değişiklikler Kaydedilecektir. Onaylıyor musunuz ?";
+
+// Existing save/409/503 regressions explicitly approve the new save prompt.
+// Delete/reload confirmations retain their individual accept/dismiss handlers.
+export function acceptRiskSaveConfirmations(page) {
+  const accept = (dialog) => {
+    if (dialog.message() === riskSaveConfirmation) {
+      assert.equal(dialog.type(), "confirm");
+      void dialog.accept();
+    }
+  };
+  page.on("dialog", accept);
+  return () => page.off("dialog", accept);
+}
+
 export async function openRisks(page, project = "Browser Project A") {
   await page
     .getByRole("tab", { name: "AA Risk Yönetimi", exact: true })
@@ -19,6 +35,7 @@ const row = (page, id) => page.locator(`tr[data-risk-id="${id}"]`);
 
 export async function checkRisks(f) {
   const { page } = await f.client("root-admin");
+  const stopConfirming = acceptRiskSaveConfirmations(page);
   try {
     await openRisks(page);
     await f.check(
@@ -223,7 +240,12 @@ export async function checkRisks(f) {
           "Risk preserved after failure",
         );
         await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
-        await page.locator(".absence-report").waitFor();
+        await page
+          .getByRole("heading", {
+            name: "Aylık Eksik Kaynak Sayısı",
+            exact: true,
+          })
+          .waitFor();
         assert.equal(
           (await f.state()).risks.find((r) => r.id === first).description,
           "Risk preserved after failure",
@@ -485,6 +507,8 @@ export async function checkRisks(f) {
     );
     const employee = await f.client("employee"),
       manager = await f.client("manager");
+    acceptRiskSaveConfirmations(employee.page);
+    acceptRiskSaveConfirmations(manager.page);
     await f.check(
       "risk: normal users edit only their own records; managers can edit others",
       async () => {
@@ -534,5 +558,7 @@ export async function checkRisks(f) {
   } catch (error) {
     await f.capture(page, "risk-failure").catch(() => {});
     throw error;
+  } finally {
+    stopConfirming();
   }
 }

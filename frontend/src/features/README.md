@@ -26,12 +26,21 @@ Her `PortalEditor`, değerlerin alındığı snapshot'ın `baseRevisions` sözl�
 | `../ProjectTimelineRows.tsx` | Proje/aşama satırları, detayları açma ve başlıkların sıralanması |
 | `../MilestoneTrack.tsx` | Aylık bar, haftalık detay, milestone, yerleşim ve önizleme çizimi |
 | `useMilestoneDrag.ts` | Pointer capture, uzun basma, günlük taşıma, iki uçtan boyutlandırma ve iptal |
+| `project-snapshot.ts` | Menü/drag başlangıcındaki proje kopyası ve revision çiftini yakalama |
 | `project-timeline-types.ts` | Satır ve zaman çizelgesi callback sözleşmeleri |
 | `project-timeline-commands.ts` | Tarih/sıralama değişikliklerinden kayıt komutu hazırlanması |
 | `position-pointer-tooltip.ts` | Fare konumu, viewport sınırı ve uygulama zoom'una göre tooltip konumu |
 | `timeline-labels.ts` | Çizelgedeki ay ve gün metinlerinin biçimi |
 
 Tarih doğrulaması ve alt notların etkisi `shared/milestone-ranges.ts` içinde kalır. Sürükleme hook'u önizlemede bu kuralları kullanır; gerçek kayıt mevcut komut ve batch yoluyla yapılır. Fareyle taşıma için 350 ms uzun basma, erken hareketin iptali, geçersiz tarihin kaydedilmemesi ve sürükleme sonrasındaki tıklamanın bastırılması korunur.
+
+Renk kopyalama/yapıştırma ve aylık/haftalık taşıma-boyutlandırma, etkileşim başlangıcındaki proje ve revision çiftini kullanır. Drag sırasında indeksli bar/not yerleşimi de aynı kopyadan çizilir; arka plan yenilemesindeki yeni aralık veya not sırası devralınmaz. Pointer basılıyken yeni bağlam menüsü açılmaz. Sunucu sürüm çakışmasını 409 ile reddeder; otomatik yeniden bazlama veya tekrar kayıt yoktur. Menüde hata görünür kalır; güncel hedef için menü yeniden açılır. `project-interaction-concurrency.test.mjs` ve `timeline-concurrency.mjs` uzak aralık/not ekleme, renk işlemleri, aylık bar ve haftalık notların iki uçtan boyutlandırılması ile baklava taşımayı sentetik verilerle denetler.
+
+## Çalışan sayısı öngörüsü
+
+`shared/headcount-trend.ts` yalnız Raporlar ekranındaki **Aylık Ortalama Çalışan Sayısı ve Öngörü** grafiğini hesaplar. Tarihli Aktif İlanlar kaynak planlamasına dahil seçiminden bağımsız olarak gelecek aylara katılır; tarihsiz Aktif İlan ve Pasif İlan katılmaz. Statü geçmişi, takım/liderlik filtresi, tarih örtüşmesi ve birikimli ortalama korunur. Çalışan sayısı kayıt sayısıdır, kişi eşdeğeri miktarı değildir.
+
+Planlanan kapasite/rapor tablolarının **Aktif Kaynak** ölçüsü `shared/model.ts:resourceCapacity` üzerinden hesaplanır ve dahil koşulunu korur. Çalışan statülerinin grafikteki mevcut dahil koşulu da korunur. Formda ilanlar için **Tahmini İşbaşı Tarihi** etiketi kullanılır; aynı `Version.start` alanı ve kayıt politikası değişmeden kalır. `headcount-trend.test.mjs`, `active-resource-scenarios.test.mjs` ve `headcount-forecast.mjs` bu hesap ayrımını denetler.
 
 ## Stil ve doğrulama
 
@@ -65,6 +74,8 @@ Zaman çizelgesi hücresi kendi stacking context'ini oluşturur (`z-index: 0`, `
 | `risk-table/useRiskTableInteraction.ts` | Odak, yeni satırı görünür yapma, satır dışına tıklama ve klavye etkileşimleri |
 
 `useRiskDraft` açılış değerini ve revision'ı birlikte tutar; props yenilenince temel sürüm değişmez. Risk `onSave`/`onDelete` sözleşmesi açık revision parametresi alır. `onEditingChange` arka plan yenilemesini bekletir; önce başlamış okumalar için açılış sürümü kontrolü ayrıca gerekir. `ApiError.status === 409` taslağı koruyan çözüm ekranını açar. Kullanıcı onaylı yeniden yükleme yeni değer/revision çiftini kurar; otomatik yeniden bazlama veya üzerine yazma yapılmaz. Değiştirilmemiş taslak açılış değerine karşılaştırılarak yazmadan kapanır.
+
+Değişen ve doğrulamadan geçen satır kaydedilmeden önce **Yaptığınız Değişiklikler Kaydedilecektir. Onaylıyor musunuz ?** sorulur. Enter/dış tıklama, diğer satıra geçiş ve ekranı terk etme aynı kayıt onayını kullanır. İptalde kayıt isteği gönderilmez; taslak, açılış revision'ı ve aktif satır korunur. Değiştirilmemiş veya eski değerlerine geri getirilmiş satırda onay çıkmaz; geçersiz satır önce alan hatasını gösterir. `risk-save-confirmation.mjs` kabul/iptal, yeni risk, değişmeyen satır ve gezinme akışlarını sentetik HTTP/tarayıcı testiyle denetler.
 
 Sütun genişliği, grup başlığı kapsamı, alan sayısı ve düzenlenebilir alan seçimi aynı katalogdan gelir. Risk seçenekleri, puanlama ve doğrulama mevcut ortak politika/hesap modüllerinde kalır. Hücre bileşenleri ek DOM sarmalayıcısı oluşturmaz; CSS sınıfları ve satır davranışı korunur. Tab/Shift+Tab tarayıcının doğal odak sırasını kullanır; IME sırasında Enter kayıt tetiklemez, silme düğmesindeki Enter otomatik kayda dönüşmez. Tarayıcı testleri bu davranışların yanında 409/503, bekleyen kayıt ve uzaktan silinen taslağı denetler.
 
@@ -118,9 +129,19 @@ Tarayıcı testleri ortak tam/yarım gün, hafta sonu, kişisel saatlik izin/eğ
 
 `usePortalRefresh.ts` ilk okumayı, generation polling'ini, storage bildirimini ve focusout yenilemesini koordine eder. Açık editör, risk taslağı, kayıt işlemi veya odaklı input/textarea/select varken dış yenileme bekletilir. Oturum epoch/kimlik doğrulaması `storage.ts` ve session root'ta kalır. `App.tsx` ekran, filtre ve kullanıcı eylemlerini koordine eder.
 
+## Sistem / Alt Sistem kataloğu
+
+`RiskManagement.tsx` Risk Ekle yanındaki admin yönetim düğmesini ve mevcut risk taslağını terk etme kontrolünü koordine eder. `risk-table/RiskSystemDialog.tsx` arama, kaydırılabilir liste ve ad formunu oluşturur. Liderlik/takım ile aynı `team-directory/useDirectoryEditor.ts` kayıt, busy, taslak koruma, revision ve açık yeniden yükleme davranışlarını paylaşır; ayrı bir transport eklenmez. `onDirectoryEditingChange` açık yönetim penceresinde dış yenilemeyi bekletir.
+
+Risk hücresindeki seçim sabit `Risk.systemId` ile mevcut `Risk.system` adını birlikte taşır. Sunucu adı katalogdan normalleştirir. Eski katalog dışı metin mevcut kayıt seçeneği olarak korunur. `shared/risk-system-policy.ts` ad tekilliğini ve katalog kullanım eşleşmesini ortaklaştırır. Sunucuda yalnız admin katalog yönetir; bağlı riskler ad değişiminde revision kazanır ve kullanılan tanımlar silinmez. Yeni katalog seçimi tüm risk düzenleme rollerine açıktır; mevcut risk sahipliği kontrolleri değişmez. Başlangıç verisi `shared/risk-system-seed.ts`, kalıcılık şema 31'dir.
+
+`tests/risk-systems.test.mjs` yetki, CSRF, tekillik, revision/tombstone, yeniden açılış, bağlı/legacy riskler, JSON restore ve migration rollback'i sentetik SQL.js ile denetler. `risk-systems.mjs` aynı davranışların kullanıcı arayüzünü kontrol eder. Native MSSQL kabulü ayrıca gerekir.
+
 ## Excel
 
 `../xlsx-workbook.ts` workbook paket ilişkilerini ve indirme/URL temizliğini ortaklaştırır. Sheet yazarları metni inline string olarak üretir; risk formülleri yalnız risk yazarı içinde tanımlanır. `xlsx-cells.ts` metin/satır sınırını, kayıpsız devam satırlarını ve XML kaçışını sağlar. Her raporun stilleri, kolonları ve hesapları kendi modülünde kalır.
+
+Ortak XML yazıcısı XML 1.0 içinde temsil edilemeyen karakterleri sessizce silmez; karakter kodunu içeren hata ile çıktıyı durdurur. Hata metni kullanıcı içeriğini tekrar etmez. Geçerli Unicode çiftleri, Türkçe, sekme ve CR/LF korunur; kayıtlı veri değiştirilmez. `tests/xlsx-xml-characters.test.mjs` karakter sınırlarını ve yedi çıktı yazıcısını; `scripts/browser-checks/excel-xml-characters.mjs` gerçek XML ayrıştırmasını, hatada indirme yapılmamasını ve düzeltilen metnin kayıpsız aktarılmasını sentetik verilerle denetler.
 
 ## Planlanan kaynak dağılımı
 
@@ -144,6 +165,8 @@ Seçim Set'i tablo başına bir kez oluşturulur; her satır aynı salt okunur S
 `test:ui` gerçek fareyle ters aralık seçimi, Ctrl ile ek seçim, sol üst odak, Ctrl+Enter ile toplu giriş, Enter/dış tıklama/Escape ile temizleme, sıfır içeren 2×2 klavye ve sağ tık kopyalama/yapıştırma, 503 sonrası taslak/seçim korunması ve bekleyen retry sırasında alan kilidini denetler. Saf dikdörtgen/taşma/dönem kuralları mevcut `plan-cell-grid.test.mjs` içindedir. Bunlar native MSSQL/Windows veya tüm olası etkileşim sıralamalarının doğrulaması değildir.
 
 ## Çalışma alanı filtreleri ve görünüm
+
+Raporlardaki **Aylık Eksik Kaynak Sayısı** grafiği, seçili liderlik/takım kapsamındaki aylık toplam tahsisten toplam aktif kaynağı çıkarır ve negatif sonucu sıfırlar. Tablo ve grafik aynı `shared/metrics.ts` → `sumCapacityMetrics` toplamlarını kullanır; seçili takımlar arasındaki fazlalar net hesaba katılır, filtre dışındaki takımlar katılmaz. Örneğin seçili kapsamda 20 tahsis ve 1 aktif kaynak, tabloda −19 kalan ve grafikte 19 eksik verir. Takım sayısına bölünmez. Sağ üstteki aylık ortalama, bu net aylık eksiklerin seçili dönem ay sayısına bölümüdür; sıfır eksikli aylar paydaya dahildir. `shared/monthly-shortage-trend.ts` dönem özetini üretir; `tests/monthly-shortage-trend.test.mjs` tabloyla tutarlılık, filtre/dönem ve boş veri sınırlarını denetler. Proje filtresi bu hesaba eklenmez. Birim kişi eşdeğeri, dönem toplamı kişi-aydır.
 
 `workspace/` API çağrısı yapmadan ekran state'ini ve yetkili snapshot'tan türetilen verileri ayırır:
 
@@ -182,3 +205,34 @@ Toplu silme ID'leri tekilleştirir; açık uyarıdan sonra mevcut `change`/`batc
 Yedek işlemleri önce risk taslağı için mevcut `flushRiskDraft` kontrolünü, sonra oturum guard'ını kullanır. Restore dosya input'u asenkron işlemden önce yakalanır; iptal/başarı/hata sonunda temizlenir. Restore ve sıfırlama API/generation/revision denetimlerini storage/backend katmanından devralır. Sunucu yetkileri belirleyicidir; controller UI kontrolleri yeni bir yetki sağlamaz. Sekme geçişi, risk leave guard ve çıkış koordinasyonu App'te kalır.
 
 `resource-report-data.test.mjs` tarih/statü/dahil/transfer, ay-sıra/aşım, yönetici fallback'i, kapsam ve filtre metnini sentetik veriyle denetler. `workspace-actions.mjs` dört sekmenin Excel çıktısını, normal kullanıcının kendi kaynağını, global sıfırlamanın iptal/503/retry ve filtre dışı dönem etkisini, toplu silmenin iptal/409/başarı ve bağlı gerçekleşen kayıt etkisini kontrol eder. Mevcut yedek/restore, risk taslağı, oturum ve zaman çizelgesi kontrolleri tam koşuda da çalışır.
+
+## Kaynak raporları
+
+Raporlar ekranındaki **Uygulanan Filtreler** satırı, proje ekranıyla ortak `WorkspaceFilterSummary` bileşenini kullanır. Liderlik, takım, başlangıç/bitiş ayı ve dönem uzunluğunu gösterir. Filtre seçim kontrolleri ve özet satırı aynı `reports-filter-dock` içinde, sayfa aşağı kaydırıldığında birlikte üstte sabit kalır. Raporlarda proje filtresi uygulanmadığı için bu satırda proje seçimi gösterilmez.
+
+`resource-reports/ResourcePlanningCharts.tsx` aylık gerçekleşen/dağıtılan karşılaştırmasını, ilk 10 projenin dönem toplamını, aylık kaynak planlama etkinliğini ve ortalama eksik kaynak ihtiyacına göre takım sıralamasını birleştirir. Doluluk haritası ve işe alım senaryosu ekrandan kaldırılmıştır. `MonthlyComparison.tsx` ortak çizgi grafiği ve erişilebilir aylık değer tablosunu; `ProjectAllocationChart.tsx` bağımsız açılıp kapatılan dağıtılan/gerçekleşen sütunlarını çizer. Ortak genişlik ölçümü `useChartWidth` içindedir.
+
+Proje ve ay karşılaştırması `shared/resource-planning-reports.ts:resourceAllocationComparison` ile yetkili takım/proje/ay kayıtlarından birer geçişte hesaplanır. Gerçekleşen değerler workspace'in mevcut `actualTeamTotals` / `actualTeamTotalIndex` verileridir; mevcut aktif kapasite değerleri gerçekleşen gibi gösterilmez. Güncel çalışan statüsü tarihsel gerçekleşen kayıtları silmez. Üst liderlik, takım ve dönem filtreleri uygulanır. Proje grafiği seçili dönemin kaynak toplamını gösterir; ay sayısına bölünmez. Birim kişi-aydır. İlk 10 sıralaması gerçekleşen açıkken gerçekleşene, yalnız dağıtılan açıkken dağıtılana göre yapılır; ikisi açıkken eşitlikte dağıtılan kullanılır. İki seri kapalıyken seçim istemi görünür. Pozitif ama iki ondalıkta sıfıra yuvarlanacak toplamlar `<0,01` olarak gösterilir; veri değişmez.
+
+`PlanningEffectivenessChart` proje toplam grafiğinin hemen altında yer alır. `planningEffectiveness` her ay gerçekleşen / planlanan × 100 değerini üretir. Sıfır planlanan değer `null` olur; grafikte yanlış sıfır noktası veya aylar arasında yanıltıcı bağ oluşturulmaz. %100 üzeri değerler sınırlandırılmaz. Dönem göstergesi toplam gerçekleşen / toplam planlanan × 100 hesabıdır, aylık yüzdelerin ortalaması değildir. `MonthlyComparison` yüzde/FTE birimlerini, boş noktaları ve isteğe bağlı %100 referansını destekler. Filtreler ve yetkili workspace verisi diğer raporlarla ortaktır.
+
+Takım sıralaması, her takımın seçili dönemdeki aylık pozitif açıklarının toplamının seçili ay sayısına bölümüdür (kişi eşdeğeri). Açık olmayan aylar da paydaya dahildir. Seçili kapsamın net açığıyla farkı ekranda açıklanır. Mevcut çalışan sayısı öngörüsünün dahil olmayan tarihli Aktif İlanları hesaba katma kuralı değişmez.
+
+İzin/eğitim listesi Çalışan & Kaynak sekmesinde kaynak tablosunun altındadır; bu sekmedeki dönem seçimi listeyi de filtreler. Sekme yetkileri değişmez. `resource-planning-reports.test.mjs` hesap/filtre/sıralamaları, `browser-checks/resource-reports.mjs` aylık gerçek değerleri, bağımsız seri seçimlerini, ilk 10 sınırını, dar/uzun dönem görünümünü ve raporun taşınmasını denetler.
+
+## Liderlik kataloğu eşzamanlı kayıt kontrolü (Y4)
+
+`useDirectoryEditor` liderlik taslağı açıldığında `data.revisions["directory:shared"]` değerini alır ve kayıt/silme boyunca korur. Snapshot yenilenmesi açılış revision'ını değiştirmez. Sunucuda `applyLeaderChange` kontrolü, `Store.mutate` içindeki aynı transaction/kilit altında yapılır. `directoryCatalogChanged`, liderlik adları/yöneticileri ve takım katalog alanları değiştiğinde revision'ı bir kez artırır; proje/risk/tahsis yazımları artırmaz. Takım bazlı mevcut revision kontrolü ayrıca devam eder.
+
+Ayrı migration olmadan mevcut `kp_revisions` tablosunda ayrılmış `allocation/@directory:shared` kaydı kullanılır. API anahtarı `directory:shared` biçimindedir; genel değişiklik uç noktasından bu anahtara yazılamaz. JSON restore, katalog aynı olsa da mevcut sayaçtan ilerler; yedekteki sayaca güvenilmez. Eski istemciler için generation kontrolü ve yeni istemcinin eski sunucuyla konuşabilmesi için açılış generation alanı korunur. Katalog revision'ı varsa sunucu bu dar kapsamlı kontrolü kullanır. Yetki, bağlı kayıt silme ve audit kuralları değişmez.
+
+
+## Özet satırında sınırlanan sayfa kaydırması
+
+Plan ve proje paneli `useViewportWorkspace` ile pencere yüksekliği, uygulamanın alt not alanı ve gerçek sayfa ölçeğine göre boyutlanır. Ana sayfanın en aşağı konumu panelin filtre özetini üst kenara getirir; daha uzun veri yalnız tablonun kendi scroll alanındadır. Wheel/key olayları yakalanmaz. Özet açma/kapatma ve pencere boyutu değişiminde ölçü güncellenir; tablonun scroll zinciri sayfaya taşmaz. Proje filtre özeti yalnız bu ekrana uygulanan proje, başlangıç/bitiş ayı, dönem ve aylık/haftalık görünümü gösterir. Plan özetindeki çipler ortak `FilterSummaryChips` bileşenini kullanır.
+
+Proje ve planlanan dağılım tabloları bütün filtre sonuçlarını tek kaydırma alanında gösterir; 250 proje / 100 kaynak satırı sayfa sınırı yoktur. `useWindowedSections` kaydırma konumuna yakın bölümleri ve odaktaki veya sürüklenen bölümü oluşturur, diğer bölümler için yüksekliği koruyan boşluklar kullanır. Dinamik detay yükseklikleri ResizeObserver ile ölçülür. Proje detaylarının açık/kapalı durumu üst bileşende tutulur; kaydırılıp tekrar gelindiğinde korunur. Takım görünümündeki dağılım satırları küçük bölümlere ayrılır; proje görünümünde proje başlığı ve takımları aynı bölümde kalır. Seçim/kopyalama kapsamı tüm filtre sonuçlarıdır; rapor toplamları ve dışa aktarım değişmez. Kullanım ipucu satırı kaldırılmıştır; sürükleme ve kopyalama davranışları korunur.
+
+Takvimde sayısal kaynak editörünün odak katmanı yalnız `.cell input:focus` içeren hücrede yükseltilir. Aşama düğmelerine ve proje adındaki kontrollere uygulanmaz; yatay kaydırmada aşama seçimi/odağı sabit proje sütununun önüne çıkmaz. Bu sınır gerçek tarayıcı hit-test ile doğrulanır.
+
+Görünüm seçenekleri filtre bileşeninde tutulmaz: plan paneli gerçekleşen dağılım anahtarını, proje paneli detay ve haftalık anahtarlarını kendi özetinin altında gösterir. Ortak `.workspace-view-options` stili dar satırı boyutlandırır ve viewport panelinde küçülmeden görünür tutar. Durum App'te kalır; gerçekleşen dağılım anahtarı değişince tekil açılmış takım seçimleri önceki davranışla temizlenir. Haftalık açıklama etiketin başlık ipucunda korunur. Proje özeti başlığı “Filtrelenen Projeler”dir.

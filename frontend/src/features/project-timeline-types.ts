@@ -6,14 +6,19 @@ import type { milestoneBarsForPeriods } from "../milestone-bars";
 import type { weeklyNoteLayout } from "../weekly-note-bars";
 import type { usePhaseGrid } from "./usePhaseGrid";
 import type { useProjectRowOrder } from "./useProjectRowOrder";
+import type { ProjectSnapshot } from "./project-snapshot";
 
 export type ProjectTimelineRowProps = {
   ordering: ReturnType<ReturnType<typeof useProjectRowOrder>["rowProps"]>;
   phaseSelection: ReturnType<typeof usePhaseGrid>;
   project: Project;
+  projectRevision: number;
   periods: TimelinePeriod[];
   density: "detail" | "compact" | "overview";
   expandAllDetails: boolean;
+  windowKey?: string;
+  expanded?: boolean;
+  onExpandedChange?: (expanded: boolean) => void;
   isAdmin: boolean;
   saving: boolean;
   onProjectInfo: () => void;
@@ -36,13 +41,15 @@ export type ProjectTimelineRowProps = {
     rangeIndex: number,
   ) => void;
   onChangeMilestoneRange: (
-    milestone: Milestone,
+    snapshot: ProjectSnapshot,
+    milestoneId: string,
     rangeIndex: number,
     mode: "move" | "start" | "end",
     days: number,
   ) => Promise<void>;
   onChangeMilestoneNote: (
-    milestone: Milestone,
+    snapshot: ProjectSnapshot,
+    milestoneId: string,
     rangeIndex: number,
     noteIndex: number,
     mode: "move" | "start" | "end",
@@ -54,6 +61,7 @@ export type MilestoneTrackProps = Pick<
   ProjectTimelineRowProps,
   | "isAdmin"
   | "saving"
+  | "projectRevision"
   | "onEditMilestone"
   | "onMilestoneContextMenu"
   | "onChangeMilestoneRange"

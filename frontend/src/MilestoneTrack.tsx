@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -26,12 +26,13 @@ import { positionPointerTooltip } from "./features/position-pointer-tooltip";
 import { dateLabel, barDateLabel } from "./features/timeline-labels";
 
 export default function MilestoneTrack({
-  project,
-  milestone,
-  ranges,
-  bars,
-  periods,
-  weeklyLayout,
+  project: currentProject,
+  projectRevision,
+  milestone: currentMilestone,
+  ranges: currentRanges,
+  bars: currentBars,
+  periods: currentPeriods,
+  weeklyLayout: currentWeeklyLayout,
   isAdmin,
   saving,
   onEditMilestone,
@@ -50,6 +51,8 @@ export default function MilestoneTrack({
   const noteTooltipRef = useRef<HTMLDivElement>(null);
   const notePointerRef = useRef({ x: 0, y: 0 });
   const {
+    interaction,
+    isInteracting,
     isNoteDragging,
     trackRef,
     suppressClickRef,
@@ -65,10 +68,10 @@ export default function MilestoneTrack({
     endNoteDrag,
     cancelNoteDrag,
   } = useMilestoneDrag({
-    project,
-    milestone,
-    ranges,
-    periods,
+    project: currentProject,
+    projectRevision,
+    milestone: currentMilestone,
+    periods: currentPeriods,
     isAdmin,
     saving,
     onChangeMilestoneRange,
@@ -76,6 +79,27 @@ export default function MilestoneTrack({
     onBeginRange: () => setHoveredPoint(null),
     onBeginNote: () => setHoveredNote(null),
   });
+  // Keep index-based bars/notes and previews on the pointer-down value even if
+  // a background read changes their order. The server checks its opening revision.
+  const frozenLayout = useMemo(() => {
+    if (!interaction) return null;
+    const ranges = milestoneRanges(interaction.milestone);
+    return {
+      ranges,
+      bars: milestoneBarsForPeriods(ranges, interaction.periods),
+      weeklyLayout: interaction.periods.some((period) => period.kind === "week")
+        ? weeklyNoteLayout(ranges, interaction.periods)
+        : null,
+    };
+  }, [interaction]);
+  const project = interaction?.snapshot.project || currentProject;
+  const milestone = interaction?.milestone || currentMilestone;
+  const periods = interaction?.periods || currentPeriods;
+  const ranges = frozenLayout?.ranges || currentRanges;
+  const bars = frozenLayout?.bars || currentBars;
+  const weeklyLayout = frozenLayout
+    ? frozenLayout.weeklyLayout
+    : currentWeeklyLayout;
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track) return;
@@ -305,7 +329,7 @@ export default function MilestoneTrack({
               }}
               onBlur={() => setHoveredPoint(null)}
               onClick={() => {
-                if (suppressClickRef.current) {
+                if (isInteracting() || suppressClickRef.current) {
                   suppressClickRef.current = false;
                   return;
                 }
@@ -316,6 +340,10 @@ export default function MilestoneTrack({
               onPointerUp={endDrag}
               onPointerCancel={cancelDrag}
               onContextMenu={(event) => {
+                if (isInteracting()) {
+                  event.preventDefault();
+                  return;
+                }
                 setHoveredPoint(null);
                 onMilestoneContextMenu(event, milestone, rangeIndex);
               }}
@@ -345,7 +373,7 @@ export default function MilestoneTrack({
             title={`${milestone.name} · ${dateLabel(displayed.range.start)} – ${dateLabel(displayed.range.end)}\n${details.join("\n")}${isAdmin ? "\nTıklayın: düzenle · Basılı tutup sürükleyin: taşı · Uçlardan sürükleyin: daralt / genişlet" : ""}`}
             aria-label={details.join(", ")}
             onClick={() => {
-              if (suppressClickRef.current) {
+              if (isInteracting() || suppressClickRef.current) {
                 suppressClickRef.current = false;
                 return;
               }
@@ -355,9 +383,13 @@ export default function MilestoneTrack({
             onPointerMove={moveDrag}
             onPointerUp={endDrag}
             onPointerCancel={cancelDrag}
-            onContextMenu={(event) =>
-              onMilestoneContextMenu(event, milestone, rangeIndex)
-            }
+            onContextMenu={(event) => {
+              if (isInteracting()) {
+                event.preventDefault();
+                return;
+              }
+              onMilestoneContextMenu(event, milestone, rangeIndex);
+            }}
           >
             <ul className="gantt-note-list">
               {entries.map((entry, noteIndex) => (
@@ -467,13 +499,17 @@ export default function MilestoneTrack({
             onBlur={() => setHoveredNote(null)}
             onClick={() => {
               setHoveredNote(null);
-              if (suppressClickRef.current) {
+              if (isInteracting() || suppressClickRef.current) {
                 suppressClickRef.current = false;
                 return;
               }
               if (isAdmin && !saving) onEditMilestone(milestone);
             }}
             onContextMenu={(event) => {
+              if (isInteracting()) {
+                event.preventDefault();
+                return;
+              }
               setHoveredNote(null);
               onMilestoneContextMenu(event, milestone, note.rangeIndex);
             }}

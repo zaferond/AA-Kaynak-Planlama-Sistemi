@@ -233,6 +233,7 @@ export async function changeLeader(input: {
   newName?: string;
   managerName?: string;
   generation?: number;
+  catalogRevision?: number;
 }): Promise<Data> {
   return (
     await api("/leaders/change", {

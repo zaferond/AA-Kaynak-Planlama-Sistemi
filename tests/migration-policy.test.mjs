@@ -4,11 +4,12 @@ import { prepareSchema } from "../backend/schema-migrations.mjs";
 import {
   assertMigrationHistory,
   requiredVersions,
+  schemaVersion,
 } from "../backend/migration-catalog.mjs";
 
 test("SQL.js and MSSQL startup reject unknown migration history before any write", async () => {
   for (const provider of ["sqljs", "mssql"]) {
-    for (const version of [0, 31, 999]) {
+    for (const version of [0, schemaVersion + 1, 999]) {
       const commands = [];
       const connection = {
         async query(sql) {

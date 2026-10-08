@@ -92,6 +92,18 @@ export async function checkTableStyles(f) {
             await style(input, "background-color"),
             "rgb(255, 255, 255)",
           );
+          assert.equal(
+            await page
+              .locator(input)
+              .evaluate((el) => getComputedStyle(el.closest("td")).zIndex),
+            "9",
+          );
+          assert.equal(
+            await page
+              .locator(input)
+              .evaluate((el) => getComputedStyle(el.closest("td")).position),
+            "relative",
+          );
           await page.locator(input).blur();
           assert.equal(await style(input, "background-color"), saved);
           assert.equal(

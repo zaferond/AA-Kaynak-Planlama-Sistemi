@@ -96,8 +96,37 @@ test("server rejects HTTP configuration before constructing the database store",
   // password hashing and HTTP app are replaced by tripwires, not real services.
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-http-preflight-"));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  for (const name of ["backend", "shared"])
-    await fs.mkdir(path.join(dir, name));
+  for (const name of [
+    "backend",
+    "shared",
+    "scripts",
+    "frontend/src",
+    "frontend/components",
+    "frontend/lib",
+    "frontend/assets",
+    "site",
+  ])
+    await fs.mkdir(path.join(dir, name), { recursive: true });
+  await fs.copyFile(
+    new URL("../scripts/deployment-manifest.mjs", import.meta.url),
+    path.join(dir, "scripts/deployment-manifest.mjs"),
+  );
+  for (const [name, value] of Object.entries({
+    "package.json": '{"version":"3.0.0"}',
+    "package-lock.json": "{}",
+    "baslat-mac.sh": "# synthetic",
+    "baslat-windows.cmd": "rem synthetic",
+    "frontend/package.json": "{}",
+    "frontend/package-lock.json": "{}",
+    "frontend/tsconfig.json": "{}",
+    "frontend/build.mjs": "// synthetic",
+    "frontend/styles.mjs": "// synthetic",
+    "frontend/src/main.tsx": "// synthetic",
+    "shared/server-domain.ts": "// synthetic",
+    "scripts/verify-deployment.mjs": "// synthetic",
+    "site/index.html": "synthetic site",
+  }))
+    await fs.writeFile(path.join(dir, name), value);
   for (const name of ["server.mjs", "http-config.mjs", "trusted-proxies.mjs"])
     await fs.copyFile(
       new URL("../backend/" + name, import.meta.url),
@@ -127,6 +156,9 @@ test("server rejects HTTP configuration before constructing the database store",
     path.join(dir, "backend/auth.mjs"),
     'export function hashPassword() { throw Error("PASSWORD_TRIPWIRE"); }',
   );
+  const { deploymentSources, writeDeploymentManifest } =
+    await import("../scripts/deployment-manifest.mjs");
+  await writeDeploymentManifest(dir, await deploymentSources(dir));
   const run = async (settings) => {
     const env = {
       NODE_ENV: "production",
@@ -173,4 +205,20 @@ test("server rejects HTTP configuration before constructing the database store",
     await fs.readFile(path.join(dir, "db-accessed.txt"), "utf8"),
     "synthetic tripwire",
   );
+  await fs.rm(path.join(dir, "db-accessed.txt"));
+  for (const file of [
+    "deployment-manifest.json",
+    "backend/app.mjs",
+    "site/index.html",
+  ]) {
+    const original = await fs.readFile(path.join(dir, file));
+    if (file === "deployment-manifest.json") await fs.rm(path.join(dir, file));
+    else await fs.appendFile(path.join(dir, file), "\n// drift");
+    const stderr = await run({ APP_ORIGIN: "HTTPS://SYNTHETIC.INVALID:443/" });
+    assert.match(stderr, /dağıtım doğrulanamadı/);
+    await assert.rejects(fs.access(path.join(dir, "db-accessed.txt")), {
+      code: "ENOENT",
+    });
+    await fs.writeFile(path.join(dir, file), original);
+  }
 });

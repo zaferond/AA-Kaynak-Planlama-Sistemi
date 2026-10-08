@@ -67,6 +67,9 @@ async function normalFile(root, relative) {
   return fs.readFile(path.join(root, relative));
 }
 
+// Callers must use paths from a verified manifest, never user-supplied paths.
+export const readDeploymentFile = normalFile;
+
 async function inventory(root, directory, select, strict = false) {
   const stat = await fs.lstat(path.join(root, directory));
   if (!stat.isDirectory() || stat.isSymbolicLink())
@@ -218,7 +221,7 @@ function differences(expected, actual) {
 }
 
 /** Read-only pre-deployment check; no .env, Store, DB, account or running process access. */
-export async function verifyDeployment(root) {
+export async function verifyDeployment(root, { includeManifest = false } = {}) {
   let manifest;
   try {
     const bytes = await normalFile(root, manifestName);
@@ -268,5 +271,6 @@ export async function verifyDeployment(root) {
     commit: manifest.commit,
     sourceDifferences,
     artifactDifferences,
+    ...(includeManifest ? { manifest } : {}),
   };
 }

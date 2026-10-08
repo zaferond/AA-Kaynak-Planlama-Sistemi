@@ -1,4 +1,5 @@
 import { table, tableSpec, ident } from "./tables.mjs";
+import { DIRECTORY_REVISION_KEY } from "../shared/directory-policy.ts";
 const identity = (value) => value;
 const firstValue = (values) => values[0];
 
@@ -149,15 +150,19 @@ export async function readRevisionMap(c, provider, planningTeams) {
 export function revisionRecordKey(values) {
   const kind = values[0],
     id = values[1];
-  return kind === "allocation" && id.startsWith("@risk:")
-    ? "risk:" + id.slice(6)
-    : kind === "allocation" && id.startsWith("@actual:")
-      ? "actual:" + id.slice(8)
-      : kind === "allocation" && id.startsWith("@worked:")
-        ? "workedHours:" + id.slice(8)
-        : kind === "allocation" && id.startsWith("@calendar:")
-          ? "calendar:" + id.slice(10)
-          : kind === "allocation" && id.startsWith("@person:")
-            ? "personDay:" + id.slice(8)
-            : kind + ":" + id;
+  if (kind === "allocation" && id === "@directory:shared")
+    return DIRECTORY_REVISION_KEY;
+  return kind === "allocation" && id.startsWith("@riskSystem:")
+    ? "riskSystem:" + id.slice(12)
+    : kind === "allocation" && id.startsWith("@risk:")
+      ? "risk:" + id.slice(6)
+      : kind === "allocation" && id.startsWith("@actual:")
+        ? "actual:" + id.slice(8)
+        : kind === "allocation" && id.startsWith("@worked:")
+          ? "workedHours:" + id.slice(8)
+          : kind === "allocation" && id.startsWith("@calendar:")
+            ? "calendar:" + id.slice(10)
+            : kind === "allocation" && id.startsWith("@person:")
+              ? "personDay:" + id.slice(8)
+              : kind + ":" + id;
 }

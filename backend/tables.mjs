@@ -59,6 +59,10 @@ export const tables = {
       payload: "nvarchar(max)",
     },
   },
+  risk_systems: {
+    key: ["id"],
+    columns: { id: "nvarchar(120)", name: "nvarchar(200)" },
+  },
   project_phases: {
     key: ["project_id", "month"],
     columns: {

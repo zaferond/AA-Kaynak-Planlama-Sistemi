@@ -1,5 +1,5 @@
 import { currentPlanningMonth } from "./resource-dates.ts";
-export const SYSTEM_NAME = "AA Mühendislik Liderliği Kaynak Yönetimi Sistemi";
+export { SYSTEM_NAME, UI_THEME } from "./branding.ts";
 export const TAB_LABELS = {
   plan: "AA Planlanan Kaynak Dağılımı",
   projects: "AA Mühendislik Liderliği Projeler",

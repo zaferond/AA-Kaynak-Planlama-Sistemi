@@ -8,6 +8,9 @@ import {
 import { milestoneRanges } from "../shared/milestone-ranges.ts";
 import { applyChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
+import { captureProjectSnapshot } from "../frontend/src/features/project-snapshot.ts";
+const snapshot = (data) =>
+  captureProjectSnapshot(data.projects[0], data.revisions["project:p"] || 0);
 const admin = { _id: "root-admin", role: "admin", leaders: [] };
 
 test("topic ordering preserves dates, nested notes and project metadata with revision and access checks", () => {
@@ -252,7 +255,7 @@ const fixture = () => ({
 });
 function save(data, adjustment) {
   const before = structuredClone(data);
-  const command = prepareTimelineChange(data, "p", "m", adjustment);
+  const command = prepareTimelineChange(snapshot(data), "m", adjustment);
   assert.deepEqual(data, before, "command preparation must not mutate source");
   applyChanges(data, admin, [command]);
   validate(data);
@@ -341,26 +344,22 @@ test("timeline edits reject overlaps, invalid narrowing and project boundary vio
     [{ target: "range", rangeIndex: 0, mode: "move", days: -365 }, /proje/],
   ])
     assert.throws(
-      () => prepareTimelineChange(data, "p", "m", adjustment),
+      () => prepareTimelineChange(snapshot(data), "m", adjustment),
       message,
     );
   assert.deepEqual(data, before);
 });
-test("timeline commands retain conflict checks and explain a removed project or topic", () => {
+test("timeline commands retain conflict checks and explain a missing topic", () => {
   const data = fixture();
   const adjustment = { target: "range", rangeIndex: 0, mode: "move", days: 1 };
-  const command = prepareTimelineChange(data, "p", "m", adjustment);
+  const command = prepareTimelineChange(snapshot(data), "m", adjustment);
   applyChanges(data, admin, [command]);
   assert.throws(
     () => applyChanges(data, admin, [command]),
     (error) => error.status === 409,
   );
-  for (const [projectId, topicId] of [
-    ["missing", "m"],
-    ["p", "missing"],
-  ])
-    assert.throws(
-      () => prepareTimelineChange(data, projectId, topicId, adjustment),
-      /Kritik konu bulunamadı/,
-    );
+  assert.throws(
+    () => prepareTimelineChange(snapshot(data), "missing", adjustment),
+    /Kritik konu bulunamadı/,
+  );
 });

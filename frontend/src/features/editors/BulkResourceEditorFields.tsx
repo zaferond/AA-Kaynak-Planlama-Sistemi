@@ -84,7 +84,7 @@ export default function BulkResourceEditorFields({
       </div>
       <p className="bulk-edit-hint">
         Değiştirmediğiniz alanlar korunur. Aktif İlanı plana dahil etmek için
-        İşbaşı Tarihi gerekir.
+        Tahmini İşbaşı Tarihi gerekir.
       </p>
     </>
   );

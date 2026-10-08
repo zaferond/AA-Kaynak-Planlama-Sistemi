@@ -8,6 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 import { Store } from "../backend/store.mjs";
+import compatibleFingerprints from "../backend/compatible-migration-fingerprints.json" with { type: "json" };
 import { hashPassword, verifyPassword } from "../backend/auth.mjs";
 import { applyChanges } from "../backend/operations.mjs";
 import { SqlJsAdapter } from "../backend/adapters/sqljs.mjs";
@@ -304,19 +305,30 @@ test("full backup creation, verification and recovery reject unusable password r
   assert.deepEqual(await fs.readFile(f.source), f.before);
 });
 
-test("the previous schema-30 catalog fingerprint is explicitly compatible but arbitrary fingerprints are rejected", async (t) => {
+test("approved catalog fingerprints apply only to the matching schema; arbitrary fingerprints are rejected", async (t) => {
   const f = await fixture(t),
     schema = await currentSchema(),
     good = await f.backup();
-  assert.equal(schema.compatibleMigrationsSha256.length, 1);
-  await replaceBundleImage(good.directory, f.before, (manifest) => {
-    manifest.migrationsSha256 = schema.compatibleMigrationsSha256[0];
-  });
-  await verifyBundle(good.directory);
-  await prepareRecovery({
-    backup: good.directory,
-    output: path.join(f.dir, "compatible-recovery"),
-  });
+  for (const [index, entry] of compatibleFingerprints.entries()) {
+    if (entry.provider !== "sqljs") continue;
+    await replaceBundleImage(good.directory, f.before, (manifest) => {
+      manifest.migrationsSha256 = entry.sha256;
+    });
+    if (entry.schemaVersion === schema.version) {
+      assert(schema.compatibleMigrationsSha256.includes(entry.sha256));
+      await verifyBundle(good.directory);
+      await prepareRecovery({
+        backup: good.directory,
+        output: path.join(f.dir, "compatible-recovery-" + index),
+      });
+    } else {
+      assert(!schema.compatibleMigrationsSha256.includes(entry.sha256));
+      await assert.rejects(
+        verifyBundle(good.directory),
+        /şema kaynakları farklı/,
+      );
+    }
+  }
   await replaceBundleImage(good.directory, f.before, (manifest) => {
     manifest.migrationsSha256 = "0".repeat(64);
   });

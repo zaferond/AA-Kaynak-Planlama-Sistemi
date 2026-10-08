@@ -3,6 +3,10 @@ export const spreadsheetNamespace =
 export const EXCEL_MAX_CELL_CHARACTERS = 32767;
 export const EXCEL_MAX_CELL_LINE_BREAKS = 253;
 export const EXCEL_MAX_ROWS = 1048576;
+// XML 1.0 §2.2 Char: paired supplementary characters are valid; lone
+// surrogates, FFFE/FFFF and forbidden C0 controls cannot be escaped into XML.
+const invalidXmlCharacter =
+  /[^\u0009\u000a\u000d\u0020-\ud7ff\ue000-\ufffd\u{10000}-\u{10ffff}]/u;
 
 export function assertExcelRowCount(rows: number): void {
   if (!Number.isSafeInteger(rows) || rows < 1 || rows > EXCEL_MAX_ROWS)
@@ -78,8 +82,19 @@ export function splitExcelText(
   return chunks;
 }
 export function escapeXml(value: unknown): string {
-  return String(value ?? "")
-    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "")
+  const text = String(value ?? "");
+  const invalid = invalidXmlCharacter.exec(text);
+  if (invalid) {
+    const code = invalid[0]
+      .codePointAt(0)!
+      .toString(16)
+      .toUpperCase()
+      .padStart(4, "0");
+    throw Error(
+      `Excel'e aktarılamayan karakter (U+${code}) bulundu. İlgili metni düzeltip tekrar aktarın.`,
+    );
+  }
+  return text
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")

@@ -1,5 +1,6 @@
 import type { Change } from "../../../shared/commands.ts";
 import type { Data, Project } from "../../../shared/model.ts";
+import type { ProjectSnapshot } from "./project-snapshot.ts";
 import {
   changeMilestoneNoteDates,
   milestoneRanges,
@@ -97,18 +98,14 @@ type DateAdjustment = {
   days: number;
 } & ({ target: "range" } | { target: "note"; noteIndex: number });
 
-/** Use the latest project snapshot and revision for both monthly and weekly edits. */
+/** Never rebase an index-based drag onto a project received after pointer down. */
 export function prepareTimelineChange(
-  data: Data,
-  projectId: string,
+  { project, revision }: ProjectSnapshot,
   milestoneId: string,
   adjustment: DateAdjustment,
 ): Change<"project"> {
-  const project = data.projects.find((item) => item.id === projectId);
-  const milestone = project?.milestones?.find(
-    (item) => item.id === milestoneId,
-  );
-  if (!project || !milestone)
+  const milestone = project.milestones?.find((item) => item.id === milestoneId);
+  if (!milestone)
     throw Error("Kritik konu bulunamadı. Verileri yenileyip tekrar deneyin.");
   const { rangeIndex, mode, days } = adjustment;
   const changed =
@@ -133,7 +130,7 @@ export function prepareTimelineChange(
   return {
     kind: "project",
     id: project.id,
-    revision: data.revisions["project:" + project.id] || 0,
+    revision,
     value: {
       ...project,
       milestones: project.milestones?.map((item) =>

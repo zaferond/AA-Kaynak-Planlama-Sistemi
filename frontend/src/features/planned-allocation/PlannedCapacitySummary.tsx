@@ -2,6 +2,7 @@ import { ChevronDown, Layers3 } from "lucide-react";
 import { Table, TableBody } from "@/components/ui/table";
 import PlannedTableHeaders from "./PlannedTableHeaders";
 import PlannedSummaryRows from "./PlannedSummaryRows";
+import { FilterSummaryChips } from "../workspace/WorkspaceFilterSummary";
 import type { PlannedAllocationProps } from "./types";
 export default function PlannedCapacitySummary(
   props: Pick<
@@ -43,24 +44,8 @@ export default function PlannedCapacitySummary(
         </span>
         <span className="capacitystrip-copy">
           <strong>Filtrelenen Takımlar Özet Kaynak Raporu</strong>
-          <span
-            className="capacity-filter-list"
-            aria-label="Özet kaynak raporunda uygulanan filtreler"
-          >
-            {capacityFilters.map(({ label, values, active }) => (
-              <span
-                key={label}
-                className={
-                  "capacity-filter-chip" + (active ? " is-active" : "")
-                }
-                title={
-                  label + ": " + (values.length ? values.join(", ") : "Tümü")
-                }
-              >
-                <span>{label}</span>
-                <strong>{values.length ? values.join(", ") : "Tümü"}</strong>
-              </span>
-            ))}
+          <span aria-label="Özet kaynak raporunda uygulanan filtreler">
+            <FilterSummaryChips filters={capacityFilters} />
           </span>
         </span>
         <span className="capacitystrip-action" aria-hidden="true">

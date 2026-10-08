@@ -273,7 +273,7 @@ test("URL filters cannot create teams or people missing from a manager's server-
   );
 });
 
-test("paging clamps after scope changes and preserves row order in both grouping directions", () => {
+test("all filtered rows remain reachable without pagination in both grouping directions", () => {
   const teams = Array.from({ length: 17 }, (_, i) => ({ id: "t" + i })),
     projects = Array.from({ length: 23 }, (_, i) => ({ id: "p" + i }));
   const teamView = selectWorkspacePages(teams, projects, {
@@ -282,11 +282,11 @@ test("paging clamps after scope changes and preserves row order in both grouping
     planPage: 99,
     projectPage: 99,
   });
-  assert.equal(teamView.planPageSize, 20);
-  assert.equal(teamView.effectivePlanPage, 19);
-  assert.equal(teamView.effectiveProjectPage, 1);
-  assert.equal(teamView.visiblePlanRows.length, 11);
-  assert.equal(teamView.visiblePlanRows[0], "t16|p12");
+  assert.equal(teamView.planPageSize, 391);
+  assert.equal(teamView.effectivePlanPage, 0);
+  assert.equal(teamView.effectiveProjectPage, 0);
+  assert.equal(teamView.visiblePlanRows.length, 391);
+  assert.equal(teamView.visiblePlanRows[0], "t0|p0");
   assert.equal(teamView.visiblePlanRows.at(-1), "t16|p22");
   const projectView = selectWorkspacePages(teams, projects, {
     count: 12,
@@ -294,8 +294,26 @@ test("paging clamps after scope changes and preserves row order in both grouping
     planPage: 0,
     projectPage: 0,
   });
-  assert.equal(projectView.planPageSize, 100);
+  assert.equal(projectView.planPageSize, 391);
   assert.deepEqual(projectView.visiblePlanRows.slice(0, 2), ["t0|p0", "t1|p0"]);
+  for (const [total, expectedPage] of [
+    [250, 0],
+    [251, 0],
+    [500, 0],
+    [501, 0],
+  ]) {
+    const paged = selectWorkspacePages(
+      teams,
+      Array.from({ length: total }, (_, i) => ({ id: "p" + i })),
+      {
+        count: 12,
+        view: "project",
+        planPage: 0,
+        projectPage: 99,
+      },
+    );
+    assert.equal(paged.effectiveProjectPage, expectedPage);
+  }
   const empty = selectWorkspacePages([], [], {
     count: 12,
     view: "project",

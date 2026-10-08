@@ -1,4 +1,5 @@
 import catalog from "../shared/catalog.json" with { type: "json" };
+import { initialRiskSystems } from "../shared/risk-system-seed.ts";
 import {
   workdaysInMonth,
   calendarHoursInMonth,
@@ -498,6 +499,15 @@ export async function prepareSchema(c, { provider, auto }) {
     if (!auto)
       throw Error("Proje sıralaması için IT npm run db:migrate çalıştırmalı.");
     await executeSqlMigration(c, provider, 30);
+  }
+  if (!versions.includes(31)) {
+    if (!auto)
+      throw Error(
+        "Sistem / alt sistem kataloğu için IT npm run db:migrate çalıştırmalı.",
+      );
+    await executeSqlMigration(c, provider, 31);
+    await c.upsert("risk_systems", initialRiskSystems);
+    await c.query("UPDATE kp_settings SET generation=generation+1 WHERE id=1");
   }
   assertMigrationHistory(
     (await c.query("SELECT version FROM kp_schema_migrations")).rows.map(

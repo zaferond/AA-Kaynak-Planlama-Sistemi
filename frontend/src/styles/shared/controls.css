@@ -22,13 +22,27 @@
   flex-shrink: 0;
 }
 .pickerpanel {
-  width: min(440px, calc(100vw - 36px)) !important;
+  width: min(
+    440px,
+    calc(var(--radix-popper-available-width) / var(--popover-page-scale, 1))
+  ) !important;
+  max-height: calc(
+    var(--radix-popper-available-height) / var(--popover-page-scale, 1)
+  );
+  display: flex;
+  flex-direction: column;
   padding: 12px;
   background: white;
   z-index: 100;
 }
+.pickerpanel-single {
+  width: calc(
+    var(--radix-popper-anchor-width) / var(--popover-page-scale, 1)
+  ) !important;
+}
 .pickersearch {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid #dce5ed;
@@ -40,6 +54,7 @@
 }
 .pickeractions {
   display: flex;
+  flex-shrink: 0;
   justify-content: space-between;
   gap: 10px;
   padding: 10px 0;
@@ -47,8 +62,24 @@
   color: #1766bd;
 }
 .pickeroptions {
+  min-height: 0;
   max-height: 310px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: #9aaec2 #eef3f8;
+}
+.pickeroptions::-webkit-scrollbar {
+  width: 8px;
+}
+.pickeroptions::-webkit-scrollbar-track {
+  background: #eef3f8;
+}
+.pickeroptions::-webkit-scrollbar-thumb {
+  background: #9aaec2;
+  border-radius: 4px;
 }
 .pickeroptions .option {
   display: flex;

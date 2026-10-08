@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { Store } from "../backend/store.mjs";
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 import { concurrencySuite } from "./concurrency-suite.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
 import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
@@ -32,7 +33,7 @@ test(
       const stores = Array.from({ length: 2 }, () => new Store({ env }));
       try {
         await checked.test(
-          "native legacy v2 upgrade to schema 30 preserves data and runs once",
+          `native legacy v2 upgrade to schema ${schemaVersion} preserves data and runs once`,
           () => nativeUpgradeSuite(stores[0]),
         );
         await cleanupTestTables(stores[0].db);
@@ -88,6 +89,8 @@ test(
           "tests/integration-suite.mjs",
           "tests/concurrency-suite.mjs",
           "shared/server-domain.ts",
+          "shared/risk-system-seed.ts",
+          "shared/risk-system-policy.ts",
         ];
         for (const name of (
           await fs.readdir(new URL("../backend/migrations/", import.meta.url))
@@ -102,7 +105,7 @@ test(
         return {
           checkedAt: new Date().toISOString(),
           node: process.version,
-          schema: 30,
+          schema: schemaVersion,
           server,
           load,
           sourceHashes,

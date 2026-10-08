@@ -43,3 +43,8 @@ Yalnız ayrı ortam ve sentetik veriyle uygulanır. Çalışan/üretim ortamınd
 - Kurulum hatası ayrıca gerçek npm ile ağ kapalı, yerel `file:` paketleri ve ayrı boş npm config/cache kullanılarak önce/sonra yeniden üretildi. Uygulamanın gerçek `.env`, `node_modules` veya DB'si kullanılmadı.
 
 Başlatıcı kontrollerinin kapsamı [Windows doğrulama raporunda](WINDOWS-BASLATMA-DOGRULAMA-2026-10-04.md), commit'e bağlı kalite CI sonuçları [CI kanıt arşivinde](CI-KANIT-ARSIVI.md) bulunur. Bu kontroller kurum servis/ACL kabulünün yerine geçmez.
+
+
+## 7 Ekim 2026 paket koruması
+
+Yeni paket, geliştirme deposunda build ve doğrulama sonrasında `npm.cmd run deploy:package -- --output "..\AA-dagitim"` ile boş hedefe hazırlanabilir. Mevcut klasörü veya veri/ayarları üzerine yazmaz. Servis açılışı `npm.cmd start` kaynak/site manifestini Store oluşturulmadan önce kontrol eder; başarısız doğrulamada paket yeniden güvenilir kaynaktan hazırlanmalıdır. Mac temiz kurulum kabulü Windows kabulünün yerine geçmez.

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { Data, Team } from "../../model";
+import type { Data, Team, RiskSystem } from "../../model";
+import { assertUniqueRiskSystemName } from "../../../../shared/risk-system-policy";
 import { ownValue } from "../../../../shared/records";
 import {
   assertUniqueLeaderName,
   assertUniqueTeamName,
+  directoryRevision,
 } from "../../../../shared/directory-policy";
 import {
   ApiError,
@@ -14,7 +16,7 @@ import {
   writeLocal,
 } from "../../storage";
 
-export type DirectoryKind = "leader" | "team";
+export type DirectoryKind = "leader" | "team" | "riskSystem";
 type LeaderDraft = {
   kind: "leader";
   originalName: string | null;
@@ -22,6 +24,7 @@ type LeaderDraft = {
   name: string;
   managerName: string;
   generation: number;
+  catalogRevision: number;
 };
 type TeamDraft = {
   kind: "team";
@@ -29,7 +32,13 @@ type TeamDraft = {
   value: Team;
   revision: number;
 };
-type Draft = LeaderDraft | TeamDraft;
+type RiskSystemDraft = {
+  kind: "riskSystem";
+  original: RiskSystem | null;
+  value: RiskSystem;
+  revision: number;
+};
+type Draft = LeaderDraft | TeamDraft | RiskSystemDraft;
 
 function startDraft(data: Data, kind: DirectoryKind, id?: string): Draft {
   if (kind === "leader") {
@@ -41,6 +50,18 @@ function startDraft(data: Data, kind: DirectoryKind, id?: string): Draft {
       name: id || "",
       managerName,
       generation: currentGeneration(),
+      catalogRevision: directoryRevision(data),
+    };
+  }
+  if (kind === "riskSystem") {
+    const item = data.riskSystems?.find((item) => item.id === id);
+    return {
+      kind,
+      original: item ? { ...item } : null,
+      value: item
+        ? { ...item }
+        : { id: "system_" + crypto.randomUUID(), name: "" },
+      revision: item ? data.revisions["riskSystem:" + item.id] || 0 : 0,
     };
   }
   const team = data.teams.find((team) => team.id === id);
@@ -81,10 +102,12 @@ export function useDirectoryEditor({
     (draft.kind === "leader"
       ? draft.name !== (draft.originalName || "") ||
         draft.managerName !== draft.originalManager
-      : draft.value.name !== (draft.original?.name || "") ||
-        draft.value.lead !== (draft.original?.lead || "") ||
-        (draft.value.managerName || "") !==
-          (draft.original?.managerName || ""));
+      : draft.kind === "riskSystem"
+        ? draft.value.name !== (draft.original?.name || "")
+        : draft.value.name !== (draft.original?.name || "") ||
+          draft.value.lead !== (draft.original?.lead || "") ||
+          (draft.value.managerName || "") !==
+            (draft.original?.managerName || ""));
   const selectedId =
     draft?.kind === "leader" ? draft.originalName : draft?.original?.id;
 
@@ -125,6 +148,10 @@ export function useDirectoryEditor({
     if (saving.current) return;
     setDraft((previous) => {
       if (!previous) return previous;
+      if (previous.kind === "riskSystem")
+        return field === "name"
+          ? { ...previous, value: { ...previous.value, name: value } }
+          : previous;
       if (previous.kind === "team")
         return { ...previous, value: { ...previous.value, [field]: value } };
       return field === "lead" ? previous : { ...previous, [field]: value };
@@ -165,8 +192,21 @@ export function useDirectoryEditor({
           newName: current.originalName === null ? undefined : name,
           managerName: current.managerName.trim(),
           generation: current.generation,
+          catalogRevision: current.catalogRevision,
         });
         id = name;
+      } else if (current.kind === "riskSystem") {
+        const value = { ...current.value, name: current.value.name.trim() };
+        if (!value.name) throw Error("Sistem / alt sistem adı boş olamaz.");
+        assertUniqueRiskSystemName(data.riskSystems || [], value);
+        next = await writeLocal(
+          "riskSystem",
+          value.id,
+          value,
+          current.revision,
+        );
+        id = value.id;
+        name = value.name;
       } else {
         const value = {
           ...current.value,
@@ -201,7 +241,9 @@ export function useDirectoryEditor({
         name +
           " silinsin mi?" +
           (teams ? ` Bağlı ${teams} kullanılmayan takım da silinecek.` : "") +
-          " Çalışan, dağılım veya kullanıcı yetkilerinde kullanılan kayıtlar silinemez.",
+          (current.kind === "riskSystem"
+            ? " Risklerde kullanılan tanımlar silinemez."
+            : " Çalışan, dağılım veya kullanıcı yetkilerinde kullanılan kayıtlar silinemez."),
       )
     )
       return;
@@ -212,10 +254,11 @@ export function useDirectoryEditor({
               action: "delete",
               name,
               generation: current.generation,
+              catalogRevision: current.catalogRevision,
             })
           : await writeBatch([
               {
-                kind: "team",
+                kind: current.kind,
                 id: current.value.id,
                 value: null,
                 operation: "delete",
@@ -230,11 +273,18 @@ export function useDirectoryEditor({
     if (!mayLeave()) return;
     await run(async () => {
       const next = await readLocal();
-      onSaved(next, "Liderlik ve takım listesi güncellendi.");
+      onSaved(
+        next,
+        kind === "riskSystem"
+          ? "Sistem / alt sistem listesi güncellendi."
+          : "Liderlik ve takım listesi güncellendi.",
+      );
       const exists =
         kind === "leader"
           ? next.leaders?.includes(selectedId || "")
-          : next.teams.some((team) => team.id === selectedId);
+          : kind === "riskSystem"
+            ? next.riskSystems?.some((item) => item.id === selectedId)
+            : next.teams.some((team) => team.id === selectedId);
       setDraft(
         kind && selectedId && exists
           ? startDraft(next, kind, selectedId)

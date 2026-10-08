@@ -63,7 +63,14 @@ export default function Cell({
     }
   }
   return (
-    <div className={"cell " + (error ? "invalid" : "")}>
+    <div
+      className={"cell " + (error ? "invalid" : "")}
+      data-window-keep={
+        busy || !!error || Number(text.replace(",", ".")) !== value
+          ? "true"
+          : undefined
+      }
+    >
       <input
         aria-label={label}
         title={
@@ -94,6 +101,7 @@ export default function Cell({
             e.preventDefault();
             skipBlur.current = true;
             setText(value ? String(value).replace(".", ",") : "");
+            setError("");
             e.currentTarget.blur();
             return;
           }

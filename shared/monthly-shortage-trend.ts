@@ -1,28 +1,31 @@
-import type { Metric } from "./metrics.ts";
+import { sumCapacityMetrics, type Metric } from "./metrics.ts";
 
 export type MonthlyShortagePoint = {
   month: string;
-  average: number;
   total: number;
   teamCount: number;
 };
 
-/** Average each team's positive gap; surpluses in other teams do not hide a shortage. */
+/** Match the report table's net remaining capacity for the same selected scope. */
 export function buildMonthlyShortageTrend(
   capacity: Record<string, Metric>,
   teamIds: string[],
   months: string[],
 ): MonthlyShortagePoint[] {
   return months.map((month) => {
-    const total = teamIds.reduce((sum, teamId) => {
-      const value = capacity[teamId + "|" + month];
-      return sum + Math.max(0, (value?.total || 0) - (value?.current || 0));
-    }, 0);
+    const value = sumCapacityMetrics(capacity, teamIds, month);
+    const total = Math.max(0, value.total - value.current);
     return {
       month,
       total,
-      average: teamIds.length ? total / teamIds.length : 0,
       teamCount: teamIds.length,
     };
   });
+}
+
+/** Every selected month counts, including months without a shortage. */
+export function summarizeMonthlyShortage(points: MonthlyShortagePoint[]) {
+  const total = points.reduce((sum, point) => sum + point.total, 0);
+  const monthCount = points.length;
+  return { total, monthCount, average: monthCount ? total / monthCount : 0 };
 }

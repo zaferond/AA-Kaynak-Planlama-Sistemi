@@ -85,6 +85,7 @@ test("revision scope uses bound exact team IDs in streaming and ordinary queries
     ["allocation", "@actual:r|p|2026-01", 4],
     ["allocation", "@worked:r|2026-01", 5],
     ["allocation", "@calendar:shared", 6],
+    ["allocation", "@directory:shared", 9],
     ["allocation", "@person:r|2026-01-02|leave", 7],
     ["project", "p", 8],
   ];
@@ -132,6 +133,7 @@ test("revision scope uses bound exact team IDs in streaming and ordinary queries
         "actual:r|p|2026-01": 4,
         "workedHours:r|2026-01": 5,
         "calendar:shared": 6,
+        "directory:shared": 9,
         "personDay:r|2026-01-02|leave": 7,
         "project:p": 8,
       });

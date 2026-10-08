@@ -9,6 +9,7 @@ import {
   writeDeploymentManifest,
   verifyDeployment,
 } from "../scripts/deployment-manifest.mjs";
+import { createDeploymentPackage } from "../scripts/deployment-package.mjs";
 
 async function fixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "aa-deployment-test-"));
@@ -178,4 +179,60 @@ test("symlinked code directories are refused before hashing outside the package"
   );
   await assert.rejects(deploymentSources(f.root), /sembolik bağlantı/);
   await assert.rejects(fs.access(f.manifest), /ENOENT/);
+});
+
+test("deployment package creates one verified source/build tree and excludes settings, databases and dependencies", async (t) => {
+  const f = await fixture(t);
+  await f.build();
+  const output = f.root + "-package";
+  t.after(() => fs.rm(output, { recursive: true, force: true }));
+  await fs.mkdir(path.join(f.root, "node_modules/synthetic"), {
+    recursive: true,
+  });
+  await fs.writeFile(
+    path.join(f.root, "node_modules/synthetic/private.txt"),
+    "DEPENDENCY_SENTINEL",
+  );
+  const result = await createDeploymentPackage(f.root, output);
+  assert.equal(result.directory, await fs.realpath(output));
+  assert.equal((await verifyDeployment(output)).ok, true);
+  for (const name of [".env", "data", "node_modules", ".git"])
+    await assert.rejects(fs.access(path.join(output, name)), {
+      code: "ENOENT",
+    });
+  assert.equal(
+    await fs.readFile(path.join(f.root, ".env"), "utf8"),
+    f.files[".env"],
+  );
+  assert.deepEqual(
+    await fs.readFile(path.join(output, "deployment-manifest.json")),
+    await fs.readFile(f.manifest),
+  );
+});
+
+test("deployment packaging refuses existing installations, nested or stale source targets without touching their data", async (t) => {
+  const f = await fixture(t);
+  await f.build();
+  const output = f.root + "-existing";
+  t.after(() => fs.rm(output, { recursive: true, force: true }));
+  await fs.mkdir(output);
+  await fs.writeFile(path.join(output, ".env"), "EXISTING_CONFIG");
+  await assert.rejects(createDeploymentPackage(f.root, output), {
+    code: "EEXIST",
+  });
+  assert.equal(
+    await fs.readFile(path.join(output, ".env"), "utf8"),
+    "EXISTING_CONFIG",
+  );
+  await assert.rejects(
+    createDeploymentPackage(f.root, path.join(f.root, "new")),
+    /kaynak klasörünün dışında/,
+  );
+  await fs.appendFile(path.join(f.root, "frontend/src/main.tsx"), "// drift");
+  const fresh = f.root + "-stale";
+  await assert.rejects(
+    createDeploymentPackage(f.root, fresh),
+    /Kaynak paket doğrulanamadı/,
+  );
+  await assert.rejects(fs.access(fresh), { code: "ENOENT" });
 });

@@ -10,6 +10,7 @@ import {
   withMilestoneRanges,
 } from "../../../shared/milestone-ranges.ts";
 import { validPlanningMonth } from "../../../shared/planning-dates.ts";
+import type { ProjectSnapshot } from "./project-snapshot.ts";
 import {
   copyGridCells,
   pasteGridCells,
@@ -149,8 +150,9 @@ export function preparePhasePaste(
       : {}),
   });
 }
-function milestoneFor(data: Data, target: MilestoneTarget) {
-  const project = projectFor(data, target.projectId);
+function milestoneFor(project: Project, target: MilestoneTarget) {
+  if (project.id !== target.projectId)
+    throw Error("Proje bulunamadı. Menüyü yeniden açıp tekrar deneyin.");
   const milestone = project.milestones?.find(
     (value) => value.id === target.milestoneId,
   );
@@ -163,26 +165,34 @@ function milestoneFor(data: Data, target: MilestoneTarget) {
     );
   return { project, milestone, ranges };
 }
-export function milestoneClipboardColor(data: Data, target: MilestoneTarget) {
-  return milestoneFor(data, target).ranges[target.rangeIndex].color || "red";
+export function milestoneClipboardColor(
+  project: Project,
+  target: MilestoneTarget,
+) {
+  return milestoneFor(project, target).ranges[target.rangeIndex].color || "red";
 }
 export function prepareMilestoneColorPaste(
-  data: Data,
+  { project, revision }: ProjectSnapshot,
   target: MilestoneTarget,
   color: string,
 ): Change<"project"> {
   assertColor(color);
-  const { project, milestone, ranges } = milestoneFor(data, target);
+  const { milestone, ranges } = milestoneFor(project, target);
   const changed = withMilestoneRanges(
     milestone,
     ranges.map((range, index) =>
       index === target.rangeIndex ? { ...range, color } : range,
     ),
   );
-  return projectChange(data, {
-    ...project,
-    milestones: project.milestones?.map((value) =>
-      value.id === milestone.id ? changed : value,
-    ),
-  });
+  return {
+    kind: "project",
+    id: project.id,
+    revision,
+    value: {
+      ...project,
+      milestones: project.milestones?.map((value) =>
+        value.id === milestone.id ? changed : value,
+      ),
+    },
+  };
 }

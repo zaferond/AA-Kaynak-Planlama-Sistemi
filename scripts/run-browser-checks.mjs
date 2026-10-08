@@ -18,6 +18,13 @@ import { checkEntityEditors } from "./browser-checks/entity-editors.mjs";
 import { checkTableStyles } from "./browser-checks/table-styles.mjs";
 import { checkDirectoryManagement } from "./browser-checks/directory-management.mjs";
 import { checkMilestoneReportMenu } from "./browser-checks/milestone-report-menu.mjs";
+import { checkTimelineConcurrency } from "./browser-checks/timeline-concurrency.mjs";
+import { checkHeadcountForecast } from "./browser-checks/headcount-forecast.mjs";
+import { checkRiskSaveConfirmation } from "./browser-checks/risk-save-confirmation.mjs";
+import { checkExcelXmlCharacters } from "./browser-checks/excel-xml-characters.mjs";
+import { checkRiskSystems } from "./browser-checks/risk-systems.mjs";
+import { checkResourceReports } from "./browser-checks/resource-reports.mjs";
+import { checkViewportScroll } from "./browser-checks/viewport-scroll.mjs";
 
 const f = await fixture();
 try {
@@ -25,7 +32,12 @@ try {
   await checkSessionConsistency(f);
   await checkEntityEditors(f);
   await checkDirectoryManagement(f);
+  await checkRiskSystems(f);
+  await checkHeadcountForecast(f);
   await checkMilestoneReportMenu(f);
+  await checkTimelineConcurrency(f);
+  await checkRiskSaveConfirmation(f);
+  await checkExcelXmlCharacters(f);
   await checkRisks(f);
   await checkRiskConcurrency(f);
   await checkWorkspaceFilters(f);
@@ -39,6 +51,8 @@ try {
   await checkProjectTables(f);
   await checkMilestoneOverlap(f);
   await checkTimelineLayers(f);
+  await checkResourceReports(f);
+  await checkViewportScroll(f);
   assert.deepEqual(f.errors, []);
   await f.report("passed");
   console.log(

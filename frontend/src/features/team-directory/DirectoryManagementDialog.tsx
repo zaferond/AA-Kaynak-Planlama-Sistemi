@@ -45,7 +45,9 @@ export default function DirectoryManagementDialog({
   const manager =
     draft?.kind === "leader"
       ? draft.managerName
-      : draft?.value.managerName || "";
+      : draft?.kind === "team"
+        ? draft.value.managerName || ""
+        : "";
   return (
     <Dialog
       open={!!kind}

@@ -28,6 +28,12 @@ Linux ortamında eksik sistem kütüphaneleri varsa `npx playwright install --wi
 
 ## Kapsam
 
+5 Ekim 2026 Sistem / Alt Sistem kataloğu güncellemesinde **14/14 hedefli kontrol grubu geçti**, yakalanmamış tarayıcı hatası yok: mevcut dizin yönetimi 5, yeni risk kataloğu 5, risk kayıt onayı 4 grup. `risk-systems.mjs` 75 başlangıç adı, düğme sırası, arama/kaydırma, ekleme/tekrar adı reddetme, taslak koruma, rol kontrolleri, risk satırında ID ile seçim, ad değişikliğinin bağlı riske yansıması, açık eski risk taslağının 409 ile korunması ve kullanılan/kullanılmayan tanım silmesini denetler. Yönetim penceresi %90 ölçekli Chrome ekran görüntüsünde ayrıca incelendi. Kontrol tam runner'a eklendi; tam runner, Windows ve native MSSQL bu tur çalıştırılmadı. Testlerin tümü ayrı geçici SQL.js ve sentetik hesaplar kullandı; çalışan DB'ye işlem yapılmadı.
+
+5 Ekim 2026 Excel XML karakter düzeltmesinde hedefli **3/3 kontrol grubu geçti**, yakalanmamış tarayıcı hatası yok. `excel-xml-characters.mjs` geçerli Unicode sınırları ve CR/LF'nin gerçek XML ayrıştırıcısında korunmasını, yedi çıktı yazıcısının XML parçalarını ve sentetik normal kullanıcının geçersiz karakter içeren riskinde açık hata/indirme yapılmamasını denetler. Metin düzeltildikten sonra formül benzeri metin dahil kayıpsız inline string çıktısı kontrol edilir. Test ayrı geçici SQL.js ve Chrome bağlamları kullanır; gerçek veriye dokunmaz. Kontrol tam koşuya eklendi; tam koşu ve GitHub CI bu düzeltme için ayrıca çalıştırılmadı.
+
+5 Ekim 2026 risk kayıt onayı güncellemesinde seçili risk/oturum akışları geçici SQL.js ve Chrome üzerinde yeniden çalıştırıldı: **29/29 kontrol grubu geçti**, yakalanmamış tarayıcı hatası yok. Yeni `risk-save-confirmation.mjs` Enter/dış tıklamada kabul ve iptal, onaydan önce kayıt gönderilmemesi, değişmemiş veya eski değerine döndürülmüş satırda soru çıkmaması, geçersiz/yeni risk ve satır/sekme değişimi iptalinde taslağın korunmasını denetler. Aynı sekme tıklamasındaki mouse-down/focus olayları iptal sonucunu paylaşır; iki onay sorusu açılmaz. Mevcut 409/503/retry, bekleyen tek kayıt, silme/yeniden yükleme onayı, rol ve sekmeler arası oturum regresyonları bu 29 gruba dahildir. Tam tarayıcı koşusu ve GitHub CI bu güncelleme için ayrıca çalıştırılmadı.
+
 3 Ekim 2026'da macOS/Chrome üzerinde **69 kontrol grubu** başarılı:
 
 | Akış | Kontroller |
@@ -55,3 +61,34 @@ Testler uygulama davranışını ve veritabanındaki sonucu birlikte denetler; y
 
 
 Windows push/PR kalite işi ayrıca domain/TypeScript/build ve sentetik SQL.js oturum, dosya kilidi, rollback/restart, eşzamanlılık ve Excel paket kontrollerini çalıştırır. Gerçek Windows servis hesabı/ACL ve native MSSQL bağlantısı için ayrı kurum testi gerekir. `npm test` içindeki HTTPS/proxy testi OpenSSL kullanarak geçici test sertifikası üretir; global TLS ayarını veya gerçek sertifikaları değiştirmez.
+
+
+7 Ekim 2026 hedefli `viewport-scroll.mjs` kontrolü: 40 sentetik proje ve yalnız geçici SQL.js ile dört grup; %90 uygulama ölçeğinde 1800×1050 ve 1000×720 ekran, ana sayfanın özet satırında bitmesi, gerçek wheel ile bağımsız tablo kaydırma, tablo sonunda sayfanın hareket etmemesi, görünen takvim başlıklarının konum ve hit-test kontrolü, plan özeti açma/kapatma, takım gruplaması, aylık/haftalık proje görünümü ve proje/dönem filtre etiketleri. Çalıştırıcı tam tarayıcı CI listesine eklendi. Gerçek hesaba veya uygulama veritabanına bağlanmaz.
+
+Aynı turdaki hedefli regresyon koşusu toplam **12 grup** geçti: dört yeni viewport grubu, ortak üretilmiş tablo stilleri, üç ekranda proje freeze/değişimi, pointer/klavye proje sıralama ve hata koruması, aylık/haftalık bar/baklava katman hit-testleri. TypeScript ve üretim build başarılıdır.
+
+Son proje sayfalama güncellemesinde 260 sentetik proje eklendi; mevcut iki test projesiyle ilk sayfada 250, ikinci sayfada 12 proje ve önceki sayfaya dönüş doğrulandı. Kullanım ipucu satırı kaldırıldı. Son hedefli tarayıcı koşusu 13/13 grup; `node --test tests/workspace-view.test.mjs` 7/7.
+
+
+7 Ekim 2026 aşama katmanı düzeltmesi: hata gerçek seçim ve yatay scroll ile önce yeniden üretildi (`elementFromPoint` sabit proje sütunu yerine `phasepreview` döndürdü). Ortak odak yükseltmesi yalnız `.cell input:focus` içeren kaynak hücreleriyle sınırlandı. Son hedefli koşuda dört tarayıcı grubu geçti: aylık/haftalık seçili ve klavye odağındaki aşamalar sabit sütunun arkasında; proje adı/expand odağında ilk hücre sticky kalır; bar/baklava/tutamak katmanları korunur; sayısal kaynak girişinin z-index 9 odak davranışı korunur. Yalnız geçici SQL.js ve sentetik hesaplar kullanıldı. `node --test tests/project-clipboard.test.mjs` 7/7 geçti.
+
+
+7 Ekim 2026 görünüm seçenekleri: planın gerçekleşen dağılım anahtarı ve projelerin detay/haftalık anahtarları filtre özetinin altında, ana tablo üstünde dar bir satıra taşındı. “Filtrelenen Projeler” başlığı doğrulandı. Son hedefli koşu **11/11 grup** geçti: büyük/dar ekranlarda satır konumu ve dar yükseklik, gerçek aç/kapatla gerçekleşen satırlar ve proje detayları, haftalık görünüm, özet aç/kapat, sayfa kaydırma sınırı, 250/12 proje sayfalama ve aşama/bar/baklava katmanları. TypeScript ve üretim build başarılı.
+
+Gerçekleşen satırlar küçüldükten sonra eski scroll boşluğunun kalması da bu koşuda yeniden üretildi. Bugün çizgisi artık scrollTop ve viewport yüksekliğiyle taşınmaz; başlangıcı içerik sıfırı, yüksekliği gerçek tablo yüksekliğidir. Böylece çizgi silinen/gizlenen satırların alanını korumaz; başlıklar iç kaydırmada görünür kalır. Testler yalnız geçici SQL.js ve sentetik hesap kullandı.
+
+
+### 7 Ekim 2026 — tüm kayıtları kapsayan tablolar ve proje kaynak grafiği
+
+Önceki 250/12 sayfalama kontrolünün yerine tüm filtre sonuçlarını tek tabloda kapsayan kaydırma kontrolü geçmiştir. 260 ek sentetik projeyle ilk/son kayda erişim, oluşturulan proje sayısının sınırlı kalması, detay açık durumunun kaydırma sonrasında korunması, kaydedilmemiş kaynak girişinin korunması ve Esc ile iptali denetlenir. Önceki kopyala/yapıştır, Ctrl+Enter, hata/retry, proje sıralama, sabit proje/sol sütun ve görünüm seçenekleri kontrolleri korunur. Son hedefli koşu **20/20 tarayıcı grubu** geçti.
+
+Kaynak raporlarının ayrı hedefli koşusu **3/3 grup**: ay ve proje gerçek/plan karşılaştırması, ilk 10 ve bağımsız seri seçimi, dar/60 aylık görünüm, izin/eğitim listesinin yeri ve veri değiştirmeme. `node --test tests/workspace-view.test.mjs tests/resource-planning-reports.test.mjs tests/project-clipboard.test.mjs` **22/22** geçti. Performansın yöntemi, rakamları ve kapsam sınırları `TABLO-VE-KAYNAK-RAPORLARI-2026-10-07.md` içindedir.
+
+
+### 7 Ekim 2026 — dönem toplamı ve planlama etkinliği
+
+Proje sütun grafiğinin dönem toplamı (kişi-ay) ve mevcut bağımsız seri seçimleri doğrulandı. Kaynak raporlarının yeni hedefli koşusu **4/4 grup**: aylık gerçek/plan karşılaştırması, proje toplamları, aylık ve dönem etkinliği, sıfır paydada boş nokta, %100 üzeri değer, proje grafiğinin hemen altındaki yerleşim, takım filtresi, dar ekran ve açık/kapalı özet başlığının hover renginin sabit kalması. Veri değişmedi ve tarayıcı hatası yok. `node --test tests/resource-planning-reports.test.mjs` **10/10** geçti; oranların toplamdan hesaplanması, sıfır/boş veri, taşma/geçersiz değer ve girdi değiştirmeme sınırları dahil. TypeScript ve üretim build başarılı.
+
+Raporlar ekranındaki **Uygulanan Filtreler** satırı için hedefli kaynak raporları koşusu **5/5 grup** geçti. Takım değişiminin özet satırına yansıması, başlangıç/bitiş ayı ve dönem metni, uygulanmayan proje filtresinin gösterilmemesi, 1800 ve 900 piksel genişliklerde sayfa kaydırılırken satırın üstte sabit kalması ve rapor içeriğinin üzerinde görünmesi kontrol edildi. Geçici SQL.js veritabanında yalnız sentetik veri kullanıldı; kontroller veriyi değiştirmedi ve tarayıcı hatası oluşmadı.
+
+Sabit alan artık filtre seçimlerinin bulunduğu satırdan başlar. Aynı hedefli kontrol, her iki ekran genişliğinde filtre kontrollerinin üst kenarda, özet satırının onların altında sabit kalmasını ve her ikisinin rapor içeriğinin üzerinde görünmesini doğrular. Kaydırılmış ekrandan takım seçimini açıp değiştirme ve geri alma da kontrol edilir.

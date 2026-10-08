@@ -35,6 +35,7 @@ export type PlannedAllocationProps = {
   projectTotals: Record<string, number>;
   actualTotals: Record<string, number>;
   showAllActual: boolean;
+  onShowAllActualChange: (show: boolean) => void;
   expandedActualTeams: string[];
   onExpandedTeamsChange: Dispatch<SetStateAction<string[]>>;
   currentTeamMembers: Record<string, string[]>;

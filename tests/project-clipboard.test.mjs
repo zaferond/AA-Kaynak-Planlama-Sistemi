@@ -1,4 +1,10 @@
 import test from "node:test";
+import { captureProjectSnapshot } from "../frontend/src/features/project-snapshot.ts";
+const snapshot = (data) =>
+  captureProjectSnapshot(
+    data.projects[1],
+    data.revisions["project:" + data.projects[1].id] || 0,
+  );
 import assert from "node:assert/strict";
 import {
   phaseClipboard,
@@ -143,8 +149,12 @@ test("bar color paste updates only the selected date range and preserves note da
   const data = fixture();
   const before = structuredClone(data);
   const ranges = milestoneRanges(data.projects[1].milestones[0]);
-  assert.equal(milestoneClipboardColor(data, barTarget), "amber");
-  const command = prepareMilestoneColorPaste(data, barTarget, "green");
+  assert.equal(milestoneClipboardColor(data.projects[1], barTarget), "amber");
+  const command = prepareMilestoneColorPaste(
+    snapshot(data),
+    barTarget,
+    "green",
+  );
   assert.deepEqual(data, before);
   applyChanges(data, admin, [command]);
   validate(data);
@@ -184,18 +194,23 @@ test("invalid paste targets and colors fail explicitly without modifying source 
   for (const rangeIndex of [-1, 4, 0.5]) {
     assert.throws(
       () =>
-        prepareMilestoneColorPaste(data, { ...barTarget, rangeIndex }, "green"),
+        prepareMilestoneColorPaste(
+          snapshot(data),
+          { ...barTarget, rangeIndex },
+          "green",
+        ),
       /tarih aralığı bulunamadı/,
     );
     assert.throws(
-      () => milestoneClipboardColor(data, { ...barTarget, rangeIndex }),
+      () =>
+        milestoneClipboardColor(data.projects[1], { ...barTarget, rangeIndex }),
       /tarih aralığı bulunamadı/,
     );
   }
   assert.throws(
     () =>
       prepareMilestoneColorPaste(
-        data,
+        snapshot(data),
         { ...barTarget, milestoneId: "missing" },
         "green",
       ),

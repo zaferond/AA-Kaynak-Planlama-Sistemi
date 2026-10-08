@@ -5,6 +5,7 @@ import path from "node:path";
 import { Store } from "../backend/store.mjs";
 import { SqlJsAdapter } from "../backend/adapters/sqljs.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 test("unknown applied migration versions are refused without modifying an existing database", async () => {
   const dir = await fs.mkdtemp(path.resolve("tests/local-unknown-schema-"));
   const file = path.join(dir, "synthetic.sqlite");
@@ -126,7 +127,7 @@ test("sql.js: person allocations are folded into team allocations once", async (
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        30,
+        schemaVersion,
       );
       await store.close();
       await store.connect();
@@ -173,7 +174,7 @@ test("sql.js: existing actual entries keep their hours when the baseline changes
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      30,
+      schemaVersion,
     );
     await store.close();
     store = new Store({ env });

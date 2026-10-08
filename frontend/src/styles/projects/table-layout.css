@@ -61,18 +61,6 @@
   line-height: 1.2;
 }
 
-.phase-selection-hint {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 4px 12px;
-  font-size: 12px;
-  color: #64748b;
-  flex-wrap: wrap;
-}
-.phase-selection-hint strong {
-  color: #1d4ed8;
-}
 .projectmatrix td.phase-cell-selected .phasebutton {
   outline: 2px solid #3b82f6;
   outline-offset: -2px;
