@@ -336,3 +336,36 @@ test("profiling preserves owned planning callback identity and synchronous delta
     probe.restore();
   }
 });
+
+test("profile counts one metadata roundtrip and every rowset without losing request options", async () => {
+  const store = new SyntheticStore();
+  const rows = [
+    [{ privateMarker: "not in observation" }],
+    [{ name: "a" }, { name: "b" }],
+  ];
+  store.db.request = async (_owner, text, values, allRecordsets) => {
+    assert.equal(text, "SELECT * FROM kp_settings;\nSELECT * FROM kp_leaders");
+    assert.deepEqual(values, []);
+    assert.equal(allRecordsets, true);
+    return { rows: rows[0], rowCount: 1, recordsets: rows };
+  };
+  const probe = transactionProbe([store]);
+  try {
+    const result = await probe.measure("write-allocation", () =>
+      store.db.request(
+        {},
+        "SELECT * FROM kp_settings;\nSELECT * FROM kp_leaders",
+        [],
+        true,
+      ),
+    );
+    assert.equal(result.value.recordsets, rows);
+    assert.equal(result.observation.sqlCalls, 1);
+    assert.equal(result.observation.metadataBatchCalls, 1);
+    assert.equal(result.observation.metadataBatchStatements, 2);
+    assert.deepEqual(result.observation.sqlRows, { settings: 1, leaders: 2 });
+    assert(!JSON.stringify(result.observation).includes("privateMarker"));
+  } finally {
+    probe.restore();
+  }
+});

@@ -272,9 +272,10 @@ export function transactionProbe(
       store.db,
       "request",
       (original) =>
-        async function (owner, text, values) {
+        async function (owner, text, values, ...options) {
           const observation = context.getStore();
-          if (!observation) return original.call(this, owner, text, values);
+          if (!observation)
+            return original.call(this, owner, text, values, ...options);
           const lock =
             text.startsWith(lockSqlPrefix) && values?.[0] === "aa_kaynak_data";
           const start = clock();
@@ -285,7 +286,13 @@ export function transactionProbe(
               text +
               " SELECT CONVERT(float,DATEDIFF_BIG(MICROSECOND,@profileStarted,SYSUTCDATETIME()))/1000.0 AS profileLockAcquireMs;"
             : text;
-          const result = await original.call(this, owner, measuredSql, values);
+          const result = await original.call(
+            this,
+            owner,
+            measuredSql,
+            values,
+            ...options,
+          );
           observation.sqlMs += clock() - start;
           observation.sqlCalls++;
           if (lock) {
@@ -301,10 +308,21 @@ export function transactionProbe(
             observation.lockCalls++;
             return { ...result, rows: [], rowCount: 0 };
           }
-          if (/^\s*(SELECT|WITH)\b/i.test(text)) {
-            const table = /\bkp_([a-z_]+)/i.exec(text)?.[1] || "other";
-            observation.sqlRows[table] =
-              (observation.sqlRows[table] || 0) + result.rows.length;
+          const parts = options[0] === true ? result.recordsets : [result.rows];
+          const statements = options[0] === true ? text.split(";\n") : [text];
+          if (options[0] === true) {
+            if (!Array.isArray(parts) || parts.length !== statements.length)
+              throw Error("Missing native metadata batch timing result.");
+            observation.metadataBatchCalls++;
+            observation.metadataBatchStatements += statements.length;
+          }
+          for (let i = 0; i < statements.length; i++) {
+            if (/^\s*(SELECT|WITH)\b/i.test(statements[i])) {
+              const table =
+                /\bkp_([a-z_]+)/i.exec(statements[i])?.[1] || "other";
+              observation.sqlRows[table] =
+                (observation.sqlRows[table] || 0) + parts[i].length;
+            }
           }
           return result;
         },
@@ -341,6 +359,8 @@ export function transactionProbe(
         projectViewCalls: 0,
         sqlMs: 0,
         sqlCalls: 0,
+        metadataBatchCalls: 0,
+        metadataBatchStatements: 0,
         sqlRows: {},
       };
       active++;

@@ -65,6 +65,8 @@ function summarizeGroups(observations) {
         "projectViewMs",
         "sqlMs",
         "sqlCalls",
+        "metadataBatchCalls",
+        "metadataBatchStatements",
         "readCalls",
         "copySnapshotCalls",
         "persistCalls",
@@ -276,6 +278,8 @@ export async function nativeContentionProfile(
               );
             }
             assert.equal(observation.lockCalls, 1);
+            assert.equal(observation.metadataBatchCalls, edit ? 1 : 0);
+            assert.equal(observation.metadataBatchStatements, edit ? 10 : 0);
             return {
               ...observation,
               queueMs,
@@ -369,6 +373,8 @@ export async function nativeContentionProfile(
       assert.equal(response.responseMode, "planning-delta-v1");
       assert.equal(response.generation, initial.generation + index + 1);
       assert.equal(observation.lockCalls, 1);
+      assert.equal(observation.metadataBatchCalls, 1);
+      assert.equal(observation.metadataBatchStatements, 10);
       assert.equal(observation.planningDraftCopies, 1);
       assert.equal(observation.fullSnapshotCopies, 0);
       assert.equal(observation.projectViewCalls, 0);
@@ -424,7 +430,7 @@ export async function nativeContentionProfile(
     concurrency,
     cases,
     scope:
-      "Synthetic native Store/changeAndView pipeline. No HTTP/browser/WAN, SQL execution plans/IO, production load or service capacity claim. Uses unchanged production lock and validation rules. Profile instrumentation adds timing SELECT and memory sampling overhead.",
+      "Synthetic native Store/changeAndView pipeline. No HTTP/browser/WAN, SQL execution plans/IO, production load or service capacity claim. Uses unchanged production lock and validation rules. Profile instrumentation adds timing SELECT and memory sampling overhead. Metadata batch metrics count one SQL roundtrip and each SELECT rowset; full snapshot rows and validation remain.",
     metricNotes: {
       percentiles:
         "Nearest-rank sample quantiles, not production p95/p99 estimates. Count is explicit; mixed groups have fewer observations.",

@@ -58,7 +58,7 @@ export class MssqlAdapter {
   async open() {
     await this.pool.connect();
   }
-  async request(owner, text, values = []) {
+  async request(owner, text, values = [], allRecordsets = false) {
     const r = new sql.Request(owner);
     for (let i = 0; i < values.length; i++) {
       const v = values[i];
@@ -79,10 +79,35 @@ export class MssqlAdapter {
     const result = await r.query(text);
     return {
       rows: result.recordset || [],
+      ...(allRecordsets ? { recordsets: result.recordsets } : {}),
       rowCount:
         result.recordset?.length ||
         result.rowsAffected.reduce((a, b) => a + b, 0),
     };
+  }
+  async readMany(owner, queries) {
+    // Bounded read-only statements from the owned snapshot catalog. A malformed
+    // set must fail before the transaction can accept a partial snapshot.
+    if (
+      !Array.isArray(queries) ||
+      !queries.length ||
+      queries.length > 16 ||
+      !Array.from(queries).every(
+        (query) =>
+          typeof query === "string" &&
+          /^SELECT\s/i.test(query) &&
+          !/[;\0]/.test(query),
+      )
+    )
+      throw Error("Invalid snapshot metadata query batch.");
+    const result = await this.request(owner, queries.join(";\n"), [], true);
+    if (
+      !Array.isArray(result.recordsets) ||
+      result.recordsets.length !== queries.length ||
+      Array.from(result.recordsets).some((rows) => !Array.isArray(rows))
+    )
+      throw Error("SQL snapshot metadata read was incomplete.");
+    return result.recordsets.map((rows) => ({ rows, rowCount: rows.length }));
   }
   async transaction(fn, readOnly = false) {
     return this.lockedTransaction(
@@ -117,6 +142,7 @@ export class MssqlAdapter {
       );
       const c = {
         query: (q, v) => this.request(tx, q, v),
+        queryMany: (queries) => this.readMany(tx, queries),
         batch: (q) => new sql.Request(tx).batch(q),
         upsert: (t, r) => this.upsert(tx, t, r),
         remove: (t, r) => this.remove(tx, t, r),

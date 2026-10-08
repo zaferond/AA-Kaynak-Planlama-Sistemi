@@ -1,18 +1,19 @@
 import { readCompositeMap, readRevisionMap } from "./read-records.mjs";
+import { snapshotMetadataReader } from "./snapshot-metadata.mjs";
 import { visibleTeamScope, actualReadOwnerScope } from "./domain/index.mjs";
 
 // Read from the caller's snapshot; authorization remains in Store.view/mutate.
 export async function readPlanningSnapshot(c, provider, viewUser) {
-  const s = (await c.query("SELECT * FROM kp_settings WHERE id=1")).rows[0];
-  const leaderRows = (await c.query("SELECT * FROM kp_leaders ORDER BY name"))
-    .rows;
+  const metadata = await snapshotMetadataReader(c, {
+    batch: provider === "mssql" && !viewUser,
+  });
+  const s = (await metadata("settings")).rows[0];
+  const leaderRows = (await metadata("leaders")).rows;
   const d = {
     teams: [],
     projects: [],
     risks: [],
-    riskSystems: (
-      await c.query("SELECT id,name FROM kp_risk_systems ORDER BY name,id")
-    ).rows,
+    riskSystems: (await metadata("riskSystems")).rows,
     resources: [],
     allocations: {},
     actualAllocations: {},
@@ -30,21 +31,15 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     catalogVersion: 2,
   };
   if (s.legacy_archive) d.legacyArchive = JSON.parse(s.legacy_archive);
-  d.teams = (await c.query("SELECT * FROM kp_teams ORDER BY id")).rows.map(
-    (r) => ({
-      id: r.id,
-      name: r.name,
-      lead: r.leader_name || "",
-      managerName: r.manager_name || "",
-      excelCapacity: r.excel_capacity,
-      catalog: !!r.catalog,
-    }),
-  );
-  d.projects = (
-    await c.query(
-      "SELECT * FROM kp_projects ORDER BY CASE WHEN sort_order IS NULL THEN 0 ELSE 1 END,sort_order,id",
-    )
-  ).rows.map((r) => ({
+  d.teams = (await metadata("teams")).rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    lead: r.leader_name || "",
+    managerName: r.manager_name || "",
+    excelCapacity: r.excel_capacity,
+    catalog: !!r.catalog,
+  }));
+  d.projects = (await metadata("projects")).rows.map((r) => ({
     id: r.id,
     name: r.name,
     ...(r.sort_order !== null && r.sort_order !== undefined
@@ -58,19 +53,15 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     milestones: [],
   }));
   const pm = new Map(d.projects.map((p) => [p.id, p]));
-  d.risks = (
-    await c.query("SELECT * FROM kp_project_risks ORDER BY id")
-  ).rows.map((row) => JSON.parse(row.payload));
-  for (const r of (await c.query("SELECT * FROM kp_project_phases")).rows) {
+  d.risks = (await metadata("risks")).rows.map((row) =>
+    JSON.parse(row.payload),
+  );
+  for (const r of (await metadata("phases")).rows) {
     const p = pm.get(r.project_id);
     if (r.label !== null) p.phases[r.month] = r.label;
     if (r.color) p.phaseColors[r.month] = r.color;
   }
-  for (const r of (
-    await c.query(
-      "SELECT * FROM kp_project_milestones ORDER BY project_id,sort_order,id",
-    )
-  ).rows) {
+  for (const r of (await metadata("milestones")).rows) {
     pm.get(r.project_id)?.milestones.push({
       id: r.id,
       name: r.name,
@@ -102,9 +93,7 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
         : {}),
     });
   }
-  d.resources = (
-    await c.query("SELECT * FROM kp_resources ORDER BY id")
-  ).rows.map((r) => ({
+  d.resources = (await metadata("resources")).rows.map((r) => ({
     id: r.id,
     name: r.name,
     note: r.note,
@@ -112,9 +101,7 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     versions: [],
   }));
   const rm = new Map(d.resources.map((r) => [r.id, r]));
-  for (const r of (
-    await c.query("SELECT * FROM kp_resource_versions ORDER BY effective_month")
-  ).rows)
+  for (const r of (await metadata("resourceVersions")).rows)
     rm.get(r.resource_id).versions.push({
       effective: r.effective_month,
       team: r.team_id || "",

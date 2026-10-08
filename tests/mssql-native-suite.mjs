@@ -692,8 +692,8 @@ export async function nativeLoadProfile(stores, t, { size, samples }) {
     }, true);
     const observations = [],
       request = store.db.request;
-    store.db.request = async function (owner, text, values) {
-      const result = await request.call(this, owner, text, values);
+    store.db.request = async function (owner, text, values, ...options) {
+      const result = await request.call(this, owner, text, values, ...options);
       if (
         /^SELECT\b/.test(text) &&
         /FROM (?:\[kp_allocations\]|kp_revisions)/.test(text)
@@ -795,4 +795,63 @@ export async function nativeLoadProfile(stores, t, { size, samples }) {
     scope:
       "Synthetic native SQL Store pipeline, including global application lock. No HTTP/browser or production p95/capacity claim.",
   };
+}
+
+export async function nativeMetadataBatchSuite(stores, t) {
+  const first = stores[0],
+    second = stores[1];
+  const request = first.db.request;
+  let calls = [];
+  t.mock.method(first.db, "request", async function (...args) {
+    if (/^SELECT\b/.test(args[1]))
+      calls.push({ batch: args[3] === true, text: args[1] });
+    return request.apply(this, args);
+  });
+  const before = await first.transaction(async (c) => {
+    calls = [];
+    const ordinary = await first.read({ ...c, queryMany: undefined });
+    const ordinaryCalls = [...calls];
+    calls = [];
+    const batched = await first.read(c);
+    assert.deepEqual(batched, ordinary);
+    assert.equal(JSON.stringify(batched), JSON.stringify(ordinary));
+    assert.equal(ordinaryCalls.length, 15);
+    assert.equal(calls.length, 6);
+    assert.equal(calls.filter((call) => call.batch).length, 1);
+    assert.deepEqual(
+      calls.find((call) => call.batch).text.split(";\n"),
+      ordinaryCalls.slice(0, 10).map((call) => call.text),
+    );
+    return batched;
+  }, true);
+  assert.deepEqual(
+    await second.transaction((c) => second.read(c), true),
+    before,
+  );
+  const admin = (await first.users()).find((u) => u.role === "admin");
+  const audit = (await first.auditLog(admin)).total;
+  let ranCommand = false;
+  const readMany = first.db.readMany;
+  const mock = t.mock.method(first.db, "readMany", function (owner) {
+    return readMany.call(this, owner, [
+      "SELECT 1 AS ok",
+      "SELECT CONVERT(int,N'not-an-integer') AS invalid",
+    ]);
+  });
+  try {
+    await assert.rejects(
+      first.mutate(admin, () => {
+        ranCommand = true;
+      }),
+      (e) => e.number === 245,
+    );
+  } finally {
+    mock.mock.restore();
+  }
+  assert.equal(ranCommand, false);
+  assert.deepEqual(
+    await second.transaction((c) => second.read(c), true),
+    before,
+  );
+  assert.equal((await first.auditLog(admin)).total, audit);
 }

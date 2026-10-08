@@ -15,6 +15,7 @@ import { integrationSuite } from "./integration-suite.mjs";
 import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
 import {
   nativePoolSuite,
+  nativeMetadataBatchSuite,
   nativeLoadProfile,
   nativeUpgradeSuite,
   checkedNativeContext,
@@ -57,6 +58,10 @@ test(
           (sub) => sharedRateLimitSuite(stores, sub),
         );
         await nativePoolSuite(stores, checked);
+        await checked.test(
+          "native metadata batch equals ordinary reads and SQL errors cannot stage a write",
+          (sub) => nativeMetadataBatchSuite(stores, sub),
+        );
         await cleanupTestTables(stores[0].db);
         await stores[0].connect();
         const load = await nativeLoadProfile(stores, checked, {
