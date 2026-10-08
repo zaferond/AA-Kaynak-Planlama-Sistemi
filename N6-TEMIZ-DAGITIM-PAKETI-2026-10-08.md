@@ -31,6 +31,14 @@ Gerçek ayar, kullanıcı hesabı veya DB alınmayan Git kaynak kopyası kullan�
 
 İlk paket kabul denemesi, test ortamındaki `TMPDIR` kaynak klasörünü gösterdiği için kaynak-içi hedef korumasında reddedildi. Kontrol aracı geçici kökün kaynak içinde olduğu durumda dışarıda geçici dizin oluşturacak şekilde düzeltildi; koruma gevşetilmedi. Sonraki deneme geçti. Ubuntu/Windows CI'a gerçek build sonrası aynı paket kabul kontrolü eklendi; sonuçları ayrıca kaydedilecektir.
 
+## Aynı kaynak commit'i için CI doğrulaması
+
+Kod ve iş akışı commit'i **`a26c7265c87b699fa8fb3d46ea77da802ef6282a`**, [37821015932 kalite koşusunda](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37821015932) başarılıdır: **Ubuntu 562/562, Windows 212/212, Chromium 141 grup**. Test toplamlarının fail/skipped/cancelled değerleri 0'dır. İki işletim sisteminde yeni gerçek build → geçici temiz paket kabul adımı başarılıdır; biçim/domain/TypeScript/build/manifest ve iki audit Yüksek eşiği de geçmiştir. [Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-a26c726-receipt.json). Windows testleri genel süitle örtüşür; toplamlar bağımsız kapsam olarak toplanmamalıdır. Bu kayıt backend Orta bağımlılık uyarısını veya kurum kabul işlerini kapatmaz; native MSSQL yeniden çalıştırılmadı.
+
+Önceki boş detay tarihi düzeltmesinin **`652f40525d4bfdbc348cef040248a333b695e2e1`** koşusu da ayrı doğrulandı: [37819205387](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37819205387), **558/558, 208/208, 141 Chromium grup**. [Önceki kaynak için ayrı kayıt](ci-evidence/quality-652f405-receipt.json); N6 test edilmiş sayılması için kullanılmadı.
+
+Sonraki kanıt/dokümantasyon commit'i yeni üretim kodu içermez; test edilen commit yukarıdakidir. Çalışma klasörüne aktarımda 407 mevcut site çıktısı korunur; 387 kaynak ve 7 güncel çıktı listesi manifestle doğrulanır. Önceden farklı olan yerel `tests/milestone-note-dates.test.mjs` korunur ve üzerine yazılmaz. Gerçek ayar/veritabanı okunmaz veya değiştirilmez; servis yeniden başlatılmaz. Diskte doğrulama, açık sürecin yeniden yüklenmesi kanıtı değildir.
+
 ## Kalan işler ve sınırlar
 
 - Canlı `site/` içindeki eski dosyalar kasıtlı olarak korunur. Yeni temiz paket kontrollü ayrı sürüm klasörüne geçişte kullanılır. Açık sekme davranışı, önceki sürüm saklama süresi, geri dönüş ve eski klasör temizliği kurumun dağıtım kabulünde ayrıca sınanmalıdır.

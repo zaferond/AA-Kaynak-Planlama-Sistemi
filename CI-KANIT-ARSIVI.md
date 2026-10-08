@@ -1,5 +1,18 @@
 # CI kanıt arşivi
 
+## 8 Ekim 2026 — N6 temiz dağıtım paketi
+
+Test edilen kod/iş akışı **`a26c7265c87b699fa8fb3d46ea77da802ef6282a`**. [Dar değişiklik, boyut ölçümü, testler ve açık operasyonel işler](N6-TEMIZ-DAGITIM-PAKETI-2026-10-08.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| N6 kalite | **Başarılı:** Ubuntu 562/562, Windows 212/212, Chromium 141; iki işletim sisteminde gerçek build sonrası geçici temiz paket kabulü, biçim/domain/TypeScript/build/manifest ve iki audit Yüksek eşiği | [37821015932](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37821015932) |
+| Önceki boş detay tarihi düzeltmesi; ayrı commit `652f40525d4bfdbc348cef040248a333b695e2e1` | **Başarılı:** Ubuntu 558/558, Windows 208/208, Chromium 141; biçim/domain/TypeScript/build/manifest/audit | [37819205387](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37819205387) |
+
+[N6 kaydı](ci-evidence/quality-a26c726-receipt.json), [önceki düzeltmenin kaydı](ci-evidence/quality-652f405-receipt.json). Fail/skipped/cancelled 0; Windows ve genel süit örtüşür. Ham loglar Git'e eklenmez; kayıtlar güvenli metadata, test toplamları ve indirilen log hash'leridir. Bu kaynaklar için native MSSQL yeniden çalıştırılmadı. Backend Orta bağımlılık uyarısı, tam snapshot/global lock maliyeti ve kurum servis/CA/proxy/yedek/yük kabulü devam eder.
+
+Temiz yeni paket tarihsel asset'leri taşımaz; mevcut çalışan `site/` dosyaları otomatik silinmez. Canlı sürüm geçişi ve saklama/temizlik kabulü bu CI kapsamının dışındadır. Sonraki dokümantasyon/kanıt commit'i yeni üretim kodu içermez ve yeni tam CI koşusu iddiası değildir.
+
 ## 8 Ekim 2026 — N3 MSSQL metadata toplu okuması
 
 Test edilen kaynak **`f798747eb1e9c4b67220efd28ac19fa138a5e9ec`**. [Değişiklik, testler, ölçüm ve kalan sınırlar](N3-MSSQL-SNAPSHOT-TOPLU-OKUMA-2026-10-08.md).
