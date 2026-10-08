@@ -51,3 +51,7 @@ Test edilen kaynak **`f798747eb1e9c4b67220efd28ac19fa138a5e9ec`**.
 ## Kalan işler
 
 Tam satır hacmi, doğrulama/diff ve global lock maliyeti sürer. Sonraki N3 adımı ayrı geçerlilik/kısıt tasarımı veya büyük haritalarda native streaming olmalıdır; kullanıcı başına eşzamanlılık ve kurum gerçek yük ölçümü ayrıca değerlendirilir. N5 ağ süre sınırı/taslak uzlaştırma, N6 asset yaşam döngüsü ve N2 backend Orta bağımlılık uyarıları ayrı konulardır. Asgari SQL yetkileri, kurum CA/proxy/TLS/Windows servis, kurum yedek/restore ve gerçek yük bu sentetik çalışmayla kapanmaz.
+
+## Sonraki aşama — güncel bağlantı
+
+Native büyük sayısal haritalarda akışla okuma ve 9931257 kaynak commit'inin güncel kabul sonuçları [N3 sayısal akış raporunda](N3-MSSQL-SAYISAL-AKIS-OKUMA-2026-10-08.md) yer alır. Bu raporun yukarıdaki f798747 sonuçları önceki metadata batch aşamasının kanıtı olarak korunmuştur. N3 bütün olarak hâlâ kısmen giderildi.

@@ -28,7 +28,21 @@ HEAD Git arşivinden geçici dizin; kilit dosyalarından geçici `npm ci` ve tem
 
 ## Native kabul ve kalan işler
 
-Güncel commit için geçici SQL Server CI sonucu henüz bu ilk kayda eklenmedi; aşağıdaki native doğrulama tamamlanmadan yerel driver stubları gerçek MSSQL kanıtı sayılmaz. Native suite aynı transaction'da buffered/streamed snapshot + JSON, beş tablo satır sayısı, parametre/null/Unicode, gerçek iptal sonrası yeni transaction sorgusu, SQL conversion hatasında mutation'ın başlamaması ve bağımsız havuzdan veri/audit korunmasını sınar. Windows kapısına scan testi eklenmiştir.
+Test edilen kaynak **`99312575e7fc82de1ed6f1caaae9abd4ba714ade`**.
+
+| Koşu | Sonuç |
+|---|---|
+| [37808304484 kalite](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37808304484) | Ubuntu **547/547**, Windows **198/198**, Chromium **133**; format/domain/TypeScript/build/manifest ve iki Yüksek eşikli audit kapısı başarılı |
+| [37808343096 native MSSQL](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37808343096) | **23/23**; iki gerçek havuz, **16 senaryo / 640 işlem / 340 yazma**, şema **31**, temizlik başarılı |
+
+[Kalite kaydı](ci-evidence/quality-9931257-receipt.json), [native kaydı](ci-evidence/native-mssql-9931257-receipt.json), [byte olarak korunan native JSON](ci-evidence/native-mssql-9931257.json). Tüm başarılı toplamlar fail/cancelled/skipped 0; Windows testleri genel suite ile örtüşür. Native raporun **471/471** dosya hash'i test edilen commit ile eşit: 381 uygulama/derleme/ölçüm girdisi, doğrudan test modülleri ve iki workflow. `.cmd` için CRLF checkout kuralı kullanıldı. Hash kimliği tüm UI işlevlerinin native yürütüldüğü anlamına gelmez. Sonraki arşiv/dokümantasyon commit'i yeni native koşu iddiası değildir. Ham log/hesap/bağlantı bilgileri arşivlenmedi.
+
+Native suite aynı transaction'da buffered/streamed snapshot ve JSON eşitliğini, beş tablo satır sayılarını, parametre/null/Unicode, iptal sonrası yeni kilitli transaction'ın kullanılmasını, SQL conversion hatasında mutation'ın başlamamasını ve bağımsız havuzdan veri/audit korunmasını **doğruladı**. Ordinary/batch 15/6 okuma sayısı, rol kapsamları, stale revision, eşzamanlı yazma, audit/generation ve eski rollback testleri de geçti.
+
+Her profil snapshot'ı **5 scan** kullanır. 40/40 güncel tabanlı delta yazmasında 1 metadata batch/10 SELECT, 1 dar kopya, 0 tam view; SQL çağrısı medyanı **13**, yanıt **297 bayt**. Store medyanı **294,693 ms**, örnek p95 **346,222 ms**, okuma medyanı **205,989 ms**; bu 40 gözlemin betimlemesidir. Tam veri hâlâ okunur: 10.000 tahsis, 4.000 actual, önceki actual güncellemeleri sonrası 3.960 yüzde ve 14.000 revision. Ara buffer'ın kaldırılması satırları atlayan bir optimizasyon değildir.
+
+Native JSON SHA-256: `9e0b70c24d4f04f537c67ba9a68c96fb178ca0787fcc026e07f1cf3103308a32`.
+
 
 Ara listelerin kaldırılması kod ve driver contract üzerinden gözlemlenebilir; kesin heap/RSS azalması, istek başına tahsis veya üretim hızında yüzde kazanç iddiası yapılmaz. Native profildeki farklı CI runner süreleri kontrollü A/B değildir. Tam satır hacmi/validasyon/global lock, kullanıcı başına eşzamanlılık, N5 ağ süre sınırı/uzlaştırma, N6 eski asset yaşam döngüsü ve N2 backend Orta bağımlılık uyarısı ayrıca kalır. Kurum CA/proxy/TLS, asgari SQL yetkileri, Windows servis/ACL, kurum yedek kurtarma ve gerçek HTTP/WAN yük kabulü bu sentetik testlerle doğrulanmaz.
 
