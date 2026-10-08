@@ -1,5 +1,17 @@
 # CI kanıt arşivi
 
+## 8 Ekim 2026 — Risk işlemleri ve rapor kompozisyonu
+
+Test edilen kod **`3437a456b1ce830af953b1832a981f2ca67b3935`**. [Modül ayrımı, korunan sözleşmeler ve yerel 40 test / 31 tarayıcı grubu](MIMARI-RISK-VE-RAPOR-MODULLERI-2026-10-08.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı:** Ubuntu 563/563, Windows 213/213, Chromium 141; biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği | [37823750933](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37823750933) |
+
+[Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-3437a45-receipt.json). Fail/skipped/cancelled 0; Windows ile genel süit örtüşür. Yeni HTTP regresyonu toplu risk/katalog işlem sırasını, eski revision ve yetkisiz ikinci komutta tam rollback'i, yaratıcı metadata korunmasını ve yeniden açılış kalıcılığını doğrular. Tarayıcı kontrolleri rapor ref/listener ayrımından sonra birlikte kaydırma ve sekme/dönem/yeniden yükleme davranışını da kapsar.
+
+Native MSSQL bu kaynak için yeniden çalıştırılmadı; önceki native kanıt bu commit'in sonucu değildir. Backend Orta bağımlılık uyarısı, N3 snapshot/global lock, N6 canlı geçiş/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü devam eder. Ham loglar Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i üretim kodunu değiştirmez ve yeni tam CI başarısı iddiası değildir.
+
 ## 8 Ekim 2026 — N6 temiz dağıtım paketi
 
 Test edilen kod/iş akışı **`a26c7265c87b699fa8fb3d46ea77da802ef6282a`**. [Dar değişiklik, boyut ölçümü, testler ve açık operasyonel işler](N6-TEMIZ-DAGITIM-PAKETI-2026-10-08.md).

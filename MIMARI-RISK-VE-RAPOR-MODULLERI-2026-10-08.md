@@ -50,4 +50,10 @@ Mevcut tarayıcı kontrolleri risk sahipliği, kataloğu yönetme yetkisi, eski 
 - N3 tam snapshot/global lock maliyeti, N2 backend Orta bağımlılık uyarısı ve N6 canlı sürüm geçişi/eski varlık saklama işleri bu çalışmayla kapanmaz.
 - Native MSSQL bu kaynak değişikliği için yerelde test edilmedi. Kurum Windows servis/ACL, CA/proxy/TLS, gerçek yedek/restore ve hedef yük kabulü doğrulanmadı. Çalışan süreç yeniden başlatılmadı; disk manifesti doğrulaması açık sürecin yeni backend'i yüklediğinin kanıtı değildir.
 
-CI doğrulaması ve test edilen kaynak commit'i sonuç tamamlandığında ayrı kayıtla eklenecektir.
+## Aynı kaynak commit'i için CI ve aktarım
+
+Test edilen kod commit'i **`3437a456b1ce830af953b1832a981f2ca67b3935`**. [37823750933 kalite koşusu](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37823750933) başarılıdır: **Ubuntu 563/563, Windows 213/213, Chromium 141 grup**; fail/skipped/cancelled 0. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği de başarılıdır. [Metadata/test toplamları/log hash kaydı](ci-evidence/quality-3437a45-receipt.json). Windows testleri genel süitle örtüşür; toplamlar bağımsız kapsam olarak toplanmamalıdır.
+
+Bu kaynak için native MSSQL CI yeniden çalıştırılmadı. Önceki native koşu bu commit'e ait kanıt sayılmaz. İş kurallarının taşınması SQL query/persistence kodunu değiştirmedi; SQL.js ve Windows sentetik başarı kurum DB/servis kabulü yerine geçmez. Audit Yüksek eşiğinin geçmesi backend Orta bağımlılık uyarısını kapatmaz.
+
+Sonraki kanıt/dokümantasyon commit'i üretim kodunu değiştirmez; test edilen kaynak yukarıdaki commit'tir. Çalışma klasörüne aktarım geri dönüş için yedeklenir, güncellenen dosyalar önceki commit ile karşılaştırılır, var olan tarihsel bundle'lar korunur, manifest en son yazılır. **389 kaynak / 409 site çıktısı / 7 güncel çıktı** tam envanter/hash doğrulamasıyla kontrol edilir. Önceden farklı olan yerel `tests/milestone-note-dates.test.mjs` üzerine yazılmaz. Gerçek ayar/veritabanı okunmaz; servis yeniden başlatılmaz.
