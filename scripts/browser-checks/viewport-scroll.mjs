@@ -110,6 +110,19 @@ export async function checkViewportScroll(f) {
     await page.mouse.wheel(0, 3000);
     await checkHeaders(table);
     assert(Math.abs((await page.evaluate(() => scrollY)) - scroll) <= 2);
+    await table.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    const left = await table.evaluate((el) => el.scrollLeft);
+    await table.hover();
+    await page.mouse.wheel(0, -600);
+    await f.wait(
+      async () => (await page.evaluate(() => scrollY)) < scroll - 20,
+      "upward wheel at table top continues on the page",
+    );
+    assert.equal(await table.evaluate((el) => el.scrollTop), 0);
+    assert.equal(await table.evaluate((el) => el.scrollLeft), left);
+    await page.evaluate(() => window.scrollTo(0, 1e8));
   }
   try {
     for (const [tab, screenshot] of [
@@ -339,6 +352,43 @@ export async function checkViewportScroll(f) {
           },
         );
       }
+    }
+    const actual = await f.client("employee");
+    try {
+      await actual.page
+        .getByRole("tab", {
+          name: "AA Gerçekleşen Kaynak Dağılımı",
+          exact: true,
+        })
+        .click();
+      await f.check(
+        "actual: upward wheel at table top continues on the page",
+        async () => {
+          const table = actual.page.locator(
+            '.person-allocation > [data-slot="table-container"]',
+          );
+          await table.waitFor();
+          await actual.page.evaluate(() => window.scrollTo(0, 1e8));
+          await table.hover();
+          const before = await actual.page.evaluate(() => scrollY);
+          assert(before > 20, "actual page must be scrolled before the check");
+          assert(
+            await table.evaluate((el) => el.scrollHeight > el.clientHeight),
+          );
+          await table.evaluate((el) => {
+            el.scrollTop = 0;
+          });
+          await actual.page.mouse.wheel(0, -600);
+          await f.wait(
+            async () =>
+              (await actual.page.evaluate(() => scrollY)) < before - 20,
+            "actual page resumes upward scrolling",
+          );
+          assert.equal(await table.evaluate((el) => el.scrollTop), 0);
+        },
+      );
+    } finally {
+      await actual.context.close();
     }
   } finally {
     await context.close();

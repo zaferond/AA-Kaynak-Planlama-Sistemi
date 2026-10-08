@@ -212,6 +212,11 @@
   display: grid;
   gap: 6px;
 }
+.timeline-editor-form .milestone-range-date-card input[readonly] {
+  background: var(--brand-surface-soft, #f6f8f4);
+  color: var(--brand-dark, #344736);
+  cursor: default;
+}
 .milestone-range-dates > strong,
 .milestone-range-notes > strong {
   color: #344f67;

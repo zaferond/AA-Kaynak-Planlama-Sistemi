@@ -26,10 +26,12 @@ import { checkRiskSystems } from "./browser-checks/risk-systems.mjs";
 import { checkResourceReports } from "./browser-checks/resource-reports.mjs";
 import { checkViewportScroll } from "./browser-checks/viewport-scroll.mjs";
 import { checkTransportRecovery } from "./browser-checks/transport-recovery.mjs";
+import { checkMilestoneParentDates } from "./browser-checks/milestone-parent-dates.mjs";
 
 const f = await fixture();
 try {
   await checkTransportRecovery(f);
+  await checkMilestoneParentDates(f);
   await checkTableStyles(f);
   await checkSessionConsistency(f);
   await checkEntityEditors(f);

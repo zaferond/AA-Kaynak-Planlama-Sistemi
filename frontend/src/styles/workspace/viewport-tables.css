@@ -24,11 +24,15 @@
   min-height: 0;
   max-height: none !important;
   overflow: auto;
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
 }
 .app .workspace-dock .capacitystrip [data-slot="table-container"] {
   max-height: min(230px, 25dvh);
-  overscroll-behavior-y: contain;
+  overscroll-behavior-y: auto;
+}
+/* At a table's top edge, native wheel/touch scrolling continues on the page. */
+.app .person-allocation > [data-slot="table-container"] {
+  overscroll-behavior-y: auto;
 }
 .app .project-filter-summary {
   display: flex;

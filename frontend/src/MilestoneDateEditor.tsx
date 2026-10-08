@@ -9,7 +9,6 @@ import {
   addDraftMilestoneRange,
   addMilestoneNote,
   datedNotes,
-  expandRangeToNoteDates,
   milestoneRanges,
   noteDates,
   rangeNotes,
@@ -85,11 +84,9 @@ export default function MilestoneDateEditor({
         value,
         ranges.map((item, i) =>
           i === index
-            ? dateChanged
-              ? expandRangeToNoteDates(item, next)
-              : recalculate
-                ? rangeWithNoteDates(item, next)
-                : { ...item, notes: next, description: next[0]?.text || "" }
+            ? dateChanged || recalculate
+              ? rangeWithNoteDates(item, next)
+              : { ...item, notes: next, description: next[0]?.text || "" }
             : item,
         ),
       ),
@@ -107,7 +104,8 @@ export default function MilestoneDateEditor({
       <p className="milestone-date-hint">
         Her not için tarih aralığı veya tek tarihli Milestone seçebilirsiniz.
         Detay açıklama tarihleri üstteki tarih aralığını otomatik belirler.
-        Üstteki tarihleri ayrıca elle değiştirebilirsiniz.
+        Üstteki tarih aralığı salt okunurdur; değişiklikleri detay notların
+        tarihlerinden yapabilirsiniz.
       </p>
       {isEmpty && (
         <p className="milestone-range-empty">
@@ -186,12 +184,9 @@ export default function MilestoneDateEditor({
                         min={min}
                         max={max}
                         value={range.start}
-                        onChange={(event) =>
-                          updateRange(index, {
-                            start: event.target.value,
-                            end: endAfterStart(event.target.value, range.end),
-                          })
-                        }
+                        readOnly
+                        aria-label={`${index + 1}. üst açıklama başlangıç tarihi`}
+                        title="Detay notların başlangıç tarihlerinden hesaplanır."
                       />
                     </label>
                     <span
@@ -207,9 +202,9 @@ export default function MilestoneDateEditor({
                         min={range.start || min}
                         max={max}
                         value={range.end}
-                        onChange={(event) =>
-                          updateRange(index, { end: event.target.value })
-                        }
+                        readOnly
+                        aria-label={`${index + 1}. üst açıklama bitiş tarihi`}
+                        title="Detay notların bitiş tarihlerinden hesaplanır."
                       />
                     </label>
                   </div>
