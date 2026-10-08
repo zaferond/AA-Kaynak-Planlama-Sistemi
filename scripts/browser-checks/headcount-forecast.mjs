@@ -78,7 +78,7 @@ export async function checkHeadcountForecast(f) {
       team: f.teamA.id,
     });
     await page.goto(f.origin + "/?" + query);
-    const table = page.locator(".planning-grid");
+    const table = page.locator(".capacitystrip .planning-grid");
     await table.waitFor();
     assert.equal(
       (await table.locator(".summary.s2 td").first().textContent()).trim(),

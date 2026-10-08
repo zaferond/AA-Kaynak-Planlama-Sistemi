@@ -192,9 +192,15 @@ export async function checkWorkspaceFilters(f) {
           .getByRole("tab", { name: "Takım → Projeler", exact: true })
           .click();
         assert.equal(
-          await page.locator(".summary.s2 td").nth(1).textContent(),
+          await page
+            .locator("table.planning-grid")
+            .filter({ has: page.getByText("Takım / Proje", { exact: true }) })
+            .locator(".summary.s2 td")
+            .nth(1)
+            .textContent(),
           fmt(metric.total),
         );
+        assert.equal(await summaryValue(2), fmt(0.5));
         await page.goto(f.origin);
         await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
         await choose(page, "Liderlik", [f.teamA.lead]);
