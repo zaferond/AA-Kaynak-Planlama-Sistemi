@@ -926,23 +926,34 @@ export async function nativeScanSuite(stores, t) {
         r.date,
       ]),
     );
-    let consumed = 0;
-    const failure = Error("synthetic native mapper failure");
-    await assert.rejects(
-      c.scan(
-        "SELECT TOP (10000) a.object_id FROM sys.all_objects a CROSS JOIN sys.all_objects b",
-        [],
-        () => {
-          consumed++;
-          throw failure;
-        },
-      ),
-      (e) => e === failure,
-    );
-    assert.equal(consumed, 1);
-    // The same transaction can issue its next query after cancellation drains.
-    assert.equal((await c.query("SELECT 1 AS ok")).rows[0].ok, 1);
   }, true);
+  let consumed = 0;
+  const failure = Error("synthetic native mapper failure");
+  await assert.rejects(
+    first.transaction(
+      (c) =>
+        c.scan(
+          "SELECT TOP (10000) a.object_id FROM sys.all_objects a CROSS JOIN sys.all_objects b",
+          [],
+          () => {
+            consumed++;
+            throw failure;
+          },
+        ),
+      true,
+    ),
+    (e) => e === failure,
+  );
+  assert.equal(consumed, 1);
+  // XACT_ABORT can abort the cancelled transaction. Never continue its partial
+  // snapshot; a fresh locked transaction must be usable after the query drains.
+  assert.equal(
+    await first.transaction(
+      async (c) => (await c.query("SELECT 1 AS ok")).rows[0].ok,
+      true,
+    ),
+    1,
+  );
   await assert.rejects(
     first.transaction(
       (c) =>
