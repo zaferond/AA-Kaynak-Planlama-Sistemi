@@ -47,7 +47,7 @@ export async function readCompositeMap(
   provider,
   name,
   valueColumn,
-  planningTeams,
+  ownerIds,
 ) {
   const spec = tableSpec(name),
     keys = spec.key;
@@ -61,26 +61,30 @@ export async function readCompositeMap(
     throw Error("Invalid composite map specification");
   let where = "",
     parameters = [];
-  if (planningTeams !== undefined) {
+  if (ownerIds !== undefined) {
     if (
-      name !== "allocations" ||
-      !Array.isArray(planningTeams) ||
-      !planningTeams.every((id) => typeof id === "string")
+      ![
+        "allocations",
+        "actual_worked_hours",
+        "actual_percent_entries",
+      ].includes(name) ||
+      !Array.isArray(ownerIds) ||
+      !ownerIds.every((id) => typeof id === "string")
     )
-      throw Error("Invalid planning read scope");
-    const ids = [...new Set(planningTeams)];
+      throw Error("Invalid composite read scope");
+    const ids = [...new Set(ownerIds)];
     // Stay below SQLite's conservative 999 / MSSQL's 2100 bind limits. Larger
     // scopes fall back to the complete read, then scopeData; never truncate.
-    if (ids.length <= 900) {
+    if (ids.length <= 900 && !ids.some((id) => id.includes("|"))) {
       parameters = ids;
       where = ids.length
-        ? ` WHERE [team_id] IN (${ids.map((_, i) => "@p" + i).join(",")})`
+        ? ` WHERE ${ident(keys[0])} IN (${ids.map((_, i) => "@p" + i).join(",")})`
         : " WHERE 1=0";
     }
   }
   if (provider === "sqljs") {
     const key = keys.map(ident).join("||'|'||");
-    // Filtered index seeks group by team. Preserve the existing table-scan
+    // Filtered index seeks group by owner. Preserve the existing table-scan
     // insertion order for JSON, compression and downstream accumulation.
     const order = where ? " ORDER BY rowid" : "";
     return readRecordMap(

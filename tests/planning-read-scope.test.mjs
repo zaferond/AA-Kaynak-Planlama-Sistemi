@@ -176,7 +176,7 @@ test("empty planning scope reads no rows; large scopes fall back without truncat
   ])
     await assert.rejects(
       readCompositeMap(unused, "sqljs", name, column, scope),
-      /Invalid planning read scope/,
+      /Invalid composite read scope/,
     );
 });
 
@@ -430,4 +430,206 @@ test("an assigned leadership without teams returns an empty planning map and ord
       store.provider = provider;
     }
   }, true);
+});
+
+test("personal map scopes use bound owner IDs on both adapters and retain zero values", async () => {
+  const ids = ["constructor", "r'); DROP TABLE kp_resources;--", "constructor"];
+  for (const provider of ["sqljs", "mssql"])
+    for (const [name, column, key] of [
+      ["actual_worked_hours", "hours", "constructor|2026-01"],
+      ["actual_percent_entries", "percent", "constructor|p|2026-01"],
+    ]) {
+      const c = {
+        query: async (sql, params) => {
+          assert.deepEqual(params, ids.slice(0, 2));
+          assert(sql.includes(" WHERE [resource_id] IN (@p0,@p1)"));
+          assert(!sql.includes(ids[1]));
+          assert.equal(sql.endsWith(" ORDER BY rowid"), provider === "sqljs");
+          return {
+            rows: [
+              provider === "sqljs"
+                ? { record_key: key, [column]: 0 }
+                : {
+                    resource_id: "constructor",
+                    project_id: "p",
+                    month: "2026-01",
+                    [column]: 0,
+                  },
+            ],
+          };
+        },
+      };
+      assert.deepEqual(await readCompositeMap(c, provider, name, column, ids), {
+        [key]: 0,
+      });
+    }
+});
+
+test("empty, large and legacy personal scopes never truncate records or interpolate owner strings", async () => {
+  for (const provider of ["sqljs", "mssql"])
+    for (const ids of [
+      [],
+      Array.from({ length: 900 }, (_, i) => "r" + i),
+      Array.from({ length: 901 }, (_, i) => "r" + i),
+      ["r|legacy"],
+    ]) {
+      const full = ids.length > 900 || ids.some((id) => id.includes("|"));
+      const c = {
+        query: async (sql, params) => {
+          assert.equal(params.length, full ? 0 : ids.length);
+          assert.equal(sql.includes("WHERE"), !full);
+          if (!ids.length) assert(sql.includes("WHERE 1=0"));
+          if (ids.length === 900) assert(sql.includes("@p899)"));
+          return {
+            rows: full
+              ? [
+                  provider === "sqljs"
+                    ? { record_key: "r900|2026-01", hours: 5 }
+                    : { resource_id: "r900", month: "2026-01", hours: 5 },
+                ]
+              : [],
+          };
+        },
+      };
+      assert.deepEqual(
+        await readCompositeMap(
+          c,
+          provider,
+          "actual_worked_hours",
+          "hours",
+          ids,
+        ),
+        full ? { "r900|2026-01": 5 } : {},
+      );
+    }
+});
+
+test("personal SQL reads reduce rows while preserving transfers, owner exceptions, role scope and full mutation snapshots", async (t) => {
+  const { store, users, team, other, reference } = await setup(t);
+  const data = (await store.read()).data;
+  const owner = data.resources.find((r) => r.id === users.normal.resourceId);
+  await store.mutate(users.admin, (d, active) =>
+    applyChanges(d, active, [
+      ...data.resources.map((r) => ({
+        kind: "workedHours",
+        id: r.id + "|2026-01",
+        value: 160,
+        revision: 0,
+      })),
+      {
+        kind: "workedHours",
+        id: owner.id + "|2026-07",
+        value: 160,
+        revision: 0,
+      },
+      {
+        kind: "resource",
+        id: owner.id,
+        revision: d.revisions["resource:" + owner.id] || 0,
+        value: {
+          ...owner,
+          versions: [
+            { ...owner.versions[0], effective: "2026-03", start: "2026-03-01" },
+            {
+              ...owner.versions[0],
+              effective: "2026-06",
+              team: other.id,
+              lead: other.lead,
+              status: "İşten Ayrıldı",
+              end: "2026-06-30",
+            },
+          ],
+        },
+      },
+    ]),
+  );
+  const reads = [],
+    raw = store.db.raw;
+  t.mock.method(store.db, "raw", function (sql, params, consume) {
+    const result = raw.call(this, sql, params, consume);
+    const name = /^SELECT\b/.test(sql)
+      ? /FROM \[kp_(actual_percent_entries|actual_worked_hours|actual_allocations)\]/.exec(
+          sql,
+        )?.[1]
+      : undefined;
+    if (name) reads.push({ name, sql, rows: result.rowCount });
+    return result;
+  });
+  for (const user of Object.values(users)) {
+    reads.length = 0;
+    const view = await store.view(user);
+    const observed = [...reads];
+    assert.deepEqual(view, await reference(user));
+    const percent = observed.find((r) => r.name === "actual_percent_entries");
+    const hours = observed.find((r) => r.name === "actual_worked_hours");
+    assert.equal(
+      observed.find((r) => r.name === "actual_allocations").rows,
+      200,
+    );
+    if (user.role === "admin") {
+      assert.equal(percent.rows, 200);
+      assert.equal(hours.rows, 21);
+    } else if (user.role === "normal" && user.resourceId) {
+      assert.equal(percent.rows, 10);
+      assert.equal(hours.rows, 2);
+      assert.equal(view.data.actualWorkedHours[owner.id + "|2026-07"], 160);
+    } else if (!user.leaders.length) {
+      assert.equal(percent.rows, 0);
+      assert.equal(hours.rows, 0);
+    } else {
+      assert(percent.rows < 200);
+      assert.equal(
+        view.data.actualWorkedHours[owner.id + "|2026-07"],
+        undefined,
+      );
+    }
+    assert.equal(percent.sql.includes("WHERE"), user.role !== "admin");
+  }
+  const before = await store.read(),
+    key = Object.keys(before.data.actualAllocations).find((k) =>
+      k.startsWith(owner.id + "|"),
+    );
+  reads.length = 0;
+  await store.mutate(users.normal, (d, active) => {
+    assert.equal(Object.keys(d.actualPercentEntries).length, 200);
+    assert.equal(Object.keys(d.actualWorkedHours).length, 21);
+    applyChanges(d, active, [
+      {
+        kind: "actual",
+        id: key,
+        value: 0.005,
+        revision: d.revisions["actual:" + key],
+      },
+    ]);
+  });
+  assert(reads.every((r) => !r.sql.includes("WHERE")));
+  const after = await store.read();
+  for (const [k, v] of Object.entries(before.data.actualWorkedHours))
+    assert.equal(after.data.actualWorkedHours[k], v);
+  for (const [k, v] of Object.entries(before.data.actualPercentEntries))
+    if (k !== key) assert.equal(after.data.actualPercentEntries[k], v);
+});
+
+test("legacy resource identities retain full personal reads with identical scoped output", async (t) => {
+  const { store, users, reference } = await setup(t);
+  await store.transaction((c) =>
+    c.upsert("resources", [
+      { id: "legacy|resource", name: "Synthetic legacy", note: "", code: "" },
+    ]),
+  );
+  const reads = [],
+    raw = store.db.raw;
+  t.mock.method(store.db, "raw", function (sql, params, consume) {
+    const result = raw.call(this, sql, params, consume);
+    if (
+      /^SELECT\b/.test(sql) &&
+      /FROM \[kp_actual_(worked_hours|percent_entries)\]/.test(sql)
+    )
+      reads.push(sql);
+    return result;
+  });
+  const view = await store.view(users.normal);
+  assert.equal(reads.length, 2);
+  assert(reads.every((sql) => !sql.includes("WHERE")));
+  assert.deepEqual(view, await reference(users.normal));
 });

@@ -279,6 +279,11 @@ export async function nativeContentionProfile(
             "projectViewMs",
             "sqlMs",
             "sqlCalls",
+            "readCalls",
+            "copySnapshotCalls",
+            "persistCalls",
+            "projectViewCalls",
+            "lockCalls",
             "jsonEncodeMs",
             "jsonBytes",
           ];

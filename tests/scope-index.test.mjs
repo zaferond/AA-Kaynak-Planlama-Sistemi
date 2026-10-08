@@ -6,7 +6,7 @@ import {
   actualTeamTotalIndex,
   actualVersionAt,
 } from "../shared/model.ts";
-import { scopeData } from "../shared/access.ts";
+import { scopeData, actualReadOwnerScope } from "../shared/access.ts";
 
 const version = (effective, team, status = "Aktif Çalışan") => ({
   effective,
@@ -337,4 +337,21 @@ test("a normal user's own record survives a complete transfer outside their acco
     manager.resources.some((r) => r.id === "r"),
     false,
   );
+});
+
+test("personal read owner candidates preserve own transfers and historical managers without granting unassigned access", () => {
+  const data = fixture();
+  assert.equal(actualReadOwnerScope(data, principal("admin")), undefined);
+  assert.deepEqual(actualReadOwnerScope(data, principal("normal", ["B"])), [
+    "r",
+  ]);
+  assert.deepEqual(actualReadOwnerScope(data, principal("normal", [], "")), []);
+  assert.deepEqual(actualReadOwnerScope(data, principal("manager", [])), []);
+  assert.deepEqual(actualReadOwnerScope(data, principal("manager", ["B"])), [
+    "r",
+  ]);
+  assert.deepEqual(actualReadOwnerScope(data, principal("manager", ["A"])), [
+    "r",
+    "s",
+  ]);
 });

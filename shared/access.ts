@@ -44,15 +44,32 @@ export function visibleTeamScope(
     ids = new Set(teams.map((t) => t.id));
   return { leaderNames, teams, ids };
 }
+
+// Candidate owners for personal actual data. A manager's historical team/month
+// check still runs below; this owner list is a superset, never a new permission.
+export function actualReadOwnerScope(
+  d: Pick<Data, "teams" | "leaders" | "resources">,
+  u: Principal,
+  teamIds = visibleTeamScope(d, u).ids,
+): string[] | undefined {
+  if (u.role === "admin") return undefined;
+  if (u.role === "normal") return u.resourceId ? [u.resourceId] : [];
+  if (!u.leaders.length) return [];
+  return d.resources
+    .filter((r) => r.versions.some((v) => teamIds.has(v.team)))
+    .map((r) => r.id);
+}
 export function scopeData(d: Data, u: Principal): Data {
   if (u.role === "admin") return d;
   const { leaderNames, teams, ids } = visibleTeamScope(d, u);
   const ownId = u.role === "normal" ? u.resourceId || "" : "";
   const managerCanSeePeople = u.role === "manager" && u.leaders.length > 0;
   const assignments = createActualTeamIndex(d.resources);
+  const actualOwners = new Set(actualReadOwnerScope(d, u, ids));
   const canSeeResourceMonth = (resourceId: string, month: string) => {
-    if (u.role === "normal") return resourceId === ownId;
-    if (!managerCanSeePeople || !month) return false;
+    if (!actualOwners.has(resourceId)) return false;
+    if (u.role === "normal") return true;
+    if (!month) return false;
     const team = assignments.get(resourceId, month);
     return team !== undefined && ids.has(team);
   };
