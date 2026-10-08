@@ -48,6 +48,12 @@ Mevcut testler admin/manager/normal rolleri, CSRF, aynı isim/invalid input, kul
 - Proje/kaynak silme zincirleri, import/restore ve App'in kalan koordinasyon sorumlulukları devam eder.
 - N3 snapshot/global lock, N2 backend Orta bağımlılık uyarısı, N6 canlı sürüm geçişi/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü bu değişiklikle kapanmaz.
 - Yerel sonuçlar SQL.js ve sentetik ortam içindir. Native MSSQL için bu kaynak commit'inde yeni koşu yapılmadı; önceki native koşu yeni commit'in kanıtı değildir. Parametreli SQL/sıra değişmemiş olması kurum DB/servis kabulü yerine geçmez.
-- Gerçek hesap/DB/ayar okunmadı; servis yeniden başlatılmadı. Disk manifesti açık sürecin yeni backend'i yüklediğini kanıtlamaz. Önceden farklı yerel `tests/milestone-note-dates.test.mjs` korunacaktır.
+- Gerçek hesap/DB/ayar okunmadı; servis yeniden başlatılmadı. Disk manifesti açık sürecin yeni backend'i yüklediğini kanıtlamaz. Önceden farklı yerel `tests/milestone-note-dates.test.mjs` aktarım kontrolünde korunur.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`b15865410c470ac67a70a97f7c5005d6490fe5e8`**. [Kalite koşusu 37826265331](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37826265331) başarılı: **Ubuntu 564/564**, **Windows 214/214**, **Chromium 141 kontrol**. Fail/skipped/cancelled 0; Windows ile genel süit örtüşür ve toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği mevcut backend Orta uyarısını kapatmaz.
+
+[Güvenli metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-b158654-receipt.json). Ham loglar veya bağlantı bilgileri Git'e eklenmez. Kanıt/dokümantasyon commit'i üretim kodunu değiştirmez; ayrı tam CI koşusu iddiası değildir.
+
+Uygulama klasörüne aktarım kontrolü önceki manifest ve dosya hash'lerini, yerel değişikliklerin korunmasını ve doğrulanmış geçici derlemeyle **390 kaynak / 409 site çıktısı / 7 güncel çıktı** eşitliğini denetler. Mevcut site çıktıları aynı olduğundan yeniden yazılmaz veya silinmez. Seçilen dosyalar geri alınabilir yedekle aktarılır, manifest en son yazılır. Yedek konumu: `.deployment-backups/2026-10-08-architecture-directory-final`. Bu işlem servis yeniden başlatması veya çalışan veritabanına işlem içermez.
