@@ -1,5 +1,25 @@
 import sql from "mssql";
 import { tableSpec, table, ident, validateRows } from "../tables.mjs";
+function parameterizedRequest(owner, values) {
+  const request = new sql.Request(owner);
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i];
+    request.input(
+      "p" + i,
+      value instanceof Date
+        ? sql.DateTime2
+        : typeof value === "boolean"
+          ? sql.Bit
+          : typeof value === "number"
+            ? Number.isInteger(value)
+              ? sql.BigInt
+              : sql.Float
+            : sql.NVarChar(sql.MAX),
+      value ?? null,
+    );
+  }
+  return request;
+}
 export function sqlConfig(env = process.env) {
   const bool = (k, fallback) =>
     env[k] === undefined ? fallback : env[k] === "true";
@@ -59,23 +79,7 @@ export class MssqlAdapter {
     await this.pool.connect();
   }
   async request(owner, text, values = [], allRecordsets = false) {
-    const r = new sql.Request(owner);
-    for (let i = 0; i < values.length; i++) {
-      const v = values[i];
-      r.input(
-        "p" + i,
-        v instanceof Date
-          ? sql.DateTime2
-          : typeof v === "boolean"
-            ? sql.Bit
-            : typeof v === "number"
-              ? Number.isInteger(v)
-                ? sql.BigInt
-                : sql.Float
-              : sql.NVarChar(sql.MAX),
-        v ?? null,
-      );
-    }
+    const r = parameterizedRequest(owner, values);
     const result = await r.query(text);
     return {
       rows: result.recordset || [],
@@ -84,6 +88,82 @@ export class MssqlAdapter {
         result.recordset?.length ||
         result.rowsAffected.reduce((a, b) => a + b, 0),
     };
+  }
+  async scanRequest(owner, text, values, consume) {
+    // Owned single SELECTs only; the synchronous map consumer uses SELECT order.
+    if (
+      typeof text !== "string" ||
+      !/^SELECT\s/i.test(text) ||
+      /[;\0]/.test(text) ||
+      !Array.isArray(values) ||
+      typeof consume !== "function"
+    )
+      throw Error("Invalid snapshot scan.");
+    const request = parameterizedRequest(owner, values);
+    request.stream = true;
+    request.arrayRowMode = true;
+    let failure,
+      failed = false,
+      completed = false,
+      columns = 0,
+      recordsets = 0,
+      rowCount = 0;
+    const fail = (error, cancel = false) => {
+      if (failed) return;
+      failed = true;
+      failure = error;
+      if (cancel) {
+        // Keep the consumer's original failure even if cancellation also fails.
+        try {
+          request.cancel();
+        } catch {}
+      }
+    };
+    const onError = (error) => fail(error);
+    const onRecordset = (metadata) => {
+      recordsets++;
+      if (recordsets !== 1 || !Array.isArray(metadata) || !metadata.length)
+        fail(Error("SQL snapshot scan returned invalid columns."), true);
+      else columns = metadata.length;
+    };
+    const onRow = (row) => {
+      if (failed) return;
+      try {
+        if (recordsets !== 1 || !Array.isArray(row) || row.length !== columns)
+          throw Error("SQL snapshot scan returned an invalid row.");
+        consume(row);
+        rowCount++;
+      } catch (error) {
+        fail(error, true);
+      }
+    };
+    const onDone = () => (completed = true);
+    request.on("error", onError);
+    request.on("recordset", onRecordset);
+    request.on("row", onRow);
+    request.on("done", onDone);
+    try {
+      // In mssql stream mode SQL errors are events, not promise rejections.
+      // Await the query completion (connection released) even after cancellation;
+      // rejecting on the first error would race transaction rollback/next query.
+      const result = await request.query(text);
+      if (
+        !completed ||
+        recordsets !== 1 ||
+        result?.recordset != null ||
+        result?.recordsets != null
+      )
+        fail(Error("SQL snapshot scan was incomplete."));
+    } catch (error) {
+      fail(error);
+    } finally {
+      request.off("error", onError);
+      request.off("recordset", onRecordset);
+      request.off("row", onRow);
+      request.off("done", onDone);
+    }
+    if (failed) throw failure;
+    return { rowCount };
   }
   async readMany(owner, queries) {
     // Bounded read-only statements from the owned snapshot catalog. A malformed
@@ -143,6 +223,7 @@ export class MssqlAdapter {
       const c = {
         query: (q, v) => this.request(tx, q, v),
         queryMany: (queries) => this.readMany(tx, queries),
+        scan: (q, v, consume) => this.scanRequest(tx, q, v, consume),
         batch: (q) => new sql.Request(tx).batch(q),
         upsert: (t, r) => this.upsert(tx, t, r),
         remove: (t, r) => this.remove(tx, t, r),

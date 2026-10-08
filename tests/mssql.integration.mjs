@@ -16,6 +16,7 @@ import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
 import {
   nativePoolSuite,
   nativeMetadataBatchSuite,
+  nativeScanSuite,
   nativeLoadProfile,
   nativeUpgradeSuite,
   checkedNativeContext,
@@ -68,6 +69,10 @@ test(
           size,
           samples,
         });
+        await checked.test(
+          "native numeric scans equal buffered snapshots and drain errors/cancellation before continuation",
+          (sub) => nativeScanSuite(stores, sub),
+        );
         let contention;
         if (process.env.TEST_DB_CONTENTION === "true") {
           const options = nativeProfileOptions({

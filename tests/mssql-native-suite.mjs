@@ -691,17 +691,26 @@ export async function nativeLoadProfile(stores, t, { size, samples }) {
       );
     }, true);
     const observations = [],
-      request = store.db.request;
-    store.db.request = async function (owner, text, values, ...options) {
-      const result = await request.call(this, owner, text, values, ...options);
+      request = store.db.request,
+      scan = store.db.scanRequest;
+    const record = (text, rows) => {
       if (
         /^SELECT\b/.test(text) &&
         /FROM (?:\[kp_allocations\]|kp_revisions)/.test(text)
       )
         observations.push({
           kind: text.includes("kp_revisions") ? "revisions" : "allocations",
-          rows: result.rows.length,
+          rows,
         });
+    };
+    store.db.request = async function (owner, text, values, ...options) {
+      const result = await request.call(this, owner, text, values, ...options);
+      record(text, result.rows.length);
+      return result;
+    };
+    store.db.scanRequest = async function (...args) {
+      const result = await scan.apply(this, args);
+      record(args[1], result.rowCount);
       return result;
     };
     const timings = [];
@@ -723,6 +732,7 @@ export async function nativeLoadProfile(stores, t, { size, samples }) {
       }
     } finally {
       store.db.request = request;
+      store.db.scanRequest = scan;
     }
     timings.sort((a, b) => a - b);
     measurements.push({
@@ -801,11 +811,16 @@ export async function nativeMetadataBatchSuite(stores, t) {
   const first = stores[0],
     second = stores[1];
   const request = first.db.request;
+  const scan = first.db.scanRequest;
   let calls = [];
   t.mock.method(first.db, "request", async function (...args) {
     if (/^SELECT\b/.test(args[1]))
       calls.push({ batch: args[3] === true, text: args[1] });
     return request.apply(this, args);
+  });
+  t.mock.method(first.db, "scanRequest", async function (...args) {
+    calls.push({ batch: false, text: args[1] });
+    return scan.apply(this, args);
   });
   const before = await first.transaction(async (c) => {
     calls = [];
@@ -847,6 +862,126 @@ export async function nativeMetadataBatchSuite(stores, t) {
     );
   } finally {
     mock.mock.restore();
+  }
+  assert.equal(ranCommand, false);
+  assert.deepEqual(
+    await second.transaction((c) => second.read(c), true),
+    before,
+  );
+  assert.equal((await first.auditLog(admin)).total, audit);
+}
+
+export async function nativeScanSuite(stores, t) {
+  const [first, second] = stores;
+  let scannedRows = {},
+    scans = 0;
+  const scan = first.db.scanRequest;
+  const mock = t.mock.method(first.db, "scanRequest", async function (...args) {
+    const result = await scan.apply(this, args);
+    scans++;
+    const table = /\bkp_([a-z_]+)/.exec(args[1])?.[1];
+    scannedRows[table] = result.rowCount;
+    return result;
+  });
+  const before = await first.transaction(async (c) => {
+    const buffered = await first.read({ ...c, scan: undefined });
+    const streamed = await first.read(c);
+    assert.deepEqual(streamed, buffered);
+    assert.equal(JSON.stringify(streamed), JSON.stringify(buffered));
+    assert.equal(scans, 5);
+    assert.deepEqual(scannedRows, {
+      allocations: Object.keys(buffered.data.allocations).length,
+      actual_allocations: Object.keys(buffered.data.actualAllocations).length,
+      actual_worked_hours: Object.keys(buffered.data.actualWorkedHours).length,
+      actual_percent_entries: Object.keys(buffered.data.actualPercentEntries)
+        .length,
+      revisions: Object.keys(buffered.data.revisions).length,
+    });
+    return streamed;
+  }, true);
+  mock.mock.restore();
+  await first.transaction(async (c) => {
+    const params = [
+      "Türkçe 😀 '",
+      0,
+      0.25,
+      true,
+      null,
+      new Date("2026-10-08T00:00:00Z"),
+    ];
+    const query =
+      "SELECT @p0 AS text,@p1 AS zero,@p2 AS fraction,@p3 AS flag,@p4 AS empty,@p5 AS date";
+    const buffered = await c.query(query, params),
+      rows = [];
+    const result = await c.scan(query, params, (row) => rows.push(row));
+    assert.equal(result.rowCount, 1);
+    assert.deepEqual(
+      rows,
+      buffered.rows.map((r) => [
+        r.text,
+        r.zero,
+        r.fraction,
+        r.flag,
+        r.empty,
+        r.date,
+      ]),
+    );
+    let consumed = 0;
+    const failure = Error("synthetic native mapper failure");
+    await assert.rejects(
+      c.scan(
+        "SELECT TOP (10000) a.object_id FROM sys.all_objects a CROSS JOIN sys.all_objects b",
+        [],
+        () => {
+          consumed++;
+          throw failure;
+        },
+      ),
+      (e) => e === failure,
+    );
+    assert.equal(consumed, 1);
+    // The same transaction can issue its next query after cancellation drains.
+    assert.equal((await c.query("SELECT 1 AS ok")).rows[0].ok, 1);
+  }, true);
+  await assert.rejects(
+    first.transaction(
+      (c) =>
+        c.scan(
+          "SELECT CONVERT(int,N'not-an-integer') AS invalid",
+          [],
+          () => {},
+        ),
+      true,
+    ),
+    (e) => e.number === 245,
+  );
+  const admin = (await first.users()).find((u) => u.role === "admin");
+  const audit = (await first.auditLog(admin)).total;
+  let ranCommand = false;
+  const broken = t.mock.method(
+    first.db,
+    "scanRequest",
+    function (owner, text, values, consume) {
+      return scan.call(
+        this,
+        owner,
+        text.includes("kp_allocations")
+          ? "SELECT CONVERT(int,N'not-an-integer') AS invalid"
+          : text,
+        values,
+        consume,
+      );
+    },
+  );
+  try {
+    await assert.rejects(
+      first.mutate(admin, () => {
+        ranCommand = true;
+      }),
+      (e) => e.number === 245,
+    );
+  } finally {
+    broken.mock.restore();
   }
   assert.equal(ranCommand, false);
   assert.deepEqual(

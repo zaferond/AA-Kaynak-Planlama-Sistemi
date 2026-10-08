@@ -369,3 +369,42 @@ test("profile counts one metadata roundtrip and every rowset without losing requ
     probe.restore();
   }
 });
+
+test("profile counts native scans once without replacing their consumer or retaining values", async () => {
+  const store = new SyntheticStore(),
+    owner = {},
+    consume = () => {};
+  const original = (store.db.scanRequest = async (
+    tx,
+    text,
+    values,
+    callback,
+  ) => {
+    assert.equal(tx, owner);
+    assert.equal(text, "SELECT amount FROM kp_allocations");
+    assert.deepEqual(values, ["private synthetic parameter"]);
+    assert.equal(callback, consume);
+    return { rowCount: 12 };
+  });
+  const probe = transactionProbe([store]);
+  try {
+    const { value, observation } = await probe.measure("read-admin", () =>
+      store.db.scanRequest(
+        owner,
+        "SELECT amount FROM kp_allocations",
+        ["private synthetic parameter"],
+        consume,
+      ),
+    );
+    assert.deepEqual(value, { rowCount: 12 });
+    assert.equal(observation.sqlCalls, 1);
+    assert.equal(observation.scanCalls, 1);
+    assert.deepEqual(observation.sqlRows, { allocations: 12 });
+    assert(
+      !JSON.stringify(observation).includes("private synthetic parameter"),
+    );
+  } finally {
+    probe.restore();
+  }
+  assert.equal(store.db.scanRequest, original);
+});

@@ -65,6 +65,7 @@ function summarizeGroups(observations) {
         "projectViewMs",
         "sqlMs",
         "sqlCalls",
+        "scanCalls",
         "metadataBatchCalls",
         "metadataBatchStatements",
         "readCalls",
@@ -280,6 +281,7 @@ export async function nativeContentionProfile(
             assert.equal(observation.lockCalls, 1);
             assert.equal(observation.metadataBatchCalls, edit ? 1 : 0);
             assert.equal(observation.metadataBatchStatements, edit ? 10 : 0);
+            assert.equal(observation.scanCalls, 5);
             return {
               ...observation,
               queueMs,
@@ -375,6 +377,7 @@ export async function nativeContentionProfile(
       assert.equal(observation.lockCalls, 1);
       assert.equal(observation.metadataBatchCalls, 1);
       assert.equal(observation.metadataBatchStatements, 10);
+      assert.equal(observation.scanCalls, 5);
       assert.equal(observation.planningDraftCopies, 1);
       assert.equal(observation.fullSnapshotCopies, 0);
       assert.equal(observation.projectViewCalls, 0);

@@ -129,6 +129,28 @@ export function transactionProbe(
     );
   }
   for (const store of stores) {
+    if (typeof store.db.scanRequest === "function")
+      wrap(
+        store.db,
+        "scanRequest",
+        (original) =>
+          async function (...args) {
+            const observation = context.getStore(),
+              start = clock();
+            const result = await original.apply(this, args);
+            if (observation) {
+              observation.sqlMs += clock() - start;
+              observation.sqlCalls++;
+              observation.scanCalls++;
+              const table = /\bkp_([a-z_]+)/i.exec(args[1])?.[1] || "other";
+              observation.sqlRows[table] =
+                (observation.sqlRows[table] || 0) + result.rowCount;
+              captureMemory();
+            }
+            return result;
+          },
+      );
+
     for (const name of ["read", "persist", "projectView"])
       wrap(
         store,
@@ -359,6 +381,7 @@ export function transactionProbe(
         projectViewCalls: 0,
         sqlMs: 0,
         sqlCalls: 0,
+        scanCalls: 0,
         metadataBatchCalls: 0,
         metadataBatchStatements: 0,
         sqlRows: {},
