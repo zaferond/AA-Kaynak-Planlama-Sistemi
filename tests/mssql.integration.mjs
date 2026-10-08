@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import { deploymentSources } from "../scripts/deployment-manifest.mjs";
 import { Store } from "../backend/store.mjs";
 import { schemaVersion } from "../backend/migration-catalog.mjs";
+import {
+  nativeContentionProfile,
+  nativeProfileOptions,
+} from "../scripts/native-contention-profile.mjs";
 import { concurrencySuite } from "./concurrency-suite.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
 import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
@@ -59,6 +63,26 @@ test(
           size,
           samples,
         });
+        let contention;
+        if (process.env.TEST_DB_CONTENTION === "true") {
+          const options = nativeProfileOptions({
+            requests: process.env.TEST_DB_PROFILE_REQUESTS,
+            actuals: process.env.TEST_DB_PROFILE_ACTUALS,
+            concurrency: process.env.TEST_DB_PROFILE_CONCURRENCY,
+          });
+          assert(size >= options.requests);
+          await cleanupTestTables(stores[0].db);
+          await stores[0].connect();
+          await checked.test(
+            "native bounded contention profile preserves scope, revisions, commit snapshots and audit",
+            async () => {
+              contention = await nativeContentionProfile(stores, {
+                size,
+                ...options,
+              });
+            },
+          );
+        }
         const before = await stores[0].transaction(
           (c) => stores[0].read(c),
           true,
@@ -96,6 +120,7 @@ test(
           schema: schemaVersion,
           server,
           load,
+          ...(contention ? { contention } : {}),
           sourceHashes,
         };
       } finally {

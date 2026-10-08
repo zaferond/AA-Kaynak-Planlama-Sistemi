@@ -8,6 +8,11 @@ on:
         description: Synthetic planned allocation count (24–100000)
         required: true
         default: "1000"
+      contention:
+        description: Run bounded synthetic contention and memory profile
+        type: boolean
+        required: false
+        default: false
 permissions:
   contents: read
 jobs:
@@ -57,10 +62,13 @@ jobs:
           TEST_DB_ENCRYPT: "true"
           TEST_DB_TRUST_SERVER_CERTIFICATE: "true"
           TEST_SIZE: ${{ inputs.size || '1000' }}
+          TEST_CONTENTION: ${{ inputs.contention || 'false' }}
         shell: bash
         run: |
           export TEST_DB_PASSWORD="$MSSQL_SA_PASSWORD"
-          npm run test:db -- --size "$TEST_SIZE" --samples 3 --report native-mssql-report.json
+          args=(--size "$TEST_SIZE" --samples 3 --report native-mssql-report.json)
+          if [ "$TEST_CONTENTION" = "true" ]; then args+=(--contention); fi
+          npm run test:db -- "${args[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: native-mssql-report
