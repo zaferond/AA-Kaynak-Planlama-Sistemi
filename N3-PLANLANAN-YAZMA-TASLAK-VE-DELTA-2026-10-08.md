@@ -53,6 +53,8 @@ Bu süreler hâlâ önemli tam okuma/doğrulama maliyetini içerir. Önceki CI f
 
 Windows test düzeltmesi **`4bec497`** için [ayrı karşılaştırma](ci-evidence/native-mssql-ae28c2c-4bec497-comparison.json): 467 dosyadan **466 eşit**, tek fark native runner'ın çalıştırmadığı `tests/planning-snapshot.test.mjs` içindeki hata predicate'idir. **380 uygulama/derleme/ölçüm girdisi, native çalışma modülleri ve workflow'lar eşittir.** `4bec497` üzerinde yeni native koşu yapıldığı iddia edilmez; native başarısı yukarıdaki kendi commit'ine aittir. Bu test-only fark için gereksiz SQL yük tekrarı yerine ayrı güncel Windows kalite koşusu kullanılır.
 
+**Sonraki aşama:** [MSSQL metadata toplu okuması ve güncel kanıtlar](N3-MSSQL-SNAPSHOT-TOPLU-OKUMA-2026-10-08.md). Yukarıdaki rakamlar bu önceki aşamanın kendi commit'ine aittir.
+
 ## Kalan sınırlar
 
 Tüm yazmalarda SQL tam snapshot okunuyor ve tam doğrulama/global lock uygulanıyor. Dar taslak, Zod'un doğrulama kopyasını veya audit/diff taramalarını kaldırmaz. Bir sonraki N3 adımı, referans/kapsam/hata kontrollerini koruyan hedefli yazma sorguları için ayrı tasarım ve eşdeğerlik kanıtıdır. Bu çalışma HTTP/WAN, SQL fiziksel IO/plan, kurum asgari SQL hesabı, kurum TLS/Windows servis ve gerçek yük kabulünü kapsamaz. N2 backend Orta bağımlılık uyarısı, N5 ortak istek yaşam döngüsü ve N6 eski asset temizliği ayrıca kalır.

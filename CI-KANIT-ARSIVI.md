@@ -1,5 +1,20 @@
 # CI kanıt arşivi
 
+## 8 Ekim 2026 — N3 MSSQL metadata toplu okuması
+
+Test edilen kaynak **`f798747eb1e9c4b67220efd28ac19fa138a5e9ec`**. [Değişiklik, testler, ölçüm ve kalan sınırlar](N3-MSSQL-SNAPSHOT-TOPLU-OKUMA-2026-10-08.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı**: Ubuntu 538/538, Windows 189/189, Chromium 133; biçim/domain/TypeScript/build/manifest ve iki audit kapısı | [37781214895](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37781214895) |
+| Native MSSQL | **Başarılı**: 22/22; aynı transaction'da ordinary/batch snapshot ve JSON eşitliği, SQL hata halinde yazmanın başlamaması; 640 işlem / 340 yazma, iki havuz, şema 31, temizlik | [37781315933](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37781315933) |
+
+[Kalite kaydı](ci-evidence/quality-f798747-receipt.json), [native kaydı](ci-evidence/native-mssql-f798747-receipt.json), [native JSON](ci-evidence/native-mssql-f798747.json). JSON SHA-256: `d190e82894540c0af65e654314b5c333f943a54b936cc8b4e1c6f442fd7d1b32`. **470/470** kaynak hash'i test commit'iyle eşleşir; `.cmd` CRLF checkout baytlarıyla karşılaştırılır. JSON byte olarak korunur; ham loglar ve bağlantı/gerçek kullanıcı bilgileri arşivlenmez.
+
+Native okumada 10 sabit metadata SELECT'i tek istek olur: snapshot okuması **15 → 6** SQL isteği. Satırlar, tam doğrulama, yetki, revision, audit ve global lock korunur. 40 güncel tabanlı delta yazmasının SQL çağrısı medyanı **13**, önceki aşamada 22'ydi; satır ve snapshot eşitliği ayrıca doğrulanır. Farklı runner süreleri kontrollü A/B veya üretim kapasitesi kanıtı değildir. Batch 45 saniyelik request bütçesini paylaşır; kurum hacminde buffer/timeout ayrıca kabul edilmelidir.
+
+Başarılı toplamların fail/skipped/cancelled değeri 0; Windows genel suite ile örtüşür. Audit Yüksek eşiği backend Orta uyarıyı kapatmaz. N3 tam satır hacmi/doğrulama/global lock maliyeti devam eder. Sonraki arşiv/dokümantasyon commit'i yeni koşu iddiası değildir; önceki bütün kayıtlar korunur.
+
 ## 8 Ekim 2026 — N3 planlanan yazma taslağı ve delta
 
 Üretim değişiklikleri **`ae28c2c261d3f3a846a14bd9bf3b05fb76547fb4`**. [Dar değişiklik, testler, ölçüm ve kalan sınırlar](N3-PLANLANAN-YAZMA-TASLAK-VE-DELTA-2026-10-08.md).

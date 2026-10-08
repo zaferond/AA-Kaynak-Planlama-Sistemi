@@ -41,6 +41,8 @@ Mevcut rapor dosyasının üzerine yazılmaz. Tekrar çalıştırmada farklı ra
 9. İki bağımsız MSSQL havuzunda 40 eşzamanlı sayaç rezervasyonundan yalnız 15'inin kabulü; yeni hizmette kotanın korunması; iki HTTP hizmetinde ortak IP/kullanıcı adı sınırı. Kaynak verilerinin genel kilidi tutulurken sayaç kilidinin bağımsız çalışması. Bu senaryolar belirtilen 4 Ekim CI koşusunda geçti; kurum proxy topolojisi veya giriş kapasitesi ölçümü değildir.
 10. N1 silme regresyonu: normal kullanıcının 32 hayali kaydı ve bozuk anahtarı reddedilir; geçerli boş silme yeni revision üretmez. Gerçek silme, tekrar, eski revision, yeniden oluşturma ve batch geri alma doğrudan kalıcı revision tablosuyla doğrulanır. Bu ek kontrol 8 Ekim koşusunda başarılıdır.
 
+**8 Ekim metadata okuma kontrolü:** Aynı kilitli native transaction'da ordinary snapshot ile 10 SELECT'i tek istekle okuyan snapshot/JSON eşitliği ve 15→6 okuma isteği doğrulanır. Geçersiz SQL dönüşümü sonrası komutun başlamadığı, generation/audit/değerlerin korunduğu bağımsız havuzdan kontrol edilir. Profiler'daki `metadataBatchCalls` gerçek roundtrip, `metadataBatchStatements` ise SELECT sayısıdır; her recordset'in satır sayısı ayrı korunur. [Güncel kaynak ve sonuç](N3-MSSQL-SNAPSHOT-TOPLU-OKUMA-2026-10-08.md).
+
 ## Ölçüm ve rapor
 
 Varsayılan: 1.000 planlanan kayıt, 80 çalışan, 200 gerçekleşen/yüzde kaydı, 20 kişisel gün; bir ısınma ve üç ölçüm. HTTP suite ve havuz suite'leri bittiğinde ölçüm için şema yeniden oluşturulur; önceki fixture/audit taşınmaz. Admin/yönetici/normal görünüm için medyan/en uzun süre, SQL'den dönen allocation/revision satırları ve JSON boyutu raporlanır. 24 yazma iki havuza dağıtılır; toplam süre global kilidi de içerir.
