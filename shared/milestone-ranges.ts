@@ -88,7 +88,7 @@ export function datedNotes(range: MilestoneRange): MilestoneNote[] {
   }));
 }
 
-/** Recalculate one bar from its nonempty subtask dates. Incomplete edits retain the current bar. */
+/** Text does not determine a subtask's date contribution. Incomplete edits retain the current bar. */
 export function rangeWithNoteDates(
   range: MilestoneRange,
   notes: MilestoneNote[],
@@ -103,9 +103,7 @@ export function rangeWithNoteDates(
     assertPointRange(dated);
     return dated;
   }
-  const dated = notes
-    .filter((note) => note.text.trim())
-    .map((note) => noteDates(note, range));
+  const dated = notes.map((note) => noteDates(note, range));
   if (
     !dated.length ||
     dated.some((note) => !note.start || !note.end || note.start > note.end)

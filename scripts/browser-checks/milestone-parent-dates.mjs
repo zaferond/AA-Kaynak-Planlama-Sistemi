@@ -151,6 +151,71 @@ export async function checkMilestoneParentDates(f) {
         assert.equal(await end.inputValue(), "2026-03-15");
       },
     );
+    await f.check(
+      "projects: blank detail text contributes to parent dates before saving and the parent survives reload",
+      async () => {
+        await dialog.locator(".milestone-note-input textarea").first().fill("");
+        await noteStart.fill("2026-02-10");
+        assert.equal(await start.inputValue(), "2026-02-10");
+        const firstEnd = dialog.getByLabel("1.1 açıklama bitiş tarihi", {
+          exact: true,
+        });
+        await firstEnd.fill("2026-03-25");
+        assert.equal(await end.inputValue(), "2026-03-25");
+        await dialog
+          .locator(".milestone-note-input textarea")
+          .nth(1)
+          .fill("   ");
+        await noteStart.fill("2026-03-06");
+        assert.equal(await start.inputValue(), "2026-03-06");
+        await firstEnd.fill("2026-03-12");
+        assert.equal(await end.inputValue(), "2026-03-15");
+        const revision = (await f.state()).revisions["project:" + original.id];
+        await dialog
+          .getByRole("button", { name: "Kaydet", exact: true })
+          .click();
+        await dialog
+          .getByRole("alert")
+          .filter({ hasText: "Rapora eklenecek açıklama boş olamaz." })
+          .waitFor();
+        assert.equal(
+          (await f.state()).revisions["project:" + original.id],
+          revision,
+        );
+        await dialog.locator(".milestone-note-report input").nth(0).uncheck();
+        await dialog.locator(".milestone-note-report input").nth(1).uncheck();
+        const reply = page.waitForResponse((r) =>
+          r.url().endsWith("/api/changes"),
+        );
+        await dialog
+          .getByRole("button", { name: "Kaydet", exact: true })
+          .click();
+        assert.equal((await reply).status(), 200);
+        await dialog.waitFor({ state: "hidden" });
+        await page.reload();
+        await page
+          .getByRole("tab", { name: /AA Mühendislik.*Projeler/ })
+          .click();
+        await page
+          .getByRole("switch", { name: "Detayları Göster", exact: true })
+          .check();
+        await page
+          .getByRole("button", {
+            name: "Synthetic parent dates düzenle",
+            exact: true,
+          })
+          .click();
+        assert.equal(await start.inputValue(), "2026-03-06");
+        assert.equal(await end.inputValue(), "2026-03-15");
+        const topic = (await f.state()).projects.find(
+          (p) => p.id === original.id,
+        ).milestones[0];
+        assert.deepEqual(
+          [topic.start, topic.end],
+          ["2026-03-06", "2026-03-15"],
+        );
+      },
+    );
   } finally {
     await c.context.close();
     await saveProject(original);

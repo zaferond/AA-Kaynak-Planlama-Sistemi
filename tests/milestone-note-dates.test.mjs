@@ -94,6 +94,66 @@ test("subtask dates set the enclosing bar from the earliest start to latest end"
   assert.match(sheet, /02\.04\.2026/);
 });
 
+test("blank detail text still contributes dates to the enclosing bar and its saved range", () => {
+  const milestone = {
+    id: "blank-dates",
+    name: "Başlık",
+    start: "2026-03-01",
+    end: "2026-03-20",
+  };
+  const original = milestoneRanges(milestone)[0];
+  for (const notes of [
+    [
+      {
+        text: "",
+        includeInReport: false,
+        start: "2026-02-20",
+        end: "2026-04-15",
+      },
+    ],
+    [
+      {
+        text: "Named",
+        includeInReport: true,
+        start: "2026-03-01",
+        end: "2026-03-20",
+      },
+      {
+        text: "   ",
+        includeInReport: false,
+        start: "2026-02-20",
+        end: "2026-04-15",
+      },
+    ],
+  ]) {
+    const range = rangeWithNoteDates(original, notes);
+    assert.deepEqual([range.start, range.end], ["2026-02-20", "2026-04-15"]);
+    const saved = withMilestoneRanges(milestone, cleanMilestoneRanges([range]));
+    assert.deepEqual([saved.start, saved.end], ["2026-02-20", "2026-04-15"]);
+    assert.doesNotThrow(() => validate(dataWith(saved)));
+    const narrowed = rangeWithNoteDates(
+      range,
+      notes.map((n) => ({ ...n, start: "2026-03-08", end: "2026-03-12" })),
+    );
+    assert.deepEqual(
+      [narrowed.start, narrowed.end],
+      ["2026-03-08", "2026-03-12"],
+    );
+  }
+  for (const dates of [
+    { start: "", end: "2026-03-20" },
+    { start: "2026-03-20", end: "2026-03-01" },
+  ]) {
+    const incomplete = rangeWithNoteDates(original, [
+      { text: "", includeInReport: false, ...dates },
+    ]);
+    assert.deepEqual(
+      [incomplete.start, incomplete.end],
+      [original.start, original.end],
+    );
+  }
+});
+
 test("manual parent dates preserve subtask dates, including old notes", () => {
   const milestone = {
     id: "i",
