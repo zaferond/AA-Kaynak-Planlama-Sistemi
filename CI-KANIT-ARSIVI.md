@@ -1,5 +1,25 @@
 # CI kanıt arşivi
 
+## 8 Ekim 2026 — N3 ölçümü ve kişisel sorgu kapsamı
+
+Kaynak başlangıcı **`f084a34174e85735c337ff946a1e48e4c19eb1c1`**, dar kişisel okuma düzeltmesi **`ce5c2f007e70b029b6132873d7f3e795c6c87ea5`**. Önceki kanıtların üzerine yazılmadı. [N3 değişiklikler, ölçüm ve kalan işler](N3-SNAPSHOT-KILIT-OLCUM-VE-OKUMA-KAPSAMI-2026-10-08.md).
+
+| Kaynak / kayıt | Sonuç | Koşu |
+|---|---|---|
+| `f084a34` kalite | 519/519 Ubuntu, 153/153 Windows, 133 Chromium kontrolü ve tüm kapılar başarılı | [37767837466](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37767837466) |
+| `f084a34` native | 21/21; 10.000 planlanan / 4.000 actual; ek 600 işlem / 300 değişiklik; iki havuz, şema 31, temizlik başarılı | [37768092380](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37768092380) |
+| `ce5c2f0` native | Aynı senaryo/sayılar başarılı; normal yüzde sorgusu ilk senaryoda 4.000 yerine 50 satır döndürüyor | [37770061188](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37770061188) |
+| `ce5c2f0` kalite, deneme 1 ve 2 | **Başarısız**; kaynak testi 524/524, Windows 153/153; risk onay browser kontrolünde response timeout; audit adımları atlandı | [37770060613](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37770060613) |
+| `f3b6383` kalite, risk onay test harness düzeltmesi sonrası | **Başarılı**: 524/524 Ubuntu, 153/153 Windows, 133 Chromium kontrolü, biçim/domain/TypeScript/build/manifest ve iki audit kapısı | [37771685013](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37771685013) |
+| `f3b6383` native | 21/21, aynı 600 işlem / 300 değişiklik; 466 hash eşit, şema 31 ve temizlik başarılı | [37771735208](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37771735208) |
+
+- [Başlangıç kalite kaydı](ci-evidence/quality-f084a34-receipt.json), [başlangıç native kaydı](ci-evidence/native-mssql-f084a34-receipt.json), [başlangıç native JSON](ci-evidence/native-mssql-f084a34.json).
+- [Dar okuma native kaydı](ci-evidence/native-mssql-ce5c2f0-receipt.json), [dar okuma native JSON](ci-evidence/native-mssql-ce5c2f0.json), [başarısız kalite deneme 1](ci-evidence/quality-ce5c2f0-attempt1-receipt.json), [başarısız kalite deneme 2](ci-evidence/quality-ce5c2f0-attempt2-receipt.json).
+- Son test edilen paket **`f3b63835c05830c85847f1c3c0ef04f0b82e7d12`**: [kalite kaydı](ci-evidence/quality-f3b6383-receipt.json), [native kaydı](ci-evidence/native-mssql-f3b6383-receipt.json), [native JSON](ci-evidence/native-mssql-f3b6383.json). Native JSON SHA-256: `1c012af10bb2a72b016c01df56e7a23318131364d3305ccf2db6e21870c53b83`. 466 dosya ilgili commit ile eşit; başarısız önceki kalite denemeleri korunur. Test harness düzeltmesi olay döngüsünü ve promise hatalarını ele alır; üretim risk kaydetme kuralları değiştirilmedi. Sonraki arşiv/dokümantasyon commit'i yeni bir native test iddiası değildir.
+- Native JSON SHA-256 sırasıyla `936c0bb6bb457c2d36c8152cf09f09fab94da88743a51d8a8cb20761c503d8fb` ve `9ad730e59ee58827fea1707d6104fca1236e398b42616c2aec1ec79213cd0588`. JSON baytları korunur; ZIP digest'i ayrı girdidir.
+- Üç native sonuçta **466 dosyanın tamamı** ilgili Git commit'iyle eşleşti; `.cmd` CRLF checkout kuralı uygulandı. Kaynak kimliği tüm işlevlerin native test edildiği anlamına gelmez. Raporlar SQL/parametre/bağlantı değerlerini içermez; ham loglar depoya eklenmedi. Son başarılı test toplamlarında hata/atlama/iptal yok; Windows genel suite ile örtüşür.
+- Profiller örnek p95/p99 ve örneklenen süreç belleğini içerir; fiziksel IO, saf DMV lock wait, istek başı bellek, HTTP/WAN veya üretim kapasitesi ölçümü değildir. Ayrı runner süreleri kontrollü A/B gibi yorumlanmaz. N3'ün global yazma snapshot/kilit maliyeti hâlâ açık; N2 backend Orta uyarısı da sürüyor.
+
 ## 8 Ekim 2026 — N4 / Y5 yenilemesi
 
 Test edilen kaynak: **`731f5281f123f324628de7d0085508d2aaf54e48`**. Sonraki arşiv/dokümantasyon commit'i test edilen kaynakla aynı değildir; kaynak kimliği ayrıca hash'lerden kontrol edilir. Önceki kayıtların üzerine yazılmadı.

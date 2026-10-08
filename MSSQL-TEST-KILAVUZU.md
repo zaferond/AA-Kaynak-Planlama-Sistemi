@@ -1,6 +1,8 @@
 # Native MSSQL doğrulaması — 31. adım
 
-**Güncel durum — 8 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `731f5281f123f324628de7d0085508d2aaf54e48` commit'i **20/20** native testi geçti; **şema 31**, iki bağımsız havuz ve temizlik doğrulandı. Raporun **463 kaynak hash'i** aynı commit ile eşleşti. Aynı kaynak için Windows 143/143, Ubuntu 509/509 ve 133 Chromium kontrolü başarılı. [N4 yenileme kaydı](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md) ve [CI kanıt arşivi](CI-KANIT-ARSIVI.md). Bu sentetik koşular kurum SQL/TLS/Windows servis/proxy ve gerçek yük kabulü değildir.
+**Güncel durum — 8 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `f3b63835c05830c85847f1c3c0ef04f0b82e7d12` commit'i **21/21** native testi geçti; **şema 31**, iki bağımsız havuz ve temizlik doğrulandı. Ek profil 10.000 planlanan / 4.000 actual kayıt üzerinde **600 işlem / 300 değişiklik** içerir. Raporun **466 kaynak hash'i** aynı commit ile eşleşti. Aynı kaynak için Windows 153/153, Ubuntu 524/524 ve 133 Chromium kontrolü, tüm kalite/audit kapıları başarılı. [N3 ölçüm ve dar kişisel okuma kaydı](N3-SNAPSHOT-KILIT-OLCUM-VE-OKUMA-KAPSAMI-2026-10-08.md) ve [CI kanıt arşivi](CI-KANIT-ARSIVI.md). N3 global yazma snapshot/kilit maliyeti sürüyor; backend Orta bağımlılık uyarısı da açık. Bu sentetik koşular kurum SQL/TLS/Windows servis/proxy ve gerçek yük kabulü değildir.
+
+**Önceki 8 Ekim kaydı:** `731f5281f123f324628de7d0085508d2aaf54e48`, 20/20 native, 463 hash; Windows 143/143, Ubuntu 509/509 ve 133 Chromium kontrolü. [N4 yenileme kaydı](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md) korunur. Sonraki iki `ce5c2f0` kalite denemesi browser timeout'u ile başarısızdı; arşivde ayrı kayıtlıdır. `f3b6383` risk onay testinin event-turn/promise takibini düzeltti; üretim onay kuralları aynı kaldı.
 
 **Tarihsel durum — 4 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `63780fc4538829c16c7b14739f882a9851629f59` commit'i 19/19 native testi geçti; şema 30 ve temizlik doğrulandı. Önceki sonuç ve 48 kaynak hash'i arşivde korunur; yeni kaynak için bu eski kayıt kullanılmaz.
 
@@ -50,6 +52,21 @@ npm run test:db -- --env-file .env.mssql.test --size 10000 --samples 5 --report 
 `size`: 24–100.000; `samples`: 1–10. Rapor sürücü/Store/SQL kaynak hash'leri, Node ve SQL Server sürümü, şema ve uyumluluk seviyesi içerir. Kullanıcı verileri, bağlantı adresi, kullanıcı adı ve şifre içermez. SQL satırı sayısı dönen satırdır; SQL Server'ın fiziksel tarama/IO/sorgu planı ölçümü değildir. Store ölçümü HTTP/tarayıcı/WAN, üretim p95 veya kapasite garantisi değildir.
 
 Global uygulama kilidi bu pakette korunur. Kaldırılması veya repository kapsamının değiştirilmesi ancak native sonuçlar incelendikten sonra değerlendirilebilir.
+
+### İsteğe bağlı eşzamanlılık ve bellek profili
+
+`--contention` varsayılan olarak kapalıdır. Yalnız yukarıdaki boşluk kontrolü ve test kilidiyle sahiplenilen ayrı test veritabanında çalışır; önceki ölçüm fixture'ı temizlenip sentetik veri yeniden oluşturulur. Gerçek `.env` veya uygulama DB'si kullanılmaz.
+
+```sh
+npm run test:db -- --env-file .env.mssql.test --size 10000 --contention --profile-requests 40 --profile-actuals 4000 --profile-concurrency 1,4,12 --report native-mssql-contention.json
+```
+
+- `profile-requests`: her senaryo için 20–200 istek; `size` bu sayıyı karşılamalıdır. `profile-actuals`: 200–50.000 gerçekleşen/yüzde kaydı. En fazla dört farklı eşzamanlılık düzeyi, her biri 1–20 ve istek sayısından küçük/eşit olabilir. Geçersiz seçenekler DB'ye bağlanmadan reddedilir.
+- Admin/normal okuma, planlanan/gerçekleşen yazma ve karma yük ayrı ölçülür. Varsayılan beş senaryo × üç düzey × 40 istek = **600 işlem / 300 değişiklik yazması**. Her yazma revision/generation/audit ve iki bağımsız havuzdaki kalıcılık ile doğrulanır; admin snapshot'ı kendi generation'ının tüm yazmalarını içerir.
+- Sunucu saatiyle `sp_getapplock` edinimi, transaction giriş/çıkışı, okuma, kopyalama, komut, doğrulama/diff hazırlığı, persistence, view projection, SQL satırları ve JSON üretimi ayrı kaydedilir. SQL süreleri aşama süreleriyle örtüşür; hepsi toplanmaz. Kilit metriği yordam süresini de içerir, saf DMV bekleme süresi değildir.
+- `sampleP95/sampleP99` açık örnek sayısıyla nearest-rank örnek yüzdelikleridir. Karma senaryoda her grup yalnız 10 örnektir; üretim kuyruk gecikmesi veya p95/p99 garantisi değildir. Benchmark worker kuyruğu uygulamanın HTTP kabul kuyruğu değildir.
+- Bellek tüm Node sürecinden aralıklarla ve aşama sınırlarında örneklenir; fixture, referans veri ve ölçüm araçları dahildir. Bu değer istek başına tahsis, kesin tepe bellek veya SQL Server belleği değildir. Profiling ek SELECT ve örnekleme maliyeti getirir; üretim adapter'ında enstrümantasyon yoktur.
+- Başarı artifact'i yalnız yeniden bağlantı eşitliği, temizlik ve test kilidinin bırakılması tamamlanınca üretilir. Rapor SQL/parametre/değer, adres, kullanıcı adı veya parola kaydetmez. Zamanlanmış workflow hafif varsayılan koşuyu korur; manuel workflow'da `contention` seçeneği açılabilir.
 
 ## GitHub üzerinde zamanlanmış ve manuel test ortamı
 
