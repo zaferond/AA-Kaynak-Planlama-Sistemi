@@ -1,3 +1,4 @@
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -251,7 +252,7 @@ test("migration 30 preserves legacy model/history, runs once and enforces rank b
   assert.equal(
     (await store.db.query("SELECT MAX(version) AS v FROM kp_schema_migrations"))
       .rows[0].v,
-    30,
+    schemaVersion,
   );
   await assert.rejects(() =>
     store.transaction((c) => c.query("UPDATE kp_projects SET sort_order=-1")),

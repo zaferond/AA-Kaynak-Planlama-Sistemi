@@ -274,8 +274,11 @@ export class Store {
             generation: view.generation,
             user: view.user,
             allocations: [...ids]
-              .filter((id) =>
-                Object.hasOwn(view.data.revisions, "allocation:" + id),
+              .filter(
+                (id) =>
+                  Object.hasOwn(view.data.revisions, "allocation:" + id) &&
+                  view.data.revisions["allocation:" + id] !==
+                    before.revisions["allocation:" + id],
               )
               .map((id) => ({
                 id,

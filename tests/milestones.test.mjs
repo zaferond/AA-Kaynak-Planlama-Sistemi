@@ -1,3 +1,4 @@
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -449,7 +450,7 @@ test("existing month milestones become full date ranges during migration", async
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        30,
+        schemaVersion,
       );
       assert.deepEqual(
         (await store.read()).data.projects.find((p) => p.id === "p").milestones,

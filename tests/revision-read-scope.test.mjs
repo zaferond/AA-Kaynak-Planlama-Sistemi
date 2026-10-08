@@ -250,6 +250,17 @@ test("all authenticated roles match complete-read revision views, including tran
   const data = (await store.read()).data,
     resource = data.resources.find((r) => r.id === "bench-r0");
   const deleted = team.id + "|bench-p0|2029-12";
+  // A deletion tombstone must originate from a real record, including zero.
+  await store.mutate(users.admin, (d, u) =>
+    applyChanges(d, u, [
+      {
+        kind: "allocation",
+        id: deleted,
+        value: 0,
+        revision: d.revisions["allocation:" + deleted] || 0,
+      },
+    ]),
+  );
   await store.mutate(users.admin, (d, u) =>
     applyChanges(d, u, [
       {
@@ -331,7 +342,7 @@ test("all authenticated roles match complete-read revision views, including tran
     if (user.role === "normal")
       assert.equal(actual.data.revisions["allocation:" + deleted], undefined);
     if (user._id === "manager")
-      assert.equal(actual.data.revisions["allocation:" + deleted], 1);
+      assert.equal(actual.data.revisions["allocation:" + deleted], 2);
   }
   const normal = await store.view(users.normal);
   assert.equal(

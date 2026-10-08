@@ -119,6 +119,221 @@ const risk = (id) => ({
   residualImpact: null,
 });
 
+test("numeric and personal deletions validate targets without manufacturing revision tombstones", async (t) => {
+  const { store, user, state, write } = await setup(t);
+  const team = (await state()).data.teams.find((item) => item.lead);
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "p",
+          value: {
+            id: "p",
+            name: "Synthetic project",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        {
+          kind: "resource",
+          id: "r-own",
+          value: {
+            id: "r-own",
+            name: "Synthetic employee",
+            note: "",
+            versions: [
+              {
+                team: team.id,
+                lead: team.lead,
+                effective: "2026-01",
+                start: "2026-01-01",
+                end: "",
+                status: "Aktif Çalışan",
+                included: true,
+                amount: 1,
+              },
+            ],
+          },
+        },
+      ])
+    ).status,
+    200,
+  );
+  const owner = await user("delete-owner", "normal", "r-own");
+  const foreign = await user("delete-foreign", "normal");
+  const manager = await user("delete-manager", "manager", "", [team.lead]);
+  const sqlRevisions = async () =>
+    (await store.db.query("SELECT * FROM kp_revisions ORDER BY kind,record_id"))
+      .rows;
+  const del = (kind, id) => ({ kind, id, operation: "delete" });
+
+  await t.test(
+    "the original 32-command phantom-project attack is rejected atomically",
+    async () => {
+      const before = await state(),
+        revisions = await sqlRevisions();
+      const ids = [
+        ...Array.from({ length: 30 }, (_, i) => `r-own|ghost-${i}|2026-01`),
+        "r-own|ghost-missing-month",
+        "r-own|ghost-extra|2026-01|extra",
+      ];
+      assert.equal(
+        (
+          await write(
+            ids.map((id) => del("actual", id)),
+            owner,
+          )
+        ).status,
+        404,
+      );
+      assert.deepEqual(await state(), before);
+      assert.deepEqual(await sqlRevisions(), revisions);
+    },
+  );
+
+  await t.test(
+    "malformed dates, missing owners/projects and extra components cannot bypass validation by deletion",
+    async () => {
+      const before = await state(),
+        revisions = await sqlRevisions();
+      const cases = [
+        ["actual", "r-own|p", 400, owner],
+        ["actual", "r-own|p|2026-01|extra", 400, owner],
+        ["actual", "r-own||2026-01", 400, owner],
+        ["actual", "r-own|p|2200-01", 400, owner],
+        ["actual", "missing|p|2026-01", 404],
+        ["allocation", `${team.id}|missing|2026-01`, 404, manager],
+        ["allocation", `${team.id}|p|2026-13`, 400, manager],
+        ["allocation", "missing|p|2026-01", 404],
+        ["workedHours", "r-own|1999-12", 400, owner],
+        ["workedHours", "r-own|2026-01|extra", 400, owner],
+        ["workedHours", "missing|2026-01", 404],
+        ["personDay", "r-own|2026-02-30|leave", 400, owner],
+        ["personDay", "r-own|2200-01-01|leave", 400, owner],
+        ["personDay", "r-own|2026-01-05|leave|extra", 400, owner],
+        ["personDay", "missing|2026-01-05|leave", 400],
+      ];
+      for (const [kind, id, expected, auth] of cases)
+        assert.equal(
+          (await write([del(kind, id)], auth)).status,
+          expected,
+          `${kind}:${id}`,
+        );
+      assert.equal(
+        (
+          await write(
+            [{ kind: "workedHours", id: "r-own|2200-01", value: null }],
+            owner,
+          )
+        ).status,
+        400,
+      );
+      assert.deepEqual(await state(), before);
+      assert.deepEqual(await sqlRevisions(), revisions);
+    },
+  );
+
+  const records = [
+    ["allocation", `${team.id}|p|2026-01`, "allocations", 0, manager],
+    [
+      "actual",
+      "r-own|p|2026-01",
+      "actualAllocations",
+      { unit: "percent", value: 25 },
+      owner,
+    ],
+    ["workedHours", "r-own|2026-01", "actualWorkedHours", 0, owner],
+    [
+      "personDay",
+      "r-own|2026-01-05|leave",
+      "personCalendar",
+      { type: "leave", hours: 1, label: "Synthetic" },
+      owner,
+    ],
+  ];
+  await t.test(
+    "empty clears and automatic-hour resets succeed without new revision rows; authorization still applies",
+    async () => {
+      const before = (await state()).data,
+        revisions = await sqlRevisions();
+      for (const [kind, id, , , auth] of records) {
+        assert.equal((await write([del(kind, id)], foreign)).status, 403);
+        assert.equal((await write([del(kind, id)], auth)).status, 200);
+      }
+      assert.equal(
+        (
+          await write(
+            [{ kind: "workedHours", id: "r-own|2026-01", value: null }],
+            owner,
+          )
+        ).status,
+        200,
+      );
+      assert.deepEqual((await state()).data, before);
+      assert.deepEqual(await sqlRevisions(), revisions);
+    },
+  );
+
+  await t.test(
+    "real deletions (including zero) retain tombstones, reject stale writes and allow recreation",
+    async () => {
+      for (const [kind, id, collection, value, auth] of records) {
+        assert.equal((await write([{ kind, id, value }], auth)).status, 200);
+        const revision = (await state()).data.revisions[kind + ":" + id];
+        const remove =
+          kind === "workedHours" ? { kind, id, value: null } : del(kind, id);
+        assert.equal((await write([remove], auth)).status, 200);
+        const removed = (await state()).data;
+        assert.equal(Object.hasOwn(removed[collection], id), false);
+        if (kind === "actual")
+          assert.equal(Object.hasOwn(removed.actualPercentEntries, id), false);
+        assert.equal(removed.revisions[kind + ":" + id], revision + 1);
+        assert.equal(
+          (await write([{ ...remove, revision }], auth)).status,
+          409,
+        );
+        assert.equal(
+          (await write([{ kind, id, value, revision }], auth)).status,
+          409,
+        );
+        const rows = await sqlRevisions();
+        assert.equal((await write([remove], auth)).status, 200);
+        assert.deepEqual(await sqlRevisions(), rows);
+        assert.equal((await write([{ kind, id, value }], auth)).status, 200);
+        assert.equal(
+          (await state()).data.revisions[kind + ":" + id],
+          revision + 2,
+        );
+        assert.equal((await write([remove], auth)).status, 200);
+      }
+    },
+  );
+
+  await t.test(
+    "a rejected deletion rolls back earlier valid changes in the same batch",
+    async () => {
+      const before = await state(),
+        revisions = await sqlRevisions();
+      assert.equal(
+        (
+          await write(
+            [
+              { kind: "actual", id: "r-own|p|2026-01", value: 0.1 },
+              del("actual", "r-own|missing|2026-01"),
+            ],
+            owner,
+          )
+        ).status,
+        404,
+      );
+      assert.deepEqual(await state(), before);
+      assert.deepEqual(await sqlRevisions(), revisions);
+    },
+  );
+});
+
 test("manual leadership and team HTTP CRUD survives reload/reopen and guards roles, duplicates and stale drafts", async (t) => {
   const { store, env, admin, request, user, state, write } = await setup(t);
   const normal = await user("directory-normal", "normal");

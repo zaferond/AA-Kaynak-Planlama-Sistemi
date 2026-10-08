@@ -1,4 +1,9 @@
 import { ownValue } from "../shared/records.ts";
+import { parseAllocationKey } from "../shared/allocation-key.ts";
+import {
+  validPlanningMonth,
+  validPlanningDate,
+} from "../shared/planning-dates.ts";
 import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
 import {
   MAX_RECORDED_MONTHLY_HOURS,
@@ -179,6 +184,28 @@ export function stageChanges(d, u, input) {
         409,
         "Kayıt başka kullanıcı tarafından değiştirildi. Yenileyip tekrar deneyin.",
       );
+    // Final snapshot validation cannot see deleted keys. Validate their targets
+    // before deletion, and never manufacture tombstones for empty cells.
+    // Authorization and revision checks must still run for these no-op clears.
+    if (operation && (kind === "allocation" || kind === "actual")) {
+      const parts = parseAllocationKey(id);
+      if (!parts) fail(400, "Dağıtım kaydı kimliği geçersiz.");
+      const [ownerId, projectId] = parts;
+      const owners = kind === "allocation" ? d.teams : d.resources;
+      if (
+        !owners.some((item) => item.id === ownerId) ||
+        !d.projects.some((item) => item.id === projectId)
+      )
+        fail(404, "Dağıtım kaydının takım, çalışan veya projesi bulunamadı.");
+      const entries =
+        kind === "allocation" ? d.allocations : d.actualAllocations;
+      if (
+        ownValue(entries || {}, id) === undefined &&
+        (kind !== "actual" ||
+          ownValue(d.actualPercentEntries || {}, id) === undefined)
+      )
+        continue;
+    }
     if (
       kind === "actual" &&
       !operation &&
@@ -274,17 +301,18 @@ export function stageChanges(d, u, input) {
       if (resourceId && month) affectMonth(resourceId, month);
     } else if (kind === "workedHours") {
       const [resourceId, month, ...extra] = id.split("|");
-      if (
-        extra.length ||
-        !resourceId ||
-        !/^\d{4}-(0[1-9]|1[0-2])$/.test(month || "")
-      )
+      if (extra.length || !resourceId || !validPlanningMonth(month || ""))
         fail(400, "Çalışılan saat kaydı geçersiz.");
       if (!d.resources.some((resource) => resource.id === resourceId))
         fail(404, "Çalışan kaynak bulunamadı.");
       if (!operation && value !== null && month > currentPlanningMonth())
         fail(400, "Gelecek aylara çalışılan saat girilemez.");
       d.actualWorkedHours ??= {};
+      if (
+        (operation || value === null) &&
+        ownValue(d.actualWorkedHours, id) === undefined
+      )
+        continue;
       if (operation || value === null) delete d.actualWorkedHours[id];
       else d.actualWorkedHours[id] = workedHoursSchema.parse(value);
       affectMonth(resourceId, month);
@@ -314,12 +342,11 @@ export function stageChanges(d, u, input) {
         extra.length ||
         (type !== undefined && !["leave", "training"].includes(type)) ||
         !d.resources.some((resource) => resource.id === resourceId) ||
-        !/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/.test(date || "") ||
-        Number.isNaN(Date.parse(date + "T12:00:00Z")) ||
-        new Date(date + "T12:00:00Z").toISOString().slice(0, 10) !== date
+        !validPlanningDate(date || "")
       )
         fail(400, "Kişisel takvim tarihi geçersiz.");
       d.personCalendar ??= {};
+      if (operation && ownValue(d.personCalendar, id) === undefined) continue;
       if (operation) delete d.personCalendar[id];
       else {
         const entry = personDaySchema.parse(value);

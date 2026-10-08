@@ -1,3 +1,4 @@
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 import { captureEditorRevisions } from "../frontend/src/features/editor-revisions.ts";
 import test from "node:test";
 import { captureProjectSnapshot } from "../frontend/src/features/project-snapshot.ts";
@@ -258,7 +259,7 @@ test("versions 27/28 preserve bars and persist point styles inside overlapping b
           "SELECT MAX(version) AS v FROM kp_schema_migrations",
         )
       ).rows[0].v,
-      30,
+      schemaVersion,
     );
   } finally {
     await store.close();

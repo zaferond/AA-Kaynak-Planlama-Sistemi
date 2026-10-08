@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
+import { deploymentSources } from "../scripts/deployment-manifest.mjs";
 import { Store } from "../backend/store.mjs";
 import { schemaVersion } from "../backend/migration-catalog.mjs";
 import { concurrencySuite } from "./concurrency-suite.mjs";
@@ -67,43 +69,29 @@ test(
           await stores[1].transaction((c) => stores[1].read(c), true),
           before,
         );
-        const sourceHashes = {};
+        // Identify the full application/build inputs and test sources. A hash
+        // proves which bytes were present, not that every feature was tested.
+        const sourceHashes = await deploymentSources(
+          fileURLToPath(new URL("../", import.meta.url)),
+        );
         const sourceFiles = [
-          "backend/store.mjs",
-          "backend/identity-repository.mjs",
-          "backend/planning-reader.mjs",
-          "backend/planning-writer.mjs",
-          "backend/schema-migrations.mjs",
-          "backend/migration-catalog.mjs",
-          "backend/adapters/mssql.mjs",
-          "backend/rate-limits.mjs",
-          "tests/rate-limit-suite.mjs",
-          "tests/login-test-fixture.mjs",
-          "backend/read-records.mjs",
-          "backend/operations.mjs",
-          "tests/mssql-native-suite.mjs",
-          "scripts/mssql-test-environment.mjs",
-          "scripts/run-mssql-tests.mjs",
-          "scripts/benchmark-fixture.mjs",
-          "tests/mssql.integration.mjs",
-          "tests/integration-suite.mjs",
-          "tests/concurrency-suite.mjs",
-          "shared/server-domain.ts",
-          "shared/risk-system-seed.ts",
-          "shared/risk-system-policy.ts",
+          ...(await fs.readdir(new URL("./", import.meta.url)))
+            .filter((name) => name.endsWith(".mjs"))
+            .map((name) => "tests/" + name),
+          ".github/workflows/mssql-native.yml",
+          ".github/workflows/quality.yml",
         ];
-        for (const name of (
-          await fs.readdir(new URL("../backend/migrations/", import.meta.url))
-        )
-          .filter((name) => /^\d{3}_mssql\.sql$/.test(name))
-          .sort())
-          sourceFiles.push("backend/migrations/" + name);
         for (const name of sourceFiles)
           sourceHashes[name] = createHash("sha256")
             .update(await fs.readFile(new URL("../" + name, import.meta.url)))
             .digest("hex");
         return {
           checkedAt: new Date().toISOString(),
+          checkedCommit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || "")
+            ? process.env.GITHUB_SHA
+            : null,
+          sourceHashScope:
+            "Application/build inputs and test sources; identity is not feature coverage.",
           node: process.version,
           schema: schemaVersion,
           server,

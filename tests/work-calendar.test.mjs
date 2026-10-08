@@ -1,3 +1,4 @@
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { applyChanges } from "../backend/operations.mjs";
@@ -398,7 +399,7 @@ test("migration recalculates old training percentages without changing project h
           "SELECT MAX(version) AS version FROM kp_schema_migrations",
         )
       ).rows[0].version,
-      30,
+      schemaVersion,
     );
   } finally {
     await store.close();

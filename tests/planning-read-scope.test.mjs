@@ -188,6 +188,17 @@ test("authenticated scoped SQL views match full reads for all roles, transfers, 
     k.startsWith(team.id + "|"),
   );
   const deleted = team.id + "|bench-p0|2029-12";
+  // A deletion tombstone must originate from a real record, including zero.
+  await store.mutate(users.admin, (d, active) =>
+    applyChanges(d, active, [
+      {
+        kind: "allocation",
+        id: deleted,
+        value: 0,
+        revision: d.revisions["allocation:" + deleted] || 0,
+      },
+    ]),
+  );
   await store.mutate(users.admin, (d, active) =>
     applyChanges(d, active, [
       {
@@ -250,7 +261,7 @@ test("authenticated scoped SQL views match full reads for all roles, transfers, 
         ),
       );
     if (user.role === "manager")
-      assert.equal(actual.data.revisions["allocation:" + deleted], 1);
+      assert.equal(actual.data.revisions["allocation:" + deleted], 2);
   }
   const normal = await store.view(users.normal);
   assert(

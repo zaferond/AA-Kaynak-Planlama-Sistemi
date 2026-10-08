@@ -1,3 +1,4 @@
+import { schemaVersion } from "../backend/migration-catalog.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
@@ -128,7 +129,7 @@ test("resource month dates migrate to first and last calendar day", async () => 
             "SELECT MAX(version) AS v FROM kp_schema_migrations",
           )
         ).rows[0].v,
-        30,
+        schemaVersion,
       );
       await store.db.transaction((c) =>
         c.query(

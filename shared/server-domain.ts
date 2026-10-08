@@ -1,5 +1,6 @@
 import { riskCategories, riskStatuses, riskStrategies } from "./risk-policy.ts";
 import { validPlanningMonth, validPlanningDate } from "./planning-dates.ts";
+import { parseAllocationKey } from "./allocation-key.ts";
 import { personDaySchema } from "./calendar-rules.ts";
 export { personDaySchema } from "./calendar-rules.ts";
 const bad = (message: string) => Object.assign(Error(message), { status: 400 });
@@ -423,9 +424,9 @@ export function validate(
   }
   for (const k of Object.keys(d.allocations)) {
     const n = d.allocations[k];
-    const [t, p, m, ...extra] = k.split("|");
-    if (extra.length || !teamIds.has(t) || !validPlanningMonth(m))
-      throw bad("Geçersiz dağıtım kaydı.");
+    const parts = parseAllocationKey(k);
+    if (!parts || !teamIds.has(parts[0])) throw bad("Geçersiz dağıtım kaydı.");
+    const [, p, m] = parts;
     const pr = projectsById.get(p);
     if (!pr || (n > 0 && (m < pr.start || m > pr.end)))
       throw bad("Proje tarihleri dışında kaynak dağıtımı var.");
@@ -433,14 +434,14 @@ export function validate(
   d.actualAllocations ??= {};
   for (const k of Object.keys(d.actualAllocations)) {
     const n = d.actualAllocations[k];
-    const [resourceId, projectId, month, ...extra] = k.split("|");
+    const parts = parseAllocationKey(k);
+    if (!parts) throw bad("Geçersiz gerçekleşen dağılım kaydı.");
+    const [resourceId, projectId, month] = parts;
     const resource = resourcesById.get(resourceId),
       project = projectsById.get(projectId);
     if (
-      extra.length ||
       !resource ||
       !project ||
-      !validPlanningMonth(month) ||
       (n > 0 && (month < project.start || month > project.end))
     )
       throw bad("Geçersiz gerçekleşen dağılım kaydı.");
@@ -459,12 +460,12 @@ export function validate(
   const personHours = createPersonMonthHoursIndex(d);
   for (const key of Object.keys(d.actualPercentEntries)) {
     const percent = d.actualPercentEntries[key];
-    const [resourceId, projectId, month, ...extra] = key.split("|");
+    const parts = parseAllocationKey(key);
+    if (!parts) throw bad("Geçersiz yüzde dağılımı kaydı.");
+    const [resourceId, projectId, month] = parts;
     if (
-      extra.length ||
       !resourcesById.has(resourceId) ||
       !projectsById.has(projectId) ||
-      !validPlanningMonth(month) ||
       d.actualAllocations[key] === undefined
     )
       throw bad("Geçersiz yüzde dağılımı kaydı.");

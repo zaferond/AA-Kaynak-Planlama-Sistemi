@@ -218,6 +218,122 @@ export async function nativePoolSuite(stores, t) {
   const key = Object.keys((await first.read()).data.allocations)[0];
 
   await t.test(
+    "native nonexistent deletes cannot grow revisions; real deletion keeps stale-write protection",
+    async () => {
+      const before = await first.read();
+      const resourceId = before.data.resources[0].id;
+      const projectId = before.data.projects[0].id;
+      const revisionRows = async () =>
+        (
+          await second.db.query(
+            "SELECT * FROM kp_revisions ORDER BY kind,record_id",
+          )
+        ).rows;
+      const revisions = await revisionRows();
+      await first.bootstrapUser({
+        _id: "native-delete-owner",
+        username: "native.delete.owner",
+        name: "Synthetic owner",
+        role: "normal",
+        leaders: [],
+        resourceId,
+        active: true,
+        password,
+        revision: 1,
+        version: 1,
+      });
+      const owner = await first.findUser({ id: "native-delete-owner" });
+      const ids = [
+        ...Array.from(
+          { length: 30 },
+          (_, i) => `${resourceId}|ghost-${i}|2026-01`,
+        ),
+        `${resourceId}|ghost-missing-month`,
+        `${resourceId}|ghost-extra|2026-01|extra`,
+      ];
+      await assert.rejects(
+        first.mutate(owner, (d, u) =>
+          applyChanges(
+            d,
+            u,
+            ids.map((id) => ({
+              kind: "actual",
+              id,
+              operation: "delete",
+              revision: 0,
+            })),
+          ),
+        ),
+        { status: 404 },
+      );
+      for (const id of [
+        `${resourceId}|${projectId}`,
+        `${resourceId}|${projectId}|2026-01|extra`,
+      ])
+        await assert.rejects(
+          change(first, [
+            { kind: "actual", id, operation: "delete", revision: 0 },
+          ]),
+          { status: 400 },
+        );
+      assert.deepEqual(await second.read(), before);
+      assert.deepEqual(await revisionRows(), revisions);
+
+      const emptyId = `${resourceId}|${projectId}|2000-01`;
+      await change(first, [
+        { kind: "actual", id: emptyId, operation: "delete", revision: 0 },
+      ]);
+      assert.deepEqual((await second.read()).data, before.data);
+      assert.deepEqual(await revisionRows(), revisions);
+
+      const value = before.data.allocations[key],
+        revision = before.data.revisions["allocation:" + key] || 0;
+      await change(first, [
+        { kind: "allocation", id: key, operation: "delete", revision },
+      ]);
+      const removed = await second.read();
+      assert.equal(Object.hasOwn(removed.data.allocations, key), false);
+      assert.equal(removed.data.revisions["allocation:" + key], revision + 1);
+      await assert.rejects(
+        change(second, [{ kind: "allocation", id: key, value, revision }]),
+        { status: 409 },
+      );
+      await change(second, [
+        {
+          kind: "allocation",
+          id: key,
+          operation: "delete",
+          revision: revision + 1,
+        },
+      ]);
+      assert.equal(
+        (await first.read()).data.revisions["allocation:" + key],
+        revision + 1,
+      );
+      await change(first, [
+        { kind: "allocation", id: key, value, revision: revision + 1 },
+      ]);
+      const restored = await second.read();
+      assert.equal(restored.data.allocations[key], value);
+      const restoredRows = await revisionRows();
+      await assert.rejects(
+        change(first, [
+          { kind: "allocation", id: key, value: 0, revision: revision + 2 },
+          {
+            kind: "actual",
+            id: `${resourceId}|missing|2026-01`,
+            operation: "delete",
+            revision: 0,
+          },
+        ]),
+        { status: 404 },
+      );
+      assert.deepEqual(await second.read(), restored);
+      assert.deepEqual(await revisionRows(), restoredRows);
+    },
+  );
+
+  await t.test(
     "separate native pools racing on one revision commit once",
     async () => {
       const before = await first.read();

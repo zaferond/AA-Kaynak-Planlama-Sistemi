@@ -11,7 +11,7 @@ import { Store } from "../backend/store.mjs";
 import { SqlJsAdapter } from "../backend/adapters/sqljs.mjs";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
-import { migrationSql } from "../backend/migration-catalog.mjs";
+import { migrationSql, schemaVersion } from "../backend/migration-catalog.mjs";
 import { verifyBundle } from "../scripts/maintenance-files.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
@@ -490,7 +490,7 @@ test("a failure after migration DDL and data conversion preserves legacy bytes, 
   });
   await adapter.close();
   const legacy = await fs.readFile(file);
-  const finalMigration = await migrationSql("sqljs", 30);
+  const finalMigration = await migrationSql("sqljs", schemaVersion);
   const transaction = adapter.transaction.bind(adapter);
   let interrupted = false;
   // Inject only in this adapter instance, after the real final DDL has executed.
@@ -516,15 +516,18 @@ test("a failure after migration DDL and data conversion preserves legacy bytes, 
                 "SELECT MAX(version) AS v FROM kp_schema_migrations",
               )
             ).rows[0].v,
-            30,
+            schemaVersion,
           );
-          throw Error("Synthetic failure after migration 30");
+          throw Error(`Synthetic failure after migration ${schemaVersion}`);
         }
         return result;
       };
       return fn(c);
     }, readOnly);
-  await assert.rejects(store.connect(), /Synthetic failure after migration 30/);
+  await assert.rejects(
+    store.connect(),
+    new RegExp(`Synthetic failure after migration ${schemaVersion}`),
+  );
   assert.equal(interrupted, true);
   assert.deepEqual(await fs.readFile(file), legacy);
   await assert.rejects(fs.stat(file + ".lock"), { code: "ENOENT" });
@@ -540,7 +543,7 @@ test("a failure after migration DDL and data conversion preserves legacy bytes, 
   assert.equal(
     (await store.db.query("SELECT MAX(version) AS v FROM kp_schema_migrations"))
       .rows[0].v,
-    30,
+    schemaVersion,
   );
   await store.close();
   await store.connect();

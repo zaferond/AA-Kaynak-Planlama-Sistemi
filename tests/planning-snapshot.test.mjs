@@ -934,6 +934,7 @@ test("planning deltas fall back for numeric changes and same-value non-planning 
   for (const change of [
     { kind: "actual", id: "r0|p|2026-01", value: 0.1 },
     { kind: "actual", id: "r0|p|2026-01", value: 0.1 },
+    { kind: "workedHours", id: "r0|2026-01", value: 180 },
     { kind: "workedHours", id: "r0|2026-01", operation: "delete" },
   ]) {
     const before = await store.view(users.admin);
