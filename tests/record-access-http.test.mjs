@@ -8,6 +8,7 @@ import { Store } from "../backend/store.mjs";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 import { activeTeamMembers } from "../shared/model.ts";
+import { applyLeaderChange } from "../backend/operations.mjs";
 import {
   DIRECTORY_REVISION_KEY,
   directoryRevision,
@@ -711,18 +712,16 @@ test("manual team moves preserve allocations and historical resource links; used
             id: "linked-resource",
             name: "Synthetic employee",
             note: "",
-            versions: [
-              {
-                team: team.id,
-                lead: team.lead,
-                effective: "2026-01",
-                start: "2026-01-01",
-                end: "",
-                status: "Aktif Çalışan",
-                included: true,
-                amount: 1,
-              },
-            ],
+            versions: ["2026-01", "2026-07"].map((effective) => ({
+              team: team.id,
+              lead: team.lead,
+              effective,
+              start: "2026-01-01",
+              end: "",
+              status: "Aktif Çalışan",
+              included: true,
+              amount: 1,
+            })),
           },
         },
         {
@@ -756,6 +755,41 @@ test("manual team moves preserve allocations and historical resource links; used
   assert.equal(
     after.data.revisions["resource:linked-resource"],
     before.data.revisions["resource:linked-resource"] + 1,
+  );
+  assert.deepEqual(
+    after.data.resources
+      .find((r) => r.id === "linked-resource")
+      .versions.map((v) => v.lead),
+    ["Manual B", "Manual B"],
+    "all historical versions move while the resource revision advances once",
+  );
+  const beforeFailedBatch = await state();
+  const beforeAudit = (await request("/audit", undefined, admin)).json;
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "team",
+          id: team.id,
+          value: { ...team, name: "Rejected move", lead: "Manual A" },
+        },
+        {
+          kind: "resource",
+          id: "linked-resource",
+          value: beforeFailedBatch.data.resources.find(
+            (r) => r.id === "linked-resource",
+          ),
+          revision:
+            beforeFailedBatch.data.revisions["resource:linked-resource"],
+        },
+      ])
+    ).status,
+    409,
+  );
+  assert.deepEqual(await state(), beforeFailedBatch);
+  assert.deepEqual(
+    (await request("/audit", undefined, admin)).json,
+    beforeAudit,
   );
   assert.deepEqual(after.data.allocations, before.data.allocations);
   const snapshot = structuredClone(after);
@@ -1157,6 +1191,147 @@ test("HTTP leadership rename and manager updates support __proto__, survive back
   } finally {
     await reopened.close();
   }
+});
+
+test("leadership rename rolls back SQL links and catalog on a late connection failure, then retries atomically", async (t) => {
+  const { store, admin, request, user, state, write } = await setup(t);
+  const team = (await state()).data.teams.find((item) => item.lead);
+  await user("cascade-manager", "manager", "", [team.lead]);
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "resource",
+          id: "cascade-worker",
+          value: {
+            id: "cascade-worker",
+            name: "Synthetic cascade worker",
+            note: "",
+            versions: ["2026-01", "2026-07"].map((effective) => ({
+              effective,
+              team: team.id,
+              lead: team.lead,
+              start: "2026-01-01",
+              end: "",
+              status: "Aktif Çalışan",
+              included: true,
+              amount: 1,
+            })),
+          },
+        },
+      ])
+    ).status,
+    200,
+  );
+  const before = await state();
+  const beforeUser = await store.findUser({ id: "cascade-manager" });
+  const beforeAudit = (await request("/audit", undefined, admin)).json;
+  const links = async () =>
+    (
+      await store.db.query(
+        "SELECT * FROM kp_user_leaders ORDER BY user_id,leader_name",
+      )
+    ).rows;
+  const beforeLinks = await links();
+  const actor = await store.findUser({ id: "admin" });
+  const change = {
+    action: "rename",
+    name: team.lead,
+    newName: "Synthetic cascade renamed leadership",
+    catalogRevision: directoryRevision(before.data),
+  };
+  let newLinksWritten = false,
+    failureReached = false;
+  await assert.rejects(
+    store.mutate(
+      actor,
+      (data, active, connection, generation) =>
+        applyLeaderChange(
+          data,
+          active,
+          change,
+          new Proxy(connection, {
+            get(target, property) {
+              if (property === "upsert")
+                return async (table, rows) => {
+                  await target.upsert(table, rows);
+                  if (table === "user_leaders")
+                    newLinksWritten = rows.length > 0;
+                };
+              if (property === "remove")
+                return async (table, rows) => {
+                  if (table === "user_leaders") {
+                    assert(
+                      newLinksWritten,
+                      "fail only after replacement user links were written",
+                    );
+                    failureReached = true;
+                    throw Error("Synthetic user-link removal failure");
+                  }
+                  return target.remove(table, rows);
+                };
+              const value = Reflect.get(target, property);
+              return typeof value === "function" ? value.bind(target) : value;
+            },
+          }),
+          generation,
+        ),
+      { auditUsers: true },
+    ),
+    /Synthetic user-link removal failure/,
+  );
+  assert(failureReached);
+  assert.deepEqual(await state(), before);
+  assert.deepEqual(await links(), beforeLinks);
+  assert.deepEqual(await store.findUser({ id: "cascade-manager" }), beforeUser);
+  assert.deepEqual(
+    (await request("/audit", undefined, admin)).json,
+    beforeAudit,
+  );
+  assert.deepEqual(
+    (
+      await store.db.query("SELECT name FROM kp_leaders WHERE name=@p0", [
+        change.newName,
+      ])
+    ).rows,
+    [],
+  );
+  assert.equal((await request("/leaders/change", change, admin)).status, 200);
+  const after = await state();
+  assert(after.data.leaders.includes(change.newName));
+  assert(!after.data.leaders.includes(change.name));
+  assert.equal(
+    after.data.teams.find((item) => item.id === team.id).lead,
+    change.newName,
+  );
+  assert.deepEqual(
+    after.data.resources
+      .find((item) => item.id === "cascade-worker")
+      .versions.map((version) => version.lead),
+    [change.newName, change.newName],
+  );
+  assert.equal(
+    after.data.revisions["resource:cascade-worker"],
+    before.data.revisions["resource:cascade-worker"] + 1,
+  );
+  assert.equal(
+    after.data.revisions["team:" + team.id],
+    (before.data.revisions["team:" + team.id] || 0) + 1,
+  );
+  assert.deepEqual((await store.findUser({ id: "cascade-manager" })).leaders, [
+    change.newName,
+  ]);
+  assert.equal(
+    directoryRevision(after.data),
+    directoryRevision(before.data) + 1,
+  );
+  assert.equal(after.generation, before.generation + 1);
+  await store.close();
+  await store.connect();
+  assert.deepEqual(await state(), after);
+  assert.deepEqual((await store.findUser({ id: "cascade-manager" })).leaders, [
+    change.newName,
+  ]);
 });
 
 test("HTTP session identity is stable for one session, rotates on login without generation changes, and grants no authentication", async (t) => {

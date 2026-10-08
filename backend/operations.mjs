@@ -26,14 +26,14 @@ import {
 } from "./domain/index.mjs";
 import { entityCollections as kinds } from "../shared/entity-kinds.ts";
 import { orderedProjects } from "../shared/project-order.ts";
-import { teamSchema } from "../shared/server-domain.ts";
 import { stageRiskChange, stageRiskSystemChange } from "./risk-commands.mjs";
 import {
-  assertUniqueLeaderName,
-  assertUniqueTeamName,
   DIRECTORY_REVISION_KEY,
   directoryRevision,
 } from "../shared/directory-policy.ts";
+import { stageTeamChange } from "./directory-commands.mjs";
+// Keep the existing operations entry point for routes, tools and tests.
+export { applyLeaderChange } from "./directory-commands.mjs";
 const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
 const changesSchema = z
   .array(
@@ -326,18 +326,12 @@ function stageParsedChanges(d, u, changes) {
       }
       const month = date.slice(0, 7);
       affectMonth(resourceId, month);
+    } else if (kind === "team") {
+      stageTeamChange(d, ch);
     } else {
       const c = kinds[kind];
       if (operation) {
         if (!d[c].some((x) => x.id === id)) fail(404, "Kayıt bulunamadı.");
-        if (kind === "team" && d.teams.length <= 1)
-          fail(409, "Son takım silinemez.");
-        if (
-          kind === "team" &&
-          (d.resources.some((r) => r.versions.some((v) => v.team === id)) ||
-            Object.keys(d.allocations).some((k) => k.split("|")[0] === id))
-        )
-          fail(409, "Kullanılan takım silinemez.");
         if (kind === "project") {
           for (const risk of d.risks || [])
             if (risk.projectId === id)
@@ -387,35 +381,6 @@ function stageParsedChanges(d, u, changes) {
       } else {
         if (!value || value.id !== id) fail(400, "Kimlik eşleşmiyor.");
         let nextValue = value;
-        if (kind === "team") {
-          nextValue = teamSchema.parse(value);
-          const previous = d.teams.find((t) => t.id === id);
-          if (
-            !previous ||
-            previous.name !== nextValue.name ||
-            previous.lead !== nextValue.lead
-          ) {
-            try {
-              assertUniqueTeamName(d.teams, nextValue);
-            } catch (error) {
-              fail(400, error.message);
-            }
-          }
-          if (!previous) nextValue.catalog = true;
-          if (previous && previous.lead !== nextValue.lead) {
-            for (const resource of d.resources) {
-              let changed = false;
-              for (const version of resource.versions)
-                if (version.team === id) {
-                  version.lead = nextValue.lead;
-                  changed = true;
-                }
-              if (changed)
-                d.revisions["resource:" + resource.id] =
-                  (d.revisions["resource:" + resource.id] || 0) + 1;
-            }
-          }
-        }
         if (kind === "project" && value.sortOrder === undefined) {
           const previous = d.projects.find((p) => p.id === id);
           if (previous?.sortOrder !== undefined)
@@ -446,146 +411,6 @@ function stageParsedChanges(d, u, changes) {
   if (changes.some((change) => change.kind === "project"))
     d.projects = orderedProjects(d.projects);
   return d;
-}
-const leaderChangeSchema = z
-  .object({
-    action: z.enum(["create", "rename", "update", "delete"]),
-    name: z.string().trim().min(1).max(200),
-    newName: z.string().trim().min(1).max(200).optional(),
-    managerName: z.string().trim().max(200).optional(),
-    generation: z.number().int().nonnegative().optional(),
-    catalogRevision: z.number().int().nonnegative().optional(),
-  })
-  .refine(
-    (change) =>
-      change.catalogRevision !== undefined || change.generation !== undefined,
-    "Sürüm bilgisi eksik.",
-  );
-export async function applyLeaderChange(d, u, input, c, generation) {
-  admin(u);
-  const previousResources = structuredClone(d.resources);
-  const change = leaderChangeSchema.parse(input);
-  if (change.catalogRevision !== undefined) {
-    if (change.catalogRevision !== directoryRevision(d))
-      fail(
-        409,
-        "Liderlik veya takım listesi değişti. Taslağınız korundu; güncel listeyi yükleyip tekrar deneyin.",
-      );
-  } else if (change.generation !== generation) {
-    // Older open clients keep their broader guard during rollout.
-    fail(
-      409,
-      "Uygulama verileri değişti. Taslağınız korundu; sayfayı yenileyip tekrar deneyin.",
-    );
-  }
-  if (change.action === "create") {
-    try {
-      assertUniqueLeaderName(d.leaders || [], change.name);
-    } catch (error) {
-      fail(400, error.message);
-    }
-    d.leaders = [...(d.leaders || []), change.name];
-    if (change.managerName)
-      d.leaderManagers = {
-        ...d.leaderManagers,
-        [change.name]: change.managerName,
-      };
-    Object.assign(d, validate(d, { previousResources }));
-    return;
-  }
-  if (!d.leaders?.includes(change.name)) fail(404, "Liderlik bulunamadı.");
-  const linkedUsers = (
-    await c.query("SELECT * FROM kp_user_leaders WHERE leader_name=@p0", [
-      change.name,
-    ])
-  ).rows;
-  if (change.action === "rename" || change.action === "update") {
-    const newName = change.newName || change.name;
-    const oldManager = ownValue(d.leaderManagers, change.name) || "";
-    const managerName = change.managerName ?? oldManager;
-    const renamed = newName !== change.name;
-    if (change.action === "rename" && !renamed)
-      fail(400, "Farklı bir liderlik adı girin.");
-    if (renamed) {
-      try {
-        assertUniqueLeaderName(d.leaders, newName, change.name);
-      } catch (error) {
-        fail(400, error.message);
-      }
-    }
-    if (!renamed && managerName === oldManager)
-      fail(400, "Değiştirilecek liderlik bilgisi yok.");
-    d.leaderManagers ??= {};
-    delete d.leaderManagers[change.name];
-    if (managerName)
-      d.leaderManagers = { ...d.leaderManagers, [newName]: managerName };
-    if (renamed) {
-      await c.upsert("leaders", [{ name: newName, manager_name: managerName }]);
-      d.leaders = d.leaders.map((name) =>
-        name === change.name ? newName : name,
-      );
-      for (const team of d.teams)
-        if (team.lead === change.name) {
-          team.lead = newName;
-          d.revisions["team:" + team.id] =
-            (d.revisions["team:" + team.id] || 0) + 1;
-        }
-      for (const resource of d.resources) {
-        let changed = false;
-        for (const version of resource.versions)
-          if (version.lead === change.name) {
-            version.lead = newName;
-            changed = true;
-          }
-        if (changed)
-          d.revisions["resource:" + resource.id] =
-            (d.revisions["resource:" + resource.id] || 0) + 1;
-      }
-      await c.upsert(
-        "user_leaders",
-        linkedUsers.map((row) => ({
-          user_id: row.user_id,
-          leader_name: newName,
-        })),
-      );
-      await c.remove(
-        "user_leaders",
-        linkedUsers.map((row) => ({
-          user_id: row.user_id,
-          leader_name: change.name,
-        })),
-      );
-    }
-  } else {
-    if (linkedUsers.length)
-      fail(
-        409,
-        "Liderlik kullanıcı yetkilerinde kullanılıyor. Önce yetkileri güncelleyin.",
-      );
-    const teams = d.teams.filter((team) => team.lead === change.name),
-      ids = new Set(teams.map((team) => team.id));
-    if (d.teams.length <= teams.length)
-      fail(409, "Son takım veya liderlik silinemez.");
-    if (
-      d.resources.some((resource) =>
-        resource.versions.some(
-          (version) => ids.has(version.team) || version.lead === change.name,
-        ),
-      ) ||
-      Object.keys(d.allocations).some((key) => ids.has(key.split("|")[0]))
-    )
-      fail(
-        409,
-        "Bu liderliğe bağlı çalışan kaynak veya planlanan dağılım var. Önce bağlı kayıtları taşıyın ya da temizleyin.",
-      );
-    d.teams = d.teams.filter((team) => !ids.has(team.id));
-    for (const team of teams)
-      d.revisions["team:" + team.id] =
-        (d.revisions["team:" + team.id] || 0) + 1;
-    d.leaders = d.leaders.filter((name) => name !== change.name);
-    if (d.leaderManagers) delete d.leaderManagers[change.name];
-  }
-  Object.assign(d, validate(d, { previousResources }));
 }
 export function reset(d, u, expected) {
   admin(u);
