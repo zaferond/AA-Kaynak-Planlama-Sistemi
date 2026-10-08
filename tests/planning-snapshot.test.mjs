@@ -17,6 +17,16 @@ import { createApp } from "../backend/app.mjs";
 import { createServer } from "node:http";
 import { once } from "node:events";
 
+// Replacing a file with a directory fails as EPERM on Windows and
+// EISDIR/ENOTDIR on POSIX. Require this fixture's exact failing rename;
+// do not accept unrelated permission or application errors.
+const blockedCommitRename = (error, blocker) =>
+  error.syscall === "rename" &&
+  error.path === blocker + ".tmp" &&
+  error.dest === blocker &&
+  (["EISDIR", "ENOTDIR"].includes(error.code) ||
+    (process.platform === "win32" && error.code === "EPERM"));
+
 const password = hashPassword("Snapshot-test-only-284!");
 async function setup(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-planning-view-"));
@@ -298,7 +308,7 @@ test("a prepared planning response is not returned when disk commit fails and da
       changeAndView(store, users.admin, [
         { kind: "allocation", id: key, value: 0.5, revision: 0 },
       ]),
-      (error) => ["EISDIR", "ENOTDIR"].includes(error.code),
+      (error) => blockedCommitRename(error, blocker),
     );
   } finally {
     store.db.file = originalFile;
@@ -628,7 +638,7 @@ test("delta negotiation preserves permissions, revisions and disk rollback", asy
         ],
         response,
       ),
-      (error) => ["EISDIR", "ENOTDIR"].includes(error.code),
+      (error) => blockedCommitRename(error, blocker),
     );
   } finally {
     store.db.file = file;
@@ -915,7 +925,7 @@ test("a non-planning response is withheld on disk failure and the committed data
       changeAndView(store, users.normal, [
         { kind: "actual", id: "r0|p|2026-01", revision: 1, value: 0.1 },
       ]),
-      (error) => ["EISDIR", "ENOTDIR"].includes(error.code),
+      (error) => blockedCommitRename(error, blocker),
     );
   } finally {
     store.db.file = originalFile;

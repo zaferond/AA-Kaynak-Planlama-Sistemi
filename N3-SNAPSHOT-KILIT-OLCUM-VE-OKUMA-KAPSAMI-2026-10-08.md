@@ -2,6 +2,8 @@
 
 Tarih: **8 Ekim 2026**. İlgili bulgu: [7 Ekim incelemesi](MIMARI-GUVENLIK-PERFORMANS-INCELEME-2026-10-07.md), **N3 / Orta**. Durum: **Kısmen giderildi**. Native ölçüm altyapısı ve kişisel yüzde/saat okumalarının kapsamı tamamlandı; küçük yazmaların tam snapshot doğrulaması ve global kilit maliyeti sürüyor.
 
+**Sonraki aşama:** [Planlanan yazmalarda dar taslak ve doğrudan delta](N3-PLANLANAN-YAZMA-TASLAK-VE-DELTA-2026-10-08.md). Aşağıdaki süre ve kayıtlar önceki aşamanın kendi commit'lerine aittir.
+
 ## Sürüm ve kısa sonuç
 
 - Ölçüm öncesi uygulama davranışını koruyan profil sürümü: **`f084a34174e85735c337ff946a1e48e4c19eb1c1`**.

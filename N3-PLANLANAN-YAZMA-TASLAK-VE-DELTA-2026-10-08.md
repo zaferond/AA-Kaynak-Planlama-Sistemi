@@ -30,7 +30,11 @@ Yeni regression kontrolleri: dar taslağın önceki tahsis/revision'ı değişti
 
 Native profile'a, her patch sonrası generation'ı güncelleyen 40 işlemlik `planning-delta-chain` eklendi. Eski sabit tabanlı 15 contention senaryosu korunur; default toplam 16 senaryo / 640 işlem / 340 yazma olur. Zincir iki bağımsız SQL havuzu üzerinden ilerler, son görünüm doğrudan SQL view ile eşit olmalıdır; her adım tek kilit, bir dar kopya, sıfır tam view ve sadece aktif hesabın tek satırlık SQL kontrolünü doğrular. Ham SQL, parametre, bağlantı ve kullanıcı verileri rapora konmaz. Windows kalite kapısına planlanan snapshot ve kopyalama regression testleri eklendi.
 
-**Bu notun ilk kaydında güncel native/kalite CI sonuçları henüz bekleniyor.** Başarı, ancak exact commit koşusu ve kaynak hash karşılaştırması sonrası aşağıya eklenecektir. Önceki başarılı CI kayıtları bu değişikliklerin doğrulaması olarak kullanılmaz.
+### İlk CI ve Windows test düzeltmesi
+
+Planlanan değişiklik sürümü `ae28c2c261d3f3a846a14bd9bf3b05fb76547fb4`. Native [37776609079](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37776609079) başarılıdır; JSON/hash doğrulaması aşağıya ayrıca eklenecektir. İlk kalite [37776557819](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37776557819) **başarısızdır**: Ubuntu **530/530**, Chromium **133** ve audit kapıları başarılı; Windows **178/181**, üç disk rollback testi yalnız POSIX hata kodlarını beklediği için durdu. [Başarısız kalite kaydı](ci-evidence/quality-ae28c2c-receipt.json) korunur.
+
+Bu üç test önceden Windows kapısında bulunmuyordu. Windows CI'da geçici DB hedefini bir klasör yaparak oluşturulan kontrollü rename hatası `EPERM`; POSIX'te `EISDIR/ENOTDIR` oldu. Test predicate'i yalnız fixture'ın kaynak/hedef yollarındaki `rename` ve platforma uygun hata kodunu kabul eder. Rollback, audit/generation ve yeniden açılış eşitliği kontrolleri kaldırılmadı. Uygulama/adapter kodu değişmedi. Düzeltilmiş test yerelde `node --test tests/planning-snapshot.test.mjs` **22/22** geçti. Yeni Windows kalite koşusu bekleniyor; ilk başarısız kayıt korunur. Native ölçüm bu test dosyasını çalıştırmaz; native komut ve tüm 380 uygulama/derleme/ölçüm girdisi bu test-only düzeltmesinden etkilenmez.
 
 ## Kalan sınırlar
 
