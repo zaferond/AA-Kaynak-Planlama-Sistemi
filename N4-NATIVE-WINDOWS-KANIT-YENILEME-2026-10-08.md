@@ -42,6 +42,16 @@ Komutlar/fixture'lar çalıştırılmadan incelendi. Yerel doğrulama ayrı geç
 
 ## Bu çalışma ile doğrulanmayan kurum konuları
 
+### Disk paketinin son kontrolü
+
+Kanıt arşivi `a28affa` ile gönderildi; bu commit'in otomatik [37764507509 kalite koşusu](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37764507509) da başarılıdır. Native raporun 463 hash'i arşiv commit'iyle yeniden karşılaştırıldı; kaynak farkı yok. Bu notun sonraki güncellemesi dokümantasyondur, yeni bir native koşu iddiası değildir.
+
+Temiz geçici derlemenin aktif çıktıları mevcut paketle aynıydı. Kanonik manifest başarılı derlemenin kaynak hash'leriyle yenilenip doğrulandı. Çalışma klasörüne 14 dosya yedek alınarak aktarıldı. Beklenen **377 kaynak + 397 çıktı** hash'i eşleşti. Ancak tam envanter kontrolü `site/index 2.html` ve `site/index 2.html.gz` adlı iki ek dosya bulduğu için ilk `node scripts/verify-deployment.mjs` komutu exit 1 döndü; yalnız hash eşitliği tam envanter doğrulaması yerine kullanılmadı.
+
+Bu iki ek dosya silinmedi; `.deployment-backups/2026-10-08-n4-final/unexpected-site-copies/` altında korundu. Oluşma nedeni doğrulanmadı. Asıl `site/index.html` ve gzip çıktısı beklenen hash'leri taşıyordu. Son tekrar **exit 0 / ok: true**, kaynak ve çıktı için changed/missing/added listeleri boş. Gerçek DB, `.env`, hesaplar ve çalışan backend süreci kullanılmadı. Eski hash'li varlıkların genel saklama konusu **N6** olarak ayrıca açık kalır.
+
+### Ayrı kurum kabulü
+
 1. **Native MSSQL kurum bağlantısı:** asgari yetkili hesap, kurum CA/hostname/NTLM, firewall. Container SQL hesabı ve self-signed trust kurum kabulü yerine geçmez.
 2. **Windows hizmeti:** kurum servis hesabı, NTFS ACL, SCM stop/crash/boot, gerçek Explorer/TTY ilk kurulum. Windows sentetik başlatıcı testleri gerçek servis/DB başlatmaz.
 3. **Proxy/TLS ve ağ:** kurum HTTPS adresleri, çoklu proxy, WAN/gecikme, kurum tarayıcısı ve SSO.
