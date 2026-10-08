@@ -83,6 +83,9 @@ export async function checkRiskSaveConfirmation(f) {
     else await dialog.dismiss();
     if (openDialog === dialog) openDialog = null;
     await acted;
+    // A declined save is coalesced for its original event turn. The next
+    // independent user action must start after that turn, including its timer.
+    await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 0)));
   }
   try {
     await openRisks(page);
@@ -121,11 +124,14 @@ export async function checkRiskSaveConfirmation(f) {
           assert.equal(writes, requests);
           assert.equal(await field().inputValue(), text);
           assert.deepEqual((await f.state()).risks, before.risks);
-          const saved = page.waitForResponse((response) =>
-            response.url().endsWith("/api/changes"),
-          );
-          await respond(trigger, true);
-          const response = await saved;
+          // Observe both promises immediately so a dialog/action failure cannot
+          // leave the response wait as an unhandled rejection and hide its cause.
+          const [response] = await Promise.all([
+            page.waitForResponse((response) =>
+              response.url().endsWith("/api/changes"),
+            ),
+            respond(trigger, true),
+          ]);
           assert.equal(response.status(), 200);
           assert.equal(
             response.request().postDataJSON().changes[0].revision,
