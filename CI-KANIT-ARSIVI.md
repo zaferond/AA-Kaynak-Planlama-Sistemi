@@ -1,5 +1,19 @@
 # CI kanıt arşivi
 
+## 8 Ekim 2026 — N3 planlanan yazma taslağı ve delta
+
+Üretim değişiklikleri **`ae28c2c261d3f3a846a14bd9bf3b05fb76547fb4`**. [Dar değişiklik, testler, ölçüm ve kalan sınırlar](N3-PLANLANAN-YAZMA-TASLAK-VE-DELTA-2026-10-08.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| `ae28c2c` native | **Başarılı**, 21/21, 640 işlem / 340 yazma; 40/40 güncel tabanlı delta, bağımsız SQL eşitliği; şema 31, temizlik başarılı | [37776609079](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37776609079) |
+| `ae28c2c` kalite | **Başarısız**: Ubuntu 530/530, Chromium 133 ve audit kapıları geçti; Windows 178/181, üç POSIX errno beklentisi Windows EPERM'i reddetti | [37776557819](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37776557819) |
+| `4bec497` kalite, test düzeltmesi sonrası | **Başarılı**: Ubuntu 530/530, Windows 181/181, Chromium 133; biçim/domain/TypeScript/build/manifest ve iki audit kapısı | [37777354538](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37777354538) |
+
+[Native sonuç](ci-evidence/native-mssql-ae28c2c.json), [native koşu kaydı](ci-evidence/native-mssql-ae28c2c-receipt.json), [başarısız kalite kaydı](ci-evidence/quality-ae28c2c-receipt.json). Native JSON SHA-256: `651b0db388725ebc20054d13de300e54f945b4d18cfbb8c892d01e39f24a0f3a`; **467/467 hash** kendi test edilen commit'ine eşit. JSON byte olarak korunur; ham loglar, bağlantı ve gerçek kullanıcı bilgileri arşivlenmez.
+
+Test-only Windows düzeltmesi **`4bec497`**: yalnız fixture'ın tam kaynak/hedef yollarındaki rename ve işletim sistemine uygun errno kabul edilir. Üç testin rollback/audit/restart assert'leri korunur. [Karşılaştırma kaydı](ci-evidence/native-mssql-ae28c2c-4bec497-comparison.json), native kanıtındaki **380 uygulama/derleme/ölçüm girdisinin** değişmediğini ve 467 dosyada tek farkın native runner'da yürütülmeyen SQL.js test predicate'i olduğunu gösterir. Native koşunun commit'i değişmedi; [güncel kalite kaydı](ci-evidence/quality-4bec497-receipt.json) ayrıdır ve başarılıdır. Bu son koşuda fail/skipped/cancelled 0; Windows genel suite ile örtüşür. Audit Yüksek eşiği backend Orta uyarıların kapandığı anlamına gelmez. Sonraki arşiv/dokümantasyon commit'i ayrı bir native/kalite koşusu iddiası değildir. N3 tam SQL snapshot/doğrulama/global lock maliyeti hâlâ açık; farklı runner süreleri kontrollü A/B değildir.
+
 ## 8 Ekim 2026 — N3 ölçümü ve kişisel sorgu kapsamı
 
 Kaynak başlangıcı **`f084a34174e85735c337ff946a1e48e4c19eb1c1`**, dar kişisel okuma düzeltmesi **`ce5c2f007e70b029b6132873d7f3e795c6c87ea5`**. Önceki kanıtların üzerine yazılmadı. [N3 değişiklikler, ölçüm ve kalan işler](N3-SNAPSHOT-KILIT-OLCUM-VE-OKUMA-KAPSAMI-2026-10-08.md).
