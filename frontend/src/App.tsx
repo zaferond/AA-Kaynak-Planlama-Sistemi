@@ -30,17 +30,12 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ClipboardPaste, Copy, Info } from "lucide-react";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import AbsenceReport from "./AbsenceReport";
-import ResourcePlanningCharts from "./features/resource-reports/ResourcePlanningCharts";
+import WorkspaceReports from "./features/workspace/WorkspaceReports";
 import AccessPanel from "./AccessPanel";
 import PortalEditorDialog from "./features/PortalEditorDialog";
-import RemainingResourceTable, {
-  type ReportGroup,
-} from "./features/RemainingResourceTable";
 import { usePlannedGrid } from "./features/usePlannedGrid";
 import { fmt, monthLabel } from "./format";
-import HeadcountTrend from "./HeadcountTrend";
 import { Project, phaseStyle } from "./model";
-import MonthlyShortageTrend from "./MonthlyShortageTrend";
 import {
   allowedDefaultTabs,
   defaultTabKey,
@@ -111,8 +106,6 @@ export default function Portal() {
     [tab, setTab] = useState(() =>
       fullPlan ? "plan" : readDefaultTab(currentUser()),
     );
-  const leaderReportTableRef = useRef<HTMLTableElement>(null);
-  const teamReportTableRef = useRef<HTMLTableElement>(null);
   const {
     leads,
     setLeads,
@@ -261,12 +254,6 @@ export default function Portal() {
     secondaryRef: capacityTableRef,
     layoutKey: months.join("|") + ":" + planMonthWidth,
   });
-  useSynchronizedTableScroll({
-    enabled: !!data && tab === "overview",
-    primaryRef: leaderReportTableRef,
-    secondaryRef: teamReportTableRef,
-    layoutKey: months.join("|") + ":" + monthWidth,
-  });
   const {
     leaderItems,
     availableTeams,
@@ -398,23 +385,6 @@ export default function Portal() {
     return m < p.start || m > p.end
       ? "Proje dönemi dışında"
       : p.phases[m] || "Çalışma bilgisi girilmemiş";
-  }
-  function reportRows(groups: ReportGroup[], teamReport = false) {
-    return (
-      <RemainingResourceTable
-        groups={groups}
-        teamReport={teamReport}
-        data={data}
-        teams={teams}
-        months={months}
-        monthWidth={monthWidth}
-        todayDate={todayDate}
-        currentMonth={currentMonth}
-        currentTeamMembers={currentTeamMembers}
-        metric={metric}
-        tableRef={teamReport ? teamReportTableRef : leaderReportTableRef}
-      />
-    );
   }
   function planWorkspaceUrl() {
     return planWorkspacePath(window.location.href, {
@@ -842,53 +812,22 @@ export default function Portal() {
               )}
               {(isAdmin || isManager) && tab === "overview" && (
                 <TabsContent value="overview">
-                  <section className="panel">
-                    <div className="panelhead">
-                      <div>
-                        <h2>Liderlik Bazında Kalan Kaynak</h2>
-                      </div>
-                    </div>
-                    {reportRows(leaderReportGroups)}
-                  </section>
-                  <section className="panel report">
-                    <div className="panelhead">
-                      <div>
-                        <h2>Takım Bazında Kalan Kaynak</h2>
-                      </div>
-                    </div>
-                    {reportRows(teamReportGroups, true)}
-                  </section>
-                  <MonthlyShortageTrend
-                    capacity={cache}
-                    teamIds={ids}
+                  <WorkspaceReports
+                    data={data}
+                    teams={teams}
                     months={months}
-                    filterLabel={
-                      "Liderlik: " +
-                      (leads.length === 1
-                        ? leads[0]
-                        : leads.length
-                          ? leads.length + " seçili"
-                          : "Tümü") +
-                      " · Takım: " +
-                      (teamIds.length === 1
-                        ? teams[0]?.name || "Seçili takım"
-                        : teamIds.length
-                          ? teamIds.length + " seçili"
-                          : "Tümü")
-                    }
-                  />
-                  <ResourcePlanningCharts
+                    monthWidth={monthWidth}
+                    todayDate={todayDate}
+                    currentMonth={currentMonth}
+                    currentTeamMembers={currentTeamMembers}
+                    metric={metric}
+                    leaderReportGroups={leaderReportGroups}
+                    teamReportGroups={teamReportGroups}
+                    capacity={cache}
                     actualTotals={actualTotals}
-                    data={data}
-                    capacity={cache}
                     teamIds={ids}
-                    months={months}
-                  />
-                  <HeadcountTrend
-                    data={data}
-                    teamIds={ids}
+                    selectedTeamIds={teamIds}
                     leads={leads}
-                    months={months}
                   />
                 </TabsContent>
               )}

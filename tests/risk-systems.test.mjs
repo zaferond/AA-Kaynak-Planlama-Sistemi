@@ -338,6 +338,77 @@ test("legacy free text is preserved; new drafts follow renames and reject delete
   assert.deepEqual(await f.state(), before);
 });
 
+test("mixed risk/catalog batches retain authorization, command ordering, metadata and atomic rollback", async (t) => {
+  const f = await fixture(t);
+  const system = initialRiskSystems[0];
+  const draft = f.risk("mixed-batch-risk", system.id);
+  assert.equal((await f.write("risk", draft.id, draft, f.normal)).status, 200);
+  const opened = await f.state();
+  const existing = opened.data.risks.find((item) => item.id === draft.id);
+  const riskRevision = opened.data.revisions["risk:" + draft.id];
+  const systemRevision = opened.data.revisions["riskSystem:" + system.id] || 0;
+  const riskEdit = {
+    kind: "risk",
+    id: draft.id,
+    revision: riskRevision,
+    value: {
+      ...existing,
+      description: "Mixed batch update",
+      createdBy: "forged",
+      createdByName: "forged",
+      createdAt: "forged",
+    },
+  };
+  const rename = {
+    kind: "riskSystem",
+    id: system.id,
+    revision: systemRevision,
+    value: { ...system, name: "Mixed batch renamed system" },
+  };
+  const beforeAudit = (await f.request("/audit", f.admin)).body;
+
+  // Catalog rename increments the linked risk revision before the next command.
+  assert.equal(
+    (await f.request("/changes", f.admin, { changes: [rename, riskEdit] }))
+      .status,
+    409,
+  );
+  assert.deepEqual(await f.state(), opened);
+  assert.deepEqual((await f.request("/audit", f.admin)).body, beforeAudit);
+
+  // Even an allowed first command must roll back when a later one is forbidden.
+  assert.equal(
+    (await f.request("/changes", f.normal, { changes: [riskEdit, rename] }))
+      .status,
+    403,
+  );
+  assert.deepEqual(await f.state(), opened);
+  assert.deepEqual((await f.request("/audit", f.admin)).body, beforeAudit);
+
+  // Editing the current risk before the catalog rename is a valid ordered batch.
+  assert.equal(
+    (await f.request("/changes", f.admin, { changes: [riskEdit, rename] }))
+      .status,
+    200,
+  );
+  const saved = await f.state();
+  const updated = saved.data.risks.find((item) => item.id === draft.id);
+  assert.equal(updated.description, riskEdit.value.description);
+  assert.equal(updated.system, rename.value.name);
+  assert.equal(updated.systemId, system.id);
+  for (const field of ["createdBy", "createdByName", "createdAt"])
+    assert.equal(updated[field], existing[field]);
+  assert.equal(saved.data.revisions["risk:" + draft.id], riskRevision + 2);
+  assert.equal(
+    saved.data.revisions["riskSystem:" + system.id],
+    systemRevision + 1,
+  );
+  assert.equal(saved.generation, opened.generation + 1);
+  await f.store.close();
+  await f.store.connect();
+  assert.deepEqual(await f.state(), saved);
+});
+
 test("legacy names matching a catalog entry are protected and adopted on rename", async (t) => {
   const f = await fixture(t);
   const system = initialRiskSystems[0];
