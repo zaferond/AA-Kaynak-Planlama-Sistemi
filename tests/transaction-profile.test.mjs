@@ -11,6 +11,8 @@ import {
   nativeContentionProfile,
 } from "../scripts/native-contention-profile.mjs";
 
+import { planningCommand, isPlanningCommand } from "../backend/operations.mjs";
+
 const deferred = () => {
   let resolve;
   const promise = new Promise((r) => {
@@ -300,4 +302,37 @@ test("contention entry refuses a non-test Store before seeding or reading data",
     /synthetic test Store/,
   );
   assert.equal(touched, false);
+});
+
+test("profiling preserves owned planning callback identity and synchronous delta results", async () => {
+  const store = new SyntheticStore();
+  const command = planningCommand([
+    { kind: "allocation", id: "t|p|2026-09", value: 1, revision: 0 },
+  ]);
+  const delta = { responseMode: "planning-delta-v1" };
+  store.projectPlanningDelta = () => delta;
+  store.mutate = async function (_u, callback) {
+    assert.equal(callback, command);
+    assert(isPlanningCommand(callback));
+    this.copySnapshot({}, { planningOnly: true });
+    await this.persist({}, {}, { query: async () => ({ rows: [] }) });
+    const result = this.projectPlanningDelta({});
+    assert.equal(result, delta); // A promise here would change Store behavior.
+    return result;
+  };
+  const probe = transactionProbe([store]);
+  try {
+    const result = await probe.measure("write-allocation", () =>
+      store.mutate({}, command),
+    );
+    assert.equal(result.value, delta);
+    assert.equal(result.observation.commandTimingMode, "combined");
+    assert.equal(result.observation.planningDraftCopies, 1);
+    assert.equal(result.observation.fullSnapshotCopies, 0);
+    assert.equal(result.observation.planningDeltaProjectionCalls, 1);
+    assert(!Object.hasOwn(result.observation, "copyEnd"));
+    assert(!Object.hasOwn(result.observation, "commandEnd"));
+  } finally {
+    probe.restore();
+  }
 });

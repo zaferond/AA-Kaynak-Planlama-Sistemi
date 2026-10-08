@@ -5,7 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import { Store } from "../backend/store.mjs";
 import { hashPassword } from "../backend/auth.mjs";
-import { applyChanges } from "../backend/operations.mjs";
+import {
+  applyChanges,
+  planningCommand,
+  isPlanningCommand,
+  stageChanges,
+} from "../backend/operations.mjs";
 import { changeAndView } from "../backend/change-service.mjs";
 import { mergePlanningDelta } from "../shared/planning-response.ts";
 import { createApp } from "../backend/app.mjs";
@@ -964,5 +969,160 @@ test("planning deltas fall back for numeric changes and same-value non-planning 
       result.data.revisions[change.kind + ":" + change.id],
       (before.data.revisions[change.kind + ":" + change.id] || 0) + 1,
     );
+  }
+});
+
+test("only owned planning commands receive narrow drafts; matching deltas skip full projection", async (t) => {
+  const { store, users, key, hiddenKey } = await setup(t);
+  const originalCopy = store.copySnapshot,
+    originalView = store.projectView;
+  const copies = [];
+  let views = 0;
+  t.mock.method(store, "copySnapshot", function (data, options) {
+    copies.push(options.planningOnly);
+    return originalCopy.call(this, data, options);
+  });
+  t.mock.method(store, "projectView", async function (...args) {
+    views++;
+    return originalView.apply(this, args);
+  });
+  const before = await store.view(users.manager);
+  views = 0;
+  const delta = await changeAndView(
+    store,
+    users.manager,
+    [{ kind: "allocation", id: key, value: 0, revision: 0 }],
+    { responseMode: "planning-delta-v1", baseGeneration: before.generation },
+  );
+  assert.equal(delta.responseMode, "planning-delta-v1");
+  assert.equal(views, 0);
+  assert.deepEqual(copies, [true]);
+  assert.equal(
+    delta.allocations.some((a) => a.id === hiddenKey),
+    false,
+  );
+  const merged = {
+    ...before,
+    generation: delta.generation,
+    data: mergePlanningDelta(before, delta),
+  };
+  assert.deepEqual(merged, await store.view(users.manager));
+  views = 0;
+  const fallback = await changeAndView(
+    store,
+    users.admin,
+    [{ kind: "allocation", id: key, value: 0.25, revision: 1 }],
+    { responseMode: "planning-delta-v1", baseGeneration: before.generation },
+  );
+  assert.equal(fallback.responseMode, undefined);
+  assert.equal(views, 1);
+  assert.deepEqual(fallback, await store.view(users.admin));
+  const command = planningCommand([
+    { kind: "allocation", id: key, value: 0.5, revision: 2 },
+  ]);
+  assert(isPlanningCommand(command));
+  const arbitrary = (...args) => command(...args);
+  arbitrary.planningOnly = true;
+  assert.equal(isPlanningCommand(arbitrary), false);
+  await store.mutate(users.admin, arbitrary);
+  await store.mutate(users.admin, (d, u) =>
+    stageChanges(d, u, [
+      { kind: "allocation", id: key, value: 1, revision: 3 },
+    ]),
+  );
+  assert.deepEqual(copies, [true, true, false, false]);
+});
+
+test("planning command input cannot turn into a metadata write after draft selection", async (t) => {
+  const { store, users, key } = await setup(t);
+  const before = await store.view(users.admin),
+    audit = (await store.auditLog(users.admin)).total;
+  const input = [{ kind: "allocation", id: key, value: 0.5, revision: 0 }];
+  const command = planningCommand(input);
+  input.push({
+    kind: "project",
+    id: "p",
+    value: { ...before.data.projects[0], name: "Changed" },
+    revision: 1,
+  });
+  await assert.rejects(
+    store.mutate(users.admin, command),
+    (e) => e.status === 400,
+  );
+  assert.deepEqual(await store.view(users.admin), before);
+  assert.equal((await store.auditLog(users.admin)).total, audit);
+});
+
+test("narrow drafts still reject unrelated invalid data before any persistence", async (t) => {
+  const { store, users, key } = await setup(t);
+  const before = await store.view(users.admin),
+    audit = (await store.auditLog(users.admin)).total;
+  const read = store.read;
+  let writes = 0;
+  t.mock.method(store, "persist", () => {
+    writes++;
+    throw Error("Must not persist invalid snapshot");
+  });
+  for (const corrupt of [
+    (d) => {
+      d.actualAllocations["missing|p|2026-09"] = 0.25;
+    },
+    (d) => {
+      d.actualWorkedHours["r0|2026-13"] = 1;
+    },
+    (d) => {
+      d.personCalendar["r0|2026-02-30|leave"] = {
+        type: "leave",
+        hours: 1,
+        label: "",
+      };
+    },
+  ]) {
+    const mock = t.mock.method(store, "read", async function (...args) {
+      const snapshot = await read.apply(this, args);
+      corrupt(snapshot.data);
+      return snapshot;
+    });
+    await assert.rejects(
+      changeAndView(store, users.admin, [
+        { kind: "allocation", id: key, value: 1, revision: 0 },
+      ]),
+      (e) => e.status === 400,
+    );
+    mock.mock.restore();
+    assert.deepEqual(await store.view(users.admin), before);
+    assert.equal((await store.auditLog(users.admin)).total, audit);
+  }
+  assert.equal(writes, 0);
+});
+
+test("failure while preparing a direct delta rolls back persisted values, audit and generation across reopen", async (t) => {
+  const { store, env, users, key } = await setup(t);
+  const before = await store.view(users.admin),
+    audit = (await store.auditLog(users.admin)).total;
+  const error = Error("Synthetic projection failure");
+  const mock = t.mock.method(store, "projectPlanningDelta", () => {
+    throw error;
+  });
+  await assert.rejects(
+    changeAndView(
+      store,
+      users.admin,
+      [{ kind: "allocation", id: key, value: 1, revision: 0 }],
+      { responseMode: "planning-delta-v1", baseGeneration: before.generation },
+    ),
+    (e) => e === error,
+  );
+  mock.mock.restore();
+  assert.deepEqual(await store.view(users.admin), before);
+  assert.equal((await store.auditLog(users.admin)).total, audit);
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    assert.deepEqual(await reopened.view(users.admin), before);
+    assert.equal((await reopened.auditLog(users.admin)).total, audit);
+  } finally {
+    await reopened.close();
   }
 });

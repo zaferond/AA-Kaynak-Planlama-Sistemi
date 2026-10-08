@@ -45,6 +45,16 @@ export function visibleTeamScope(
   return { leaderNames, teams, ids };
 }
 
+export function canSeePlanningRevision(
+  u: Pick<Principal, "role">,
+  ownerId: string,
+  visibleTeams: ReadonlySet<string>,
+) {
+  return (
+    u.role === "admin" || (u.role === "manager" && visibleTeams.has(ownerId))
+  );
+}
+
 // Candidate owners for personal actual data. A manager's historical team/month
 // check still runs below; this owner list is a superset, never a new permission.
 export function actualReadOwnerScope(
@@ -95,7 +105,7 @@ export function scopeData(d: Data, u: Principal): Data {
       return false;
     }
     return key.startsWith("allocation:")
-      ? u.role === "manager" && ids.has(key.slice(11).split("|")[0])
+      ? canSeePlanningRevision(u, key.slice(11).split("|")[0], ids)
       : key.startsWith("actual:")
         ? canSeeActual(key.slice(7), "actual")
         : key.startsWith("workedHours:")

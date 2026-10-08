@@ -43,6 +43,60 @@ export function nativeProfileOptions({
 const mapFor = (kind) =>
   kind === "allocation" ? "allocations" : "actualAllocations";
 const rounded = (value) => Math.round(value * 1000) / 1000;
+function summarizeGroups(observations) {
+  return Object.fromEntries(
+    [...new Set(observations.map((o) => o.kind))].map((kind) => {
+      const rows = observations.filter((o) => o.kind === kind);
+      const metrics = [
+        "elapsedMs",
+        "queueMs",
+        "transactionEntryMs",
+        "transactionTailMs",
+        "lockAcquireServerMs",
+        "lockAcquireRoundtripMs",
+        "readMs",
+        "copySnapshotMs",
+        "commandAndValidationAndDiffPrepMs",
+        "planningDeltaProjectionMs",
+        "planningDeltaProjectionCalls",
+        "planningDraftCopies",
+        "fullSnapshotCopies",
+        "persistMs",
+        "projectViewMs",
+        "sqlMs",
+        "sqlCalls",
+        "readCalls",
+        "copySnapshotCalls",
+        "persistCalls",
+        "projectViewCalls",
+        "lockCalls",
+        "jsonEncodeMs",
+        "jsonBytes",
+      ];
+      return [
+        kind,
+        {
+          observations: rows.length,
+          metrics: Object.fromEntries(
+            metrics.map((key) => [
+              key,
+              latencySummary(rows.map((r) => r[key])),
+            ]),
+          ),
+          sqlRowsPerRequest: Object.fromEntries(
+            [...new Set(rows.flatMap((r) => Object.keys(r.sqlRows)))].map(
+              (table) => [
+                table,
+                latencySummary(rows.map((r) => r.sqlRows[table] || 0)),
+              ],
+            ),
+          ),
+        },
+      ];
+    }),
+  );
+}
+
 // Called only inside withMssqlTestDatabase, after verified-empty lease acquisition
 // and the native assertions. No .env, connection URL or existing database input.
 export async function nativeContentionProfile(
@@ -261,54 +315,7 @@ export async function nativeContentionProfile(
         generations,
         edits.map((_, i) => before.generation + i + 1),
       );
-      const groups = Object.fromEntries(
-        [...new Set(kinds)].map((kind) => {
-          const rows = observations.filter((o) => o.kind === kind);
-          const metrics = [
-            "elapsedMs",
-            "queueMs",
-            "transactionEntryMs",
-            "transactionTailMs",
-            "lockAcquireServerMs",
-            "lockAcquireRoundtripMs",
-            "readMs",
-            "copySnapshotMs",
-            "commandMs",
-            "validationAndDiffPrepMs",
-            "persistMs",
-            "projectViewMs",
-            "sqlMs",
-            "sqlCalls",
-            "readCalls",
-            "copySnapshotCalls",
-            "persistCalls",
-            "projectViewCalls",
-            "lockCalls",
-            "jsonEncodeMs",
-            "jsonBytes",
-          ];
-          return [
-            kind,
-            {
-              observations: rows.length,
-              metrics: Object.fromEntries(
-                metrics.map((key) => [
-                  key,
-                  latencySummary(rows.map((r) => r[key])),
-                ]),
-              ),
-              sqlRowsPerRequest: Object.fromEntries(
-                [...new Set(rows.flatMap((r) => Object.keys(r.sqlRows)))].map(
-                  (table) => [
-                    table,
-                    latencySummary(rows.map((r) => r.sqlRows[table] || 0)),
-                  ],
-                ),
-              ),
-            },
-          ];
-        }),
-      );
+      const groups = summarizeGroups(observations);
       cases.push({
         scenario,
         concurrency: level,
@@ -326,6 +333,88 @@ export async function nativeContentionProfile(
         groups,
       });
     }
+  // A sequential client advances its cached generation after every returned
+  // patch. The stale-base contention cases above deliberately retain a fixed
+  // base; this additional case checks the normal delta chain on an independent
+  // SQL pool after all edits, without keeping completed full responses.
+  const initial = await stores[0].view(users.admin);
+  let cached = initial;
+  const ids = Object.keys(initial.data.allocations).slice(0, requests);
+  const auditBefore = (await stores[0].auditLog(users.admin)).total;
+  const memory = memorySampler();
+  let observations, memoryResult, probe;
+  const started = performance.now();
+  try {
+    probe = transactionProbe(stores, { captureMemory: memory.capture });
+    observations = await profileWorkers(requests, 1, async (index, queueMs) => {
+      const id = ids[index],
+        revision = cached.data.revisions["allocation:" + id];
+      const value = cached.data.allocations[id] === 0.25 ? 0.5 : 0.25;
+      const { value: response, observation } = await probe.measure(
+        "write-allocation",
+        () =>
+          changeAndView(
+            stores[index % stores.length],
+            users.admin,
+            [{ kind: "allocation", id, value, revision }],
+            {
+              responseMode: "planning-delta-v1",
+              baseGeneration: cached.generation,
+            },
+          ),
+      );
+      const encodeStart = performance.now();
+      const jsonBytes = Buffer.byteLength(JSON.stringify(response));
+      const jsonEncodeMs = performance.now() - encodeStart;
+      assert.equal(response.responseMode, "planning-delta-v1");
+      assert.equal(response.generation, initial.generation + index + 1);
+      assert.equal(observation.lockCalls, 1);
+      assert.equal(observation.planningDraftCopies, 1);
+      assert.equal(observation.fullSnapshotCopies, 0);
+      assert.equal(observation.projectViewCalls, 0);
+      assert.equal(observation.planningDeltaProjectionCalls, 1);
+      // The active-principal lookup remains; the admin user-list projection is skipped.
+      assert.equal(observation.sqlRows.users, 1);
+      cached = {
+        ...cached,
+        generation: response.generation,
+        data: mergePlanningDelta(cached, response),
+      };
+      assert.equal(cached.data.allocations[id], value);
+      assert.equal(cached.data.revisions["allocation:" + id], revision + 1);
+      return {
+        ...observation,
+        queueMs,
+        jsonBytes,
+        jsonEncodeMs,
+        responseMode: response.responseMode,
+        generation: response.generation,
+      };
+    });
+  } finally {
+    try {
+      probe?.restore();
+    } finally {
+      memoryResult = memory.stop();
+    }
+  }
+  const elapsedMs = performance.now() - started;
+  assert.deepEqual(cached, await stores[1].view(users.admin));
+  assert.equal(
+    (await stores[1].auditLog(users.admin)).total,
+    auditBefore + requests,
+  );
+  cases.push({
+    scenario: "planning-delta-chain",
+    concurrency: 1,
+    requests,
+    writes: requests,
+    elapsedMs: rounded(elapsedMs),
+    throughputPerSecond: rounded((requests * 1000) / elapsedMs),
+    responseModes: { "planning-delta-v1": requests },
+    memoryBytes: memoryResult,
+    groups: summarizeGroups(observations),
+  });
   return {
     plannedRecords: size,
     actualRecords: actuals,
@@ -348,7 +437,7 @@ export async function nativeContentionProfile(
       elapsedMs:
         "Store operation until returned view/delta. JSON encode measured separately; assertions are excluded.",
       stages:
-        "Read/persist/project durations include their SQL calls and overlap sqlMs; do not sum all metrics. ValidationAndDiffPrep covers the command-to-persist gap, not isolated schema validation.",
+        "Read/persist/project durations include their SQL calls and overlap sqlMs; do not sum all metrics. CommandAndValidationAndDiffPrep covers the copy-to-persist gap, including command execution, schema validation and preparation; it does not isolate schema validation. Owned planning callbacks keep their identity during profiling.",
       memoryBytes:
         "Whole Node process samples during each case and stage boundaries. Includes retained fixture/base, instrumentation and response data; no per-request allocation or guaranteed CPU-bound peak.",
     },

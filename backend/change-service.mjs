@@ -1,7 +1,7 @@
-import { stageChanges } from "./operations.mjs";
+import { stageChanges, planningCommand } from "./operations.mjs";
 
 export async function changeAndView(store, user, changes, response = {}) {
-  // This only chooses the response path. Staging checks commands, permissions,
+  // Select the owned planning command and optional delta. Staging checks permissions,
   // revisions and monthly limits; Store validates the final draft before writing.
   const planningOnly =
     Array.isArray(changes) &&
@@ -9,7 +9,9 @@ export async function changeAndView(store, user, changes, response = {}) {
     changes.every((change) => change?.kind === "allocation");
   return store.mutate(
     user,
-    (data, active) => stageChanges(data, active, changes),
+    planningOnly
+      ? planningCommand(changes)
+      : (data, active) => stageChanges(data, active, changes),
     {
       returnView: true,
       planningDelta:

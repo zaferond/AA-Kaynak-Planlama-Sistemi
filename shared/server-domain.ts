@@ -53,6 +53,7 @@ export {
   allowedTeam,
   visibleTeamScope,
   actualReadOwnerScope,
+  canSeePlanningRevision,
 } from "./access.ts";
 export { prepareImport, sourceRows, importColumns } from "./resource-import.ts";
 const mo = z.string().refine(validPlanningMonth, "Geçersiz ay.");

@@ -126,8 +126,28 @@ export function applyChanges(d, u, input) {
 // Store.mutate validates the final draft before persistence. Standalone callers
 // use applyChanges above, which retains full validation and normalization.
 export function stageChanges(d, u, input) {
-  const changes = changesSchema.parse(input),
-    seen = new Set(),
+  return stageParsedChanges(d, u, changesSchema.parse(input));
+}
+
+const planningCommands = new WeakSet();
+
+// Only this owned command can use an allocation/revision-only draft. Re-check
+// the parsed kinds when invoked inside the transaction, before touching data.
+export function planningCommand(input) {
+  const command = (d, u) => {
+    const changes = changesSchema.parse(input);
+    if (!changes.every((change) => change.kind === "allocation"))
+      fail(400, "Yalnız planlanan kaynak dağılımı işlemleri kullanılabilir.");
+    return stageParsedChanges(d, u, changes);
+  };
+  planningCommands.add(command);
+  return command;
+}
+
+export const isPlanningCommand = (command) => planningCommands.has(command);
+
+function stageParsedChanges(d, u, changes) {
+  const seen = new Set(),
     affectedActualMonths = new Set();
   const affectMonth = (resourceId, month) =>
     affectedActualMonths.add(resourceId + "|" + month);

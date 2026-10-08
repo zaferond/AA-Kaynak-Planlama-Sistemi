@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cloneMutationSnapshot } from "../backend/mutation-snapshot.mjs";
+import {
+  cloneMutationSnapshot,
+  clonePlanningMutationDraft,
+} from "../backend/mutation-snapshot.mjs";
 
 const data = () => ({
   allocations: { "t|p|2026-09": 0, "t|p|2026-10": 0.25 },
@@ -121,4 +124,34 @@ test("zero, special numeric values, own reserved names and absent maps keep clon
   assert.equal(Object.hasOwn(copy, "actualPercentEntries"), false);
   assert.notEqual(copy.future.nested, original.future.nested);
   assert(Object.is(copy.actualWorkedHours.negativeZero, -0));
+});
+
+test("owned planning drafts copy values/revisions without cloning unrelated snapshot metadata", () => {
+  const original = data(),
+    before = structuredClone(original);
+  const draft = clonePlanningMutationDraft(original);
+  assert.deepEqual(draft, before);
+  for (const key of ["allocations", "revisions"])
+    assert.notEqual(draft[key], original[key]);
+  for (const key of Object.keys(original).filter(
+    (k) => !["allocations", "revisions"].includes(k),
+  ))
+    assert.equal(draft[key], original[key]);
+  draft.allocations["t|p|2026-09"] = 3;
+  delete draft.allocations["t|p|2026-10"];
+  draft.revisions["allocation:t|p|2026-09"]++;
+  assert.deepEqual(original, before);
+  const reserved = JSON.parse('{"__proto__":0,"constructor":1}');
+  original.allocations = reserved;
+  assert.equal(
+    Object.hasOwn(
+      clonePlanningMutationDraft(original).allocations,
+      "__proto__",
+    ),
+    true,
+  );
+  original.revisions.invalid = { nested: true };
+  const fallback = clonePlanningMutationDraft(original);
+  assert.deepEqual(fallback, structuredClone(original));
+  assert.notEqual(fallback.projects, original.projects);
 });

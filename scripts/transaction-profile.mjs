@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { performance } from "node:perf_hooks";
+import { isPlanningCommand } from "../backend/operations.mjs";
 
 const round = (value) => Math.round(value * 1000) / 1000;
 export function latencySummary(values) {
@@ -139,6 +140,15 @@ export function transactionProbe(
             if (
               observation &&
               name === "persist" &&
+              observation.copyEnd !== undefined
+            ) {
+              observation.commandAndValidationAndDiffPrepMs +=
+                start - observation.copyEnd;
+              delete observation.copyEnd;
+            }
+            if (
+              observation &&
+              name === "persist" &&
               observation.commandEnd !== undefined
             ) {
               observation.validationAndDiffPrepMs +=
@@ -169,6 +179,12 @@ export function transactionProbe(
             if (observation) {
               observation.copySnapshotMs += clock() - start;
               observation.copySnapshotCalls++;
+              observation[
+                args[1]?.planningOnly
+                  ? "planningDraftCopies"
+                  : "fullSnapshotCopies"
+              ]++;
+              observation.copyEnd = clock();
               captureMemory();
             }
           }
@@ -179,6 +195,13 @@ export function transactionProbe(
       "mutate",
       (original) =>
         async function (user, command, options) {
+          // Preserve the owned callback identity: replacing it would silently
+          // measure the full-copy fallback instead of the production path.
+          if (isPlanningCommand(command)) {
+            const observation = context.getStore();
+            if (observation) observation.commandTimingMode = "combined";
+            return original.call(this, user, command, options);
+          }
           return original.call(
             this,
             user,
@@ -198,6 +221,25 @@ export function transactionProbe(
           );
         },
     );
+    if (typeof store.projectPlanningDelta === "function")
+      wrap(
+        store,
+        "projectPlanningDelta",
+        (original) =>
+          function (...args) {
+            const start = clock(),
+              observation = context.getStore();
+            try {
+              return original.apply(this, args);
+            } finally {
+              if (observation) {
+                observation.planningDeltaProjectionMs += clock() - start;
+                observation.planningDeltaProjectionCalls++;
+                captureMemory();
+              }
+            }
+          },
+      );
     wrap(
       store.db,
       "transaction",
@@ -287,6 +329,12 @@ export function transactionProbe(
         copySnapshotCalls: 0,
         commandMs: 0,
         validationAndDiffPrepMs: 0,
+        commandAndValidationAndDiffPrepMs: 0,
+        planningDraftCopies: 0,
+        fullSnapshotCopies: 0,
+        planningDeltaProjectionMs: 0,
+        planningDeltaProjectionCalls: 0,
+        commandTimingMode: "separate",
         persistMs: 0,
         persistCalls: 0,
         projectViewMs: 0,
@@ -304,6 +352,7 @@ export function transactionProbe(
           } finally {
             observation.elapsedMs = clock() - start;
             delete observation.commandEnd;
+            delete observation.copyEnd;
             captureMemory();
           }
         });

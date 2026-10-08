@@ -2,8 +2,11 @@ import * as identity from "./identity-repository.mjs";
 import { readPlanningSnapshot } from "./planning-reader.mjs";
 import { persistPlanningSnapshot } from "./planning-writer.mjs";
 import { auditEntries } from "./audit.mjs";
+import { isPlanningCommand } from "./operations.mjs";
+import { planningDeltaView } from "./planning-response.mjs";
 import {
   cloneMutationSnapshot,
+  clonePlanningMutationDraft,
   numericSnapshotMaps,
 } from "./mutation-snapshot.mjs";
 import path from "node:path";
@@ -157,8 +160,13 @@ export class Store {
       };
     }, true);
   }
-  copySnapshot(data) {
-    return cloneMutationSnapshot(data);
+  copySnapshot(data, { planningOnly = false } = {}) {
+    return planningOnly
+      ? clonePlanningMutationDraft(data)
+      : cloneMutationSnapshot(data);
+  }
+  projectPlanningDelta(options) {
+    return planningDeltaView(options);
   }
   async mutate(
     u,
@@ -174,8 +182,12 @@ export class Store {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
-      const { data, generation } = await this.read(c),
-        before = this.copySnapshot(data);
+      const snapshot = await this.read(c),
+        planningOnly = isPlanningCommand(fn),
+        copy = this.copySnapshot(snapshot.data, { planningOnly }),
+        before = planningOnly ? snapshot.data : copy,
+        data = planningOnly ? copy : snapshot.data,
+        generation = snapshot.generation;
       const beforeUsers = auditUsers ? await this.users(c) : [];
       const result = await fn(data, active, c, generation);
       const valid = validate(data, { previousResources: before.resources });
@@ -231,6 +243,16 @@ export class Store {
         const unchanged = [...metadataKeys].every(
           (key) => JSON.stringify(before[key]) === JSON.stringify(valid[key]),
         );
+        const delta = this.projectPlanningDelta({
+          before,
+          valid,
+          generation,
+          active,
+          changeSet,
+          planningDelta,
+          metadataUnchanged: unchanged,
+        });
+        if (delta) return returnResult ? { view: delta, result } : delta;
         const responseData = unchanged
           ? {
               ...before,
@@ -246,50 +268,6 @@ export class Store {
           active,
           c,
         );
-        // Only an unchanged, matching base can receive a patch. Scope the entire
-        // view first so values and deletion revisions follow existing permissions.
-        const planningOnly =
-          unchanged &&
-          planningDelta?.baseGeneration === generation &&
-          ["actual", "workedHours", "percent"].every(
-            (kind) => changeSet[kind].length === 0,
-          ) &&
-          // A same-value write can advance a non-planning revision too.
-          // Such revisions cannot be represented by an allocation-only patch.
-          [before.revisions, valid.revisions].every((revisions) =>
-            Object.keys(revisions).every(
-              (key) =>
-                key.startsWith("allocation:") ||
-                before.revisions[key] === valid.revisions[key],
-            ),
-          );
-        if (planningOnly) {
-          const ids = new Set([
-            ...planningDelta.ids,
-            ...changeSet.allocation.map((change) => change.id),
-          ]);
-          const delta = {
-            responseMode: "planning-delta-v1",
-            baseGeneration: generation,
-            generation: view.generation,
-            user: view.user,
-            allocations: [...ids]
-              .filter(
-                (id) =>
-                  Object.hasOwn(view.data.revisions, "allocation:" + id) &&
-                  view.data.revisions["allocation:" + id] !==
-                    before.revisions["allocation:" + id],
-              )
-              .map((id) => ({
-                id,
-                value: Object.hasOwn(view.data.allocations, id)
-                  ? view.data.allocations[id]
-                  : null,
-                revision: view.data.revisions["allocation:" + id],
-              })),
-          };
-          return returnResult ? { view: delta, result } : delta;
-        }
         return returnResult ? { view, result } : view;
       }
       return result;
