@@ -243,10 +243,11 @@ export async function checkSessionConsistency(f) {
         release = resolve;
       });
       try {
-        let captured;
+        let captured, heldRequest;
         await c.page.route(
           "**/api/data",
           async (route) => {
+            heldRequest = route.request();
             captured = await route.fetch();
             await gate;
             await route.fulfill({ response: captured });
@@ -260,17 +261,17 @@ export async function checkSessionConsistency(f) {
         );
         await f.wait(() => !!captured, "old admin read captured");
         assert.equal((await captured.json()).user.role, "admin");
+        const cancelled = c.page.waitForEvent("requestfailed", {
+          predicate: (request) => request === heldRequest,
+        });
         await c.peer
           .getByRole("button", { name: "Çıkış", exact: true })
           .click();
         await c.page.getByLabel("Kullanıcı Adı", { exact: true }).waitFor();
         await loginUI(c.peer, "employee", f.password);
         await account(c.page, "employee", "Normal Kullanıcı");
-        const oldResponse = c.page.waitForResponse((r) =>
-          r.url().endsWith("/api/data"),
-        );
+        assert.ok((await cancelled).failure(), "old request must be cancelled");
         release();
-        await oldResponse;
         await c.page.waitForTimeout(80);
         await account(c.page, "employee", "Normal Kullanıcı");
       } finally {

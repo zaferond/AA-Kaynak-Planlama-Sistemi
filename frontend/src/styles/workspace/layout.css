@@ -634,3 +634,28 @@
 html {
   zoom: 90%;
 }
+
+.write-recovery-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 1px solid #d2ba7c;
+  border-left: 4px solid #967431;
+  border-radius: 8px;
+  background: #faf7ed;
+  color: #5e4c25;
+}
+.write-recovery-notice p {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.write-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

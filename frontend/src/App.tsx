@@ -9,6 +9,7 @@ import { useWorkspaceFilters } from "./features/workspace/useWorkspaceFilters";
 import { useWorkspaceView } from "./features/workspace/useWorkspaceView";
 import { useSynchronizedTableScroll } from "./features/workspace/useSynchronizedTableScroll";
 import { usePortalData } from "./features/usePortalData";
+import WriteRecoveryNotice from "./features/WriteRecoveryNotice";
 import { usePortalRefresh } from "./features/usePortalRefresh";
 import { usePortalEditor } from "./features/usePortalEditor";
 import WorkspaceHeader, { FullPlanHeader } from "./features/WorkspaceHeader";
@@ -517,6 +518,12 @@ export default function Portal() {
         onLogout={signOut}
       />
       <main>
+        <WriteRecoveryNotice
+          onRead={(next) => {
+            setData(next);
+            setUser(currentUser());
+          }}
+        />
         {fullPlan && (
           <FullPlanHeader
             browserFullScreen={browserFullScreen}

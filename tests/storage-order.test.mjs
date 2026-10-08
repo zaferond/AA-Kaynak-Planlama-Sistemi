@@ -507,3 +507,174 @@ test("a backup file read started in the old session cannot send a restore after 
   assert.equal(pending.length, 0);
   assert.equal(storage.currentUser().id, "new");
 });
+
+test("a timed-out write cancels queued writes and direct mutations until explicit fresh-read acknowledgement", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { storage, reply, pending } = await setup(t);
+  await loadPlanning(storage, reply);
+  const change = {
+    kind: "allocation",
+    id: "t|p|2026-09",
+    value: 2,
+    revision: 1,
+  };
+  const first = storage.writeBatch([change]);
+  const queued = storage.writeBatch([{ ...change, id: "queued" }]);
+  const failures = [
+    assert.rejects(first, {
+      name: "RequestFailure",
+      outcomeUnknown: true,
+      timedOut: true,
+    }),
+    assert.rejects(queued, { name: "WriteBlockedError" }),
+  ];
+  await setImmediate();
+  const late = pending.shift();
+  t.mock.timers.tick(120_000);
+  await Promise.all(failures);
+  assert.equal(late.options.signal.aborted, true);
+  assert.equal(storage.hasUncertainWrite(), true);
+  assert.equal(pending.length, 0);
+  await assert.rejects(storage.saveUser({}), { name: "WriteBlockedError" });
+  await assert.rejects(storage.importResources([]), {
+    name: "WriteBlockedError",
+  });
+  assert.equal(pending.length, 0);
+  const read = storage.readLocal();
+  reply("/data", { data: planningData(), generation: 1, user: planningUser });
+  await read;
+  assert.equal(
+    storage.hasUncertainWrite(),
+    true,
+    "background reads cannot acknowledge a write",
+  );
+  const inspection = storage.inspectUncertainWrite();
+  reply("/data", { data: planningData(), generation: 1, user: planningUser });
+  const checked = await inspection;
+  assert.deepEqual(checked.data, planningData());
+  storage.acknowledgeUncertainWrite(checked.check);
+  assert.equal(storage.hasUncertainWrite(), false);
+  late.resolve({
+    ok: true,
+    status: 200,
+    headers: new Headers({ "X-Session-Identity": "must-not-be-accepted" }),
+    json: () => assert.fail("late body"),
+  });
+  await setImmediate();
+  assert.equal(storage.currentUser().id, "u");
+  const retry = storage.writeBatch([change]);
+  await setImmediate();
+  assert.equal(
+    JSON.parse(pending[0].options.body).changes[0].revision,
+    1,
+    "explicit retry retains captured revision",
+  );
+  reply("/changes", { error: "synthetic conflict" }, 409);
+  await assert.rejects(retry, { status: 409 });
+  assert.equal(
+    storage.hasUncertainWrite(),
+    false,
+    "a completed 409 is a known failure",
+  );
+});
+
+test("a hung write body cannot advance cached generation, and failed recovery never unblocks writes", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { storage, reply, pending } = await setup(t);
+  await loadPlanning(storage, reply);
+  const write = storage.writeBatch([
+    { kind: "allocation", id: "t|p|2026-09", value: 2, revision: 1 },
+  ]);
+  const rejected = assert.rejects(write, {
+    name: "RequestFailure",
+    outcomeUnknown: true,
+  });
+  await setImmediate();
+  let finish;
+  pending.shift().resolve({
+    ok: true,
+    status: 200,
+    headers: new Headers(),
+    json: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  });
+  await setImmediate();
+  t.mock.timers.tick(120_000);
+  await rejected;
+  assert.equal(storage.currentGeneration(), 1);
+  finish({
+    generation: 900,
+    user: { ...planningUser, role: "normal" },
+    data: { marker: "late" },
+  });
+  await setImmediate();
+  assert.equal(storage.currentGeneration(), 1);
+  assert.equal(storage.currentUser().role, "admin");
+  const check = storage.inspectUncertainWrite();
+  const failed = assert.rejects(check, { status: 503 });
+  reply("/data", { error: "synthetic recovery failure" }, 503);
+  await failed;
+  assert.equal(storage.hasUncertainWrite(), true);
+});
+
+test("delta fallback timeout is an unknown write; the committed POST is never repeated", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { storage, reply, pending } = await setup(t);
+  await loadPlanning(storage, reply);
+  const write = storage.writeBatch([
+    { kind: "allocation", id: "t|p|2026-09", value: 2, revision: 1 },
+  ]);
+  const rejected = assert.rejects(write, {
+    name: "RequestFailure",
+    outcomeUnknown: true,
+  });
+  await setImmediate();
+  reply(
+    "/changes",
+    planningPatch(3, [{ id: "t|p|2026-09", value: 2, revision: 2 }]),
+  );
+  await setImmediate();
+  assert.deepEqual(
+    pending.map((p) => p.url),
+    ["/api/data"],
+  );
+  t.mock.timers.tick(60_000);
+  await rejected;
+  assert.equal(storage.hasUncertainWrite(), true);
+  assert.equal(pending.length, 1);
+});
+
+test("session change cancels hung requests immediately and invalidates old recovery acknowledgements", async (t) => {
+  browserEvents(t);
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { storage, reply, pending } = await setup(t);
+  await bindSession(storage, reply);
+  const first = storage.writeBatch([
+    { kind: "allocation", id: "t|p|2026-09", value: 2, revision: 1 },
+  ]);
+  const rejected = assert.rejects(first, { name: "RequestFailure" });
+  await setImmediate();
+  pending.shift();
+  t.mock.timers.tick(120_000);
+  await rejected;
+  const inspection = storage.inspectUncertainWrite();
+  reply("/data", { data: planningData(), generation: 11, user: planningUser });
+  const { check } = await inspection;
+  const oldRead = storage.readLocal();
+  const stale = assert.rejects(oldRead, { name: "StaleSessionError" });
+  const login = storage.login("new.user", "unused");
+  reply("/auth/login", {
+    user: { ...planningUser, id: "new" },
+    csrf: "new",
+    sessionIdentity: "new",
+  });
+  await Promise.all([stale, login]);
+  assert.equal(storage.hasUncertainWrite(), false);
+  assert.throws(() => storage.acknowledgeUncertainWrite(check), {
+    name: "WriteBlockedError",
+  });
+  assert.equal(storage.currentUser().id, "new");
+  assert.equal(pending[0].options.signal.aborted, true);
+});

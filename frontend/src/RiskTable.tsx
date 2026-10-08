@@ -24,6 +24,8 @@ export default function RiskTable(props: RiskTableProps) {
     saving,
     error,
     conflict,
+    uncertain,
+    inspectOutcome,
     update,
     activate,
     cancel,
@@ -55,11 +57,13 @@ export default function RiskTable(props: RiskTableProps) {
           <span className="risk-scroll-hint" role="status">
             {saving
               ? "Kaydediliyor…"
-              : conflict
-                ? "Çakışma var · Düzenlemeleriniz korunuyor"
-                : draft
-                  ? "Enter veya satır dışına tıklayarak kaydı onaylayın · Shift+Enter yeni satır · Esc iptal"
-                  : "Düzenlemek için hücreye tıklayın · Tüm sütunlar yatay kaydırılabilir"}
+              : uncertain
+                ? "Sonuç belirsiz · Düzenlemeleriniz korunuyor"
+                : conflict
+                  ? "Çakışma var · Düzenlemeleriniz korunuyor"
+                  : draft
+                    ? "Enter veya satır dışına tıklayarak kaydı onaylayın · Shift+Enter yeni satır · Esc iptal"
+                    : "Düzenlemek için hücreye tıklayın · Tüm sütunlar yatay kaydırılabilir"}
           </span>
         </div>
       </div>
@@ -71,7 +75,27 @@ export default function RiskTable(props: RiskTableProps) {
               ? " Düzenlemeleriniz korunuyor; güncel kaydı yükleyin veya düzenlemeyi iptal edin."
               : ""}
           </span>
-          {conflict && (
+          {uncertain && (
+            <div className="risk-conflict-actions" data-risk-cancel>
+              <button
+                type="button"
+                className="risk-row-cancel"
+                disabled={saving}
+                onClick={() => void inspectOutcome()}
+              >
+                Sunucu Kaydını Kontrol Et
+              </button>
+              <button
+                type="button"
+                className="risk-row-cancel"
+                disabled={saving}
+                onClick={cancel}
+              >
+                Düzenlemeyi İptal Et
+              </button>
+            </div>
+          )}
+          {conflict && !uncertain && (
             <div className="risk-conflict-actions" data-risk-cancel>
               <button
                 type="button"
@@ -201,7 +225,7 @@ export default function RiskTable(props: RiskTableProps) {
                             saving={saving}
                             isNew={isNew}
                             canDelete={canDelete}
-                            conflict={conflict}
+                            conflict={conflict || uncertain}
                             update={update}
                             remove={remove}
                           />

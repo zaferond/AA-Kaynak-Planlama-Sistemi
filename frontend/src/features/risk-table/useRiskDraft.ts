@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Risk } from "../../model";
-import { ApiError } from "../../storage";
+import { ApiError, isUncertainWrite } from "../../storage";
 import { riskValidationError } from "../../risk-validation";
 import { riskFocusField } from "./columns";
 import type { RiskDraftOptions } from "./types";
@@ -26,6 +26,7 @@ export function useRiskDraft(
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
+  const [uncertain, setUncertain] = useState(false);
   // Capture value and revision together. Refreshed props must never rebase a draft.
   const editBase = useRef<{ value: Risk | null; revision: number } | null>(
     null,
@@ -79,7 +80,7 @@ export function useRiskDraft(
   }
   function save(): Promise<boolean> {
     if (saveInFlight.current) return saveInFlight.current;
-    if (!draft || saving || conflict || !editBase.current)
+    if (!draft || saving || conflict || uncertain || !editBase.current)
       return Promise.resolve(false);
     const validationError = riskValidationError(draft);
     if (validationError) {
@@ -119,6 +120,7 @@ export function useRiskDraft(
       } catch (caught) {
         setError((caught as Error).message);
         setConflict(caught instanceof ApiError && caught.status === 409);
+        setUncertain(isUncertainWrite(caught));
         return false;
       } finally {
         saveInFlight.current = null;
@@ -134,12 +136,13 @@ export function useRiskDraft(
     return () => {
       leaveGuardRef.current = null;
     };
-  }, [draft, saving, conflict, onSave, isNew, leaveGuardRef]);
+  }, [draft, saving, conflict, uncertain, onSave, isNew, leaveGuardRef]);
   function clearDraft() {
     editBase.current = null;
     setDraft(null);
     setIsNew(false);
     setConflict(false);
+    setUncertain(false);
   }
   function cancel() {
     if (saving) return;
@@ -169,7 +172,9 @@ export function useRiskDraft(
           revision: latest.revisions["risk:" + id] || 0,
         };
         setDraft(structuredClone(risk));
+        setIsNew(false);
         setConflict(false);
+        setUncertain(false);
         setError("");
       }
     } catch (caught) {
@@ -184,6 +189,7 @@ export function useRiskDraft(
       !canDelete ||
       saving ||
       conflict ||
+      uncertain ||
       !editBase.current ||
       !confirm(
         "“" + draft.description.slice(0, 90) + "” risk kaydı silinsin mi?",
@@ -198,6 +204,32 @@ export function useRiskDraft(
     } catch (caught) {
       setError((caught as Error).message);
       setConflict(caught instanceof ApiError && caught.status === 409);
+      setUncertain(isUncertainWrite(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function inspectOutcome() {
+    if (!draft || saving || !editBase.current) return;
+    setSaving(true);
+    try {
+      const latest = await onReload();
+      // Do not rebase or replace the draft, even if the desired text now exists.
+      // A snapshot is not an operation receipt; unchanged revision only permits
+      // an explicit CAS retry, not an automatic resend or proof of cancellation.
+      const changed =
+        (latest.revisions["risk:" + draft.id] || 0) !==
+        editBase.current.revision;
+      setConflict(changed);
+      setUncertain(false);
+      setError(
+        changed
+          ? "Sunucudaki kayıt sürümü değişmiş. Düzenlemeleriniz korunuyor; güncel kaydı yüklemeden yeniden kaydedilemez."
+          : "Sunucuda açılış sürümü görülüyor. İşlem daha sonra tamamlanabilir; otomatik tekrar kayıt yapılmadı. Taslağınızı aynı revizyonla tekrar onaylayabilirsiniz.",
+      );
+    } catch (caught) {
+      setError((caught as Error).message);
     } finally {
       setSaving(false);
     }
@@ -210,6 +242,8 @@ export function useRiskDraft(
     saving,
     error,
     conflict,
+    uncertain,
+    inspectOutcome,
     setError,
     update,
     activate,

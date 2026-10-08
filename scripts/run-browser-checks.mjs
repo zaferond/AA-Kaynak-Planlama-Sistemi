@@ -25,9 +25,11 @@ import { checkExcelXmlCharacters } from "./browser-checks/excel-xml-characters.m
 import { checkRiskSystems } from "./browser-checks/risk-systems.mjs";
 import { checkResourceReports } from "./browser-checks/resource-reports.mjs";
 import { checkViewportScroll } from "./browser-checks/viewport-scroll.mjs";
+import { checkTransportRecovery } from "./browser-checks/transport-recovery.mjs";
 
 const f = await fixture();
 try {
+  await checkTransportRecovery(f);
   await checkTableStyles(f);
   await checkSessionConsistency(f);
   await checkEntityEditors(f);

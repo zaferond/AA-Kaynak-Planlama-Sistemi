@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { isUncertainWrite } from "../storage";
 import type { Resource } from "../../../shared/model.ts";
 import type { ActualUnit } from "../../../shared/actual-units.ts";
 import {
@@ -39,21 +40,40 @@ export function WorkedHours({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const draftSave = useRef<typeof onSave | null>(null);
+  const context = useRef(resource.id + "|" + month);
+  const unknown = useRef(false);
+  const explicitRetry = useRef(false);
   useEffect(() => {
+    const nextContext = resource.id + "|" + month;
+    if (context.current !== nextContext) {
+      context.current = nextContext;
+      draftSave.current = null;
+      unknown.current = false;
+    }
+    if (draftSave.current) return;
     setText(String(value ?? calculatedHours).replace(".", ","));
     setDirty(false);
     setError("");
-  }, [value, calculatedHours, resource.id, month]);
+  }, [value, calculatedHours, resource.id, month, busy]);
   async function commit() {
-    if (disabled || busy || !dirty) return;
+    const explicit = explicitRetry.current;
+    explicitRetry.current = false;
+    if (disabled || busy || !dirty || (unknown.current && !explicit)) return;
     setBusy(true);
     try {
       const hours = parseWorkedHoursInput(text, maxHours);
-      const saved = await onSave(hours, inputRef.current);
+      const saved = await (draftSave.current || onSave)(
+        hours,
+        inputRef.current,
+      );
+      draftSave.current = null;
+      unknown.current = false;
       if (!saved) setText(String(value ?? calculatedHours).replace(".", ","));
       setDirty(false);
       setError("");
     } catch (cause) {
+      unknown.current = isUncertainWrite(cause);
       setError((cause as Error).message);
     } finally {
       setBusy(false);
@@ -75,6 +95,7 @@ export function WorkedHours({
         }
         onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => {
+          draftSave.current ??= onSave;
           setText(event.target.value);
           setDirty(true);
           setError("");
@@ -90,6 +111,7 @@ export function WorkedHours({
           if (event.key === "Enter") {
             event.preventDefault();
             event.stopPropagation();
+            explicitRetry.current = true;
             event.currentTarget.blur();
           }
         }}
@@ -133,19 +155,34 @@ export function ActualAmount({
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const draftSave = useRef<typeof onSave | null>(null);
+  const context = useRef(label + "|" + month + "|" + unit);
+  const unknown = useRef(false);
+  const explicitRetry = useRef(false);
   useEffect(() => {
+    const nextContext = label + "|" + month + "|" + unit;
+    if (context.current !== nextContext) {
+      context.current = nextContext;
+      draftSave.current = null;
+      unknown.current = false;
+    }
+    if (draftSave.current) return;
     setText(formatEntry(value, unit, month, workedHours, savedPercent));
     setDirty(false);
     setError("");
-  }, [value, unit, month, workedHours, savedPercent]);
+  }, [value, unit, month, workedHours, savedPercent, busy]);
   function showLimitWarning() {
+    draftSave.current = null;
+    unknown.current = false;
     setText(formatEntry(value, unit, month, workedHours, savedPercent));
     setDirty(false);
     setError("");
     onLimitExceeded(inputRef.current);
   }
   async function commit() {
-    if (disabled || busy || !dirty) return;
+    const explicit = explicitRetry.current;
+    explicitRetry.current = false;
+    if (disabled || busy || !dirty || (unknown.current && !explicit)) return;
     const checked = checkActualEntry(
       text,
       unit,
@@ -163,10 +200,13 @@ export function ActualAmount({
     }
     setBusy(true);
     try {
-      await onSave(checked.entry);
+      await (draftSave.current || onSave)(checked.entry);
+      draftSave.current = null;
+      unknown.current = false;
       setDirty(false);
       setError("");
     } catch (cause) {
+      unknown.current = isUncertainWrite(cause);
       const message = (cause as Error).message;
       if (message.includes("%100")) showLimitWarning();
       else setError(message);
@@ -174,7 +214,7 @@ export function ActualAmount({
       setBusy(false);
     }
   }
-  if (fullyAllocated && !disabled && value === 0)
+  if (fullyAllocated && !disabled && value === 0 && !draftSave.current)
     return (
       <div
         className="actual-fully-allocated"
@@ -199,6 +239,7 @@ export function ActualAmount({
         placeholder={unit === "percent" ? "%" : "0"}
         onFocus={(event) => event.currentTarget.select()}
         onChange={(event) => {
+          draftSave.current ??= onSave;
           setText(
             unit === "percent"
               ? event.target.value.replaceAll("%", "")
@@ -218,6 +259,7 @@ export function ActualAmount({
           if (event.key === "Enter") {
             event.preventDefault();
             event.stopPropagation();
+            explicitRetry.current = true;
             event.currentTarget.blur();
             onDeselect();
           }

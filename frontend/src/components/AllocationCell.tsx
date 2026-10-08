@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { isUncertainWrite } from "../storage";
 export default function Cell({
   value,
   save,
@@ -20,33 +21,47 @@ export default function Cell({
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const skipBlur = useRef(false);
+  const draftBase = useRef<{
+    value: number;
+    save: typeof save;
+    fill: typeof onFillSelection;
+  } | null>(null);
+  const unknown = useRef(false);
   useEffect(() => {
+    if (draftBase.current) return;
     setText(value ? String(value).replace(".", ",") : "");
-  }, [value]);
+  }, [value, busy]);
   async function commit(complete = false) {
+    if (busy || (!complete && unknown.current)) return;
+    const base = draftBase.current || { value, save, fill: onFillSelection };
     const n = Number(text.replace(",", "."));
     if (!Number.isFinite(n) || n < 0) {
       setError("Pozitif sayı veya sıfır girin.");
       return;
     }
-    if (n === value) {
+    if (n === base.value) {
+      draftBase.current = null;
       setError("");
       if (complete) onCommit?.();
       return;
     }
     setBusy(true);
     try {
-      await save(n);
+      await base.save(n);
+      draftBase.current = null;
+      unknown.current = false;
       setError("");
       if (complete) onCommit?.();
     } catch (e) {
+      unknown.current = isUncertainWrite(e);
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   }
   async function fillSelection() {
-    if (!onFillSelection) return;
+    const fill = draftBase.current?.fill || onFillSelection;
+    if (!fill || busy) return;
     const n = Number(text.replace(",", "."));
     if (!Number.isFinite(n) || n < 0 || n > 10000) {
       setError("0–10.000 aralığında bir değer girin.");
@@ -54,9 +69,12 @@ export default function Cell({
     }
     setBusy(true);
     try {
-      await onFillSelection(n);
+      await fill(n);
+      draftBase.current = null;
+      unknown.current = false;
       setError("");
     } catch (e) {
+      unknown.current = isUncertainWrite(e);
       setError((e as Error).message);
     } finally {
       setBusy(false);
@@ -86,6 +104,7 @@ export default function Cell({
         disabled={disabled || busy}
         placeholder={disabled ? "—" : "0"}
         onChange={(e) => {
+          draftBase.current ??= { value, save, fill: onFillSelection };
           delete e.currentTarget.dataset.gridSelectionFocus;
           setText(e.target.value);
         }}
@@ -100,6 +119,8 @@ export default function Cell({
           if (e.key === "Escape") {
             e.preventDefault();
             skipBlur.current = true;
+            draftBase.current = null;
+            unknown.current = false;
             setText(value ? String(value).replace(".", ",") : "");
             setError("");
             e.currentTarget.blur();

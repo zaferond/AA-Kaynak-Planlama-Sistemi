@@ -5,6 +5,20 @@ import type { Principal } from "./access";
 import type { ImportRow } from "./resource-import";
 import { mergePlanningDelta } from "../../shared/planning-response.ts";
 import { publishSessionChange, watchSessionChanges } from "./session-events.ts";
+import {
+  HttpTransport,
+  RequestFailure,
+  REQUEST_DEADLINES,
+} from "./http-transport.ts";
+import { WriteRecovery, WriteBlockedError } from "./write-recovery.ts";
+export { RequestFailure, WriteBlockedError };
+export const isUncertainWrite = (error: unknown) =>
+  error instanceof WriteBlockedError ||
+  (error instanceof RequestFailure && error.outcomeUnknown);
+const transport = new HttpTransport();
+const writeRecovery = new WriteRecovery();
+export const observeWriteRecovery = writeRecovery.subscribe;
+export const hasUncertainWrite = writeRecovery.pending;
 let principal: Principal | null = null,
   csrf = "",
   generation = -1;
@@ -30,6 +44,8 @@ export class ApiError extends Error {
 }
 function clearSession() {
   sessionEpoch++;
+  transport.cancelAll(new StaleSessionError());
+  writeRecovery.reset();
   sessionContext++;
   principal = null;
   csrf = "";
@@ -67,30 +83,46 @@ export function captureSessionGuard() {
 }
 async function api(path: string, body?: unknown) {
   const epoch = sessionEpoch;
-  const response = await fetch("/api" + path, {
-    method: body === undefined ? "GET" : "POST",
-    credentials: "same-origin",
-    headers:
-      body === undefined
-        ? {}
-        : {
-            "Content-Type": "application/json",
-            "X-Requested-With": "KaynakPortal",
-            "X-CSRF-Token": csrf,
-          },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  if (epoch !== sessionEpoch) {
-    void response.body?.cancel().catch(() => {});
-    throw new StaleSessionError();
-  }
+  const businessWrite = body !== undefined && !path.startsWith("/auth/");
+  if (businessWrite) writeRecovery.assert();
+  let exchange;
   try {
-    acceptSessionIdentity(response.headers?.get("X-Session-Identity"));
+    exchange = await transport.json(
+      "/api" + path,
+      {
+        method: body === undefined ? "GET" : "POST",
+        credentials: "same-origin",
+        headers:
+          body === undefined
+            ? {}
+            : {
+                "Content-Type": "application/json",
+                "X-Requested-With": "KaynakPortal",
+                "X-CSRF-Token": csrf,
+              },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      },
+      body === undefined ? REQUEST_DEADLINES.read : REQUEST_DEADLINES.write,
+      (response) => {
+        if (epoch !== sessionEpoch) {
+          void response.body?.cancel().catch(() => {});
+          throw new StaleSessionError();
+        }
+        try {
+          acceptSessionIdentity(response.headers?.get("X-Session-Identity"));
+        } catch (error) {
+          void response.body?.cancel().catch(() => {});
+          throw error;
+        }
+      },
+    );
   } catch (error) {
-    void response.body?.cancel().catch(() => {});
+    if (epoch !== sessionEpoch) throw new StaleSessionError();
+    if (businessWrite && isUncertainWrite(error)) writeRecovery.markUnknown();
     throw error;
   }
-  let result = await response.json();
+  const { response } = exchange;
+  let { result } = exchange;
   if (epoch !== sessionEpoch) throw new StaleSessionError();
   acceptSessionIdentity(result.sessionIdentity);
   if (!response.ok) {
@@ -103,7 +135,21 @@ async function api(path: string, body?: unknown) {
     if (latestView && result.generation <= latestView.generation)
       return { ...latestView };
     const data = latestView && mergePlanningDelta(latestView, result);
-    if (!data) return api("/data");
+    if (!data) {
+      try {
+        return await api("/data");
+      } catch (error) {
+        if (epoch !== sessionEpoch || error instanceof StaleSessionError)
+          throw new StaleSessionError();
+        // The POST succeeded, but its fallback view could not be loaded. Do not
+        // repeat the committed command or let already queued writes continue.
+        writeRecovery.markUnknown();
+        throw new RequestFailure(
+          true,
+          error instanceof RequestFailure && error.timedOut,
+        );
+      }
+    }
     result = { data, generation: result.generation, user: result.user };
   }
   // Reads and writes can complete out of order. All consumers receive the newest
@@ -156,6 +202,7 @@ export async function resumeRemembered() {
 }
 export async function logout() {
   sessionEpoch++;
+  transport.cancelAll(new StaleSessionError());
   latestView = null;
   generation = -1;
   await api("/auth/logout", {});
@@ -167,41 +214,53 @@ export async function readLocal(): Promise<Data> {
 }
 export async function checkUpdates() {
   const epoch = sessionEpoch;
-  const response = await fetch("/api/version", { credentials: "same-origin" });
-  if (epoch !== sessionEpoch) {
-    void response.body?.cancel().catch(() => {});
-    return false;
-  }
   try {
-    acceptSessionIdentity(response.headers?.get("X-Session-Identity"));
-  } catch (error) {
-    if (error instanceof StaleSessionError) {
-      void response.body?.cancel().catch(() => {});
+    const { response, result: r } = await transport.json(
+      "/api/version",
+      { credentials: "same-origin" },
+      REQUEST_DEADLINES.version,
+      (response) => {
+        if (epoch !== sessionEpoch) {
+          void response.body?.cancel().catch(() => {});
+          throw new StaleSessionError();
+        }
+        try {
+          acceptSessionIdentity(response.headers?.get("X-Session-Identity"));
+        } catch (error) {
+          if (error instanceof StaleSessionError) {
+            void response.body?.cancel().catch(() => {});
+            throw error;
+          }
+          throw error;
+        }
+      },
+    );
+    if (response.status === 401) {
+      expireSession();
       return false;
     }
-    throw error;
-  }
-  if (response.status === 401) {
-    expireSession();
-    return false;
-  }
-  if (!response.ok) return false;
-  const r = await response.json();
-  if (epoch !== sessionEpoch) return false;
-  try {
-    acceptSessionIdentity(r.sessionIdentity);
+    if (!response.ok) return false;
+    if (epoch !== sessionEpoch) return false;
+    try {
+      acceptSessionIdentity(r.sessionIdentity);
+    } catch (error) {
+      if (error instanceof StaleSessionError) return false;
+      throw error;
+    }
+    return epoch === sessionEpoch && r.generation > generation;
   } catch (error) {
     if (error instanceof StaleSessionError) return false;
     throw error;
   }
-  return epoch === sessionEpoch && r.generation > generation;
 }
 export async function writeBatch(changes: Change[]): Promise<Data> {
   // Choose the base when the queued request starts, after the preceding response.
   // Other edits and older servers keep the complete snapshot response contract.
   const epoch = sessionEpoch;
+  const writeEpoch = writeRecovery.capture();
   const request = writeTail.then(() => {
     if (epoch !== sessionEpoch) throw new StaleSessionError();
+    writeRecovery.assert(writeEpoch);
     const response =
       latestView?.user &&
       changes.length > 0 &&
@@ -219,6 +278,16 @@ export async function writeBatch(changes: Change[]): Promise<Data> {
   );
   return (await request).data;
 }
+
+export async function inspectUncertainWrite() {
+  const assertSession = captureSessionGuard();
+  const epoch = writeRecovery.capture();
+  const data = await readLocal();
+  assertSession();
+  return { data, check: writeRecovery.checkedAt(epoch) };
+}
+export const acknowledgeUncertainWrite = (check: object) =>
+  writeRecovery.acknowledge(check);
 export async function writeLocal<K extends ChangeKind>(
   kind: K,
   id: string,
