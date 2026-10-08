@@ -127,3 +127,9 @@ SQL.js için CLI'den kurtarma kopyasının gerçek HTTP giriş/yetki/güncelleme
 Native container koşusunda test kimliği ve self-signed sertifikaya trust kullanılmıştır. Sentetik Store medyan/en uzun süre ölçümleri üretim kapasitesi veya p95 değildir. Açık sürecin güncel kodu yüklediği, disk paketinin `deploy:verify` kontrolünden ayrıca kabul edilir.
 
 Bu kurum işlemleri yalnız ayrılmış test ortamı ve sentetik veriyle yürütülür. Çalışan/üretim ortamındaki hesap, DB, migration/restore, servis, sertifika veya ağ işlemi için ayrıca açık yetki ve kabul planı gerekir. Bu arşivleme sırasında bunların hiçbiri çalıştırılmadı.
+
+## 8 Ekim — N5 taşıma ve belirsiz yazma kontrolü
+
+Kaynak `f7d5a0eb011485f0408a4961f261e468af0a618c` için [37813756755 kalite koşusu](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37813756755) başarılı: Ubuntu **557/557**, Windows **208/208**, Chromium **138**. Fail/cancelled/skipped 0; format/domain/TypeScript/build/manifest ve Yüksek eşikli root/frontend audit kapıları geçti. [Koşu kaydı](ci-evidence/quality-f7d5a0e-receipt.json), job kimlikleri/toplamları ve özel geçici dizine indirilen logların hash'lerini içerir. Ham log, sır veya kişisel veri Git'e eklenmedi.
+
+[N5 kapsamı ve sınırlamaları](N5-AG-SURE-SINIRI-VE-YAZMA-UZLASTIRMA-2026-10-08.md): süre aşımı/iptal POST'un tamamlanmadığını kanıtlamaz; manuel GET ve eski revision'lı CAS denemesi ile taslak korunur, otomatik replay yapılmaz. Yeni beş browser grubu yalnız sentetik SQL.js/HTTP verisi kullanır. Windows testleri genel testlerle örtüşür. Bu frontend değişikliğinde yeni native MSSQL/kurum kabul koşusu çalıştırılmadı; önceki kanıtlar kendi kaynak commit'lerini temsil eder. Sonraki belge/kanıt commit'i yeni test koşusu olarak sunulmaz.

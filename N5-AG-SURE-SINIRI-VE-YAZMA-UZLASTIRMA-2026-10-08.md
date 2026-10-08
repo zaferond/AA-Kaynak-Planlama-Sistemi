@@ -37,10 +37,17 @@ Eski bir oturum browser testi, logout sonrasında tutulan GET'in normal response
 | `npm run deploy:verify` | Geçici kaynak/artifact hash'leri eşit; eski release varlıkları korunarak tekrar doğrulandı |
 | `git diff --check` | Başarılı |
 
-GitHub kalite ve uygulama kopyasına aktarım sonuçları ayrıca kaydedilecektir; bekleyen koşu başarılı olarak sunulmaz.
+## GitHub kalite kanıtı
+
+Test edilen kaynak **`f7d5a0eb011485f0408a4961f261e468af0a618c`**.
+[37813756755 kalite koşusu](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37813756755) başarılı: Ubuntu **557/557**, Windows **208/208**, Chromium **138** kontrol. Fail/cancelled/skipped 0; Windows ve hedefli testler genel süitle örtüşür, kapsam toplamı olarak toplanmaz. Format/domain/TypeScript/build/manifest ve iki Yüksek eşikli audit kapısı geçti. [Kalite kaydı](ci-evidence/quality-f7d5a0e-receipt.json) koşu/commit ve job kimlikleri, toplamlar ve indirilen log hash'lerini içerir; ham log, hesap veya token arşivlenmedi.
+
+Sonraki yalnız belge/kanıt commit'i yeni test edilmiş kaynak iddiası değildir. Backend/shared/migration değişmediği için bu frontend aşamasında yeni native MSSQL koşusu başlatılmadı. Önceki native kanıt kendi commit kapsamındadır.
+
+Uygulama kopyasının başlangıç `76d0016` manifesti kaynak/artifact farkı olmadan doğrulandı. Hazırlanan dağıtım **385 kaynak / 401 artifact** içerir; mevcut eski release varlıkları korunur, yalnız yeni aktif JS/CSS ve index eklenir/güncellenir. Aktarım yedeği `.deployment-backups/2026-10-08-n5-transport-final` altında tutulur; son kurulum kontrolü `npm run deploy:verify` ile yapılır. Bu hash kontrolü açık backend sürecinin yeniden başladığının veya kullanıcı tarayıcısının yeni JS'i yüklediğinin kanıtı değildir.
 
 ## Durum ve kalan işler
 
-N5'in kod değişikliği ve hedefli sentetik yeniden üretimi tamamlandı. Kalıcı, tarayıcı yeniden açılışından sonra taslak kurtarma veya sunucuda işlem makbuzu bu kapsamın dışındadır. Sayfayı kapatma/yenileme, filtreyle hücreyi kaldırma veya açıkça iptal etme bellek içindeki taslağı kaybettirebilir. Gerçek kurum proxy'sinin uzun import/restore süreleri ve deadline uygunluğu ayrıca ölçülmelidir; tarayıcı timeout'u gerçek DB işlemini durdurmaz.
+**N5 kod ve açıklanan sentetik test kapsamıyla giderildi.** Kalıcı, tarayıcı yeniden açılışından sonra taslak kurtarma veya sunucuda işlem makbuzu bu kapsamın dışındadır. Sayfayı kapatma/yenileme, filtreyle hücreyi kaldırma veya açıkça iptal etme bellek içindeki taslağı kaybettirebilir. Gerçek kurum proxy'sinin uzun import/restore süreleri ve deadline uygunluğu ayrıca ölçülmelidir; tarayıcı timeout'u gerçek DB işlemini durdurmaz.
 
 N3 tam snapshot/global kilit maliyeti **kısmen giderilmiş** olarak kalır. N2 backend Orta bağımlılık uyarısı ve N6 eski public asset yaşam döngüsü ayrıca açıktır. Native MSSQL, Windows servis/ACL, kurum CA/proxy/TLS, gerçek yedek kurtarma ve temsilî üretim yükü için önceki sınırlamalar devam eder. Bu frontend aşaması yeni native/kurum kabulü iddiası oluşturmaz.
