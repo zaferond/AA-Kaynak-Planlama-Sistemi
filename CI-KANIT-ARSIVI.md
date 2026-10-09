@@ -1,5 +1,17 @@
 # CI kanıt arşivi
 
+## 9 Ekim 2026 — N3 mutasyon aşamaları ve takvim JSON eşitliği
+
+Test edilen kaynak **`a5661f8d63cac67a5fd3ad0507eb4de9967d1a0b`**. [Aşama ölçümleri, transaction'a ait JSON eşitliği ve 38 yerel test](MIMARI-MUTASYON-ASAMALARI-2026-10-09.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı:** Ubuntu 613/613, Windows 263/263, Chromium 145; biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği | [37924961901](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37924961901) |
+
+[Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-a5661f8-receipt.json). Fail/skipped/cancelled 0; Windows ve genel süit örtüşür. Yeni 5 helper testi, 121 settings before/valid kombinasyonu, 4 yerine 2 takvim kodlaması, raw default normalizasyonu, bilinmeyen metadata ve SQL parametre eşdeğerliğini doğrular. Yeni planning testi validation/settings/response aşamalarında ayrı hata ile disk/veri/audit/generation rollback ve restart'ı sınar. Owned komut marker'ı ve tam son doğrulama korunur.
+
+[İki veri boyutunda 7 örnekli önce/sonra karşılaştırması ve model digest eşitliği](ci-evidence/mutation-stages-2026-10-09.json): 10.000 takvim kaydında yanıt hazırlama medyanı 9,94 → 5,19 ms; ardışık yerel koşu, üretim SLA/kapasite veya doğrulama hızlanması iddiası değildir. N3 tam snapshot/validation/global kilit **kısmen giderildi** olarak kalır. N2 Orta bağımlılık, N6 canlı geçiş/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü sürer. Bu kaynak için native koşu çalıştırılmadı. Ham loglar Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i ayrı tam CI başarısı iddiası değildir.
+
 ## 9 Ekim 2026 — N3 komut performansı ölçüm doğrulaması
 
 Test edilen kaynak **`7c46c23bee294a410ee885c7a51d5f9ae9dc6c64`**. [Gerçek owned komut sınırı, karşılaştırmalı ölçümler ve 37 yerel test](MIMARI-KOMUT-PERFORMANS-OLCUMU-2026-10-09.md).

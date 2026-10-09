@@ -58,7 +58,13 @@ Temiz Git arşivi geçici dizine çıkarıldı; lock dosyaları doğrulanmış m
 
 Yeni 5 helper testi Windows süitine eklendi; mevcut Windows planning testi yeni aşama hata/rollback kontrolünü de içerir. Genel Linux süiti bu testleri otomatik alır.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`a5661f8d63cac67a5fd3ad0507eb4de9967d1a0b`**. [Kalite koşusu 37924961901](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37924961901) başarılı: **Ubuntu 613/613**, **Windows 263/263**, **Chromium 145 kontrol**. Fail/skipped/cancelled 0; Windows ve genel süit örtüşür, toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği backend Orta bağımlılık uyarısını kapatmaz.
+
+[Metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-a5661f8-receipt.json). Ham loglar, kişisel veriler veya bağlantı bilgileri Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i uygulama kodunu değiştirmez ve ayrı tam CI başarısı iddiası değildir.
+
+Aktarım ön kontrolü önceki manifest/file hash'lerini, yerel test değişikliğinin korunmasını ve doğrulanmış geçici derlemeyle **400 kaynak / 413 site çıktısı / 7 güncel çıktı** eşitliğini denetledi. Frontend çıktıları byte olarak aynı; yeni bundle veya tarihî çıktı silme işlemi yoktur. Seçilen kod/test/CI/rapor dosyaları geri alınabilir yedekle aktarılır, manifest son yazılır. Yedek: `.deployment-backups/2026-10-09-mutation-stages-final`. Çalışan servis yeniden başlatılmaz ve gerçek DB'ye işlem yapılmaz; backend dosyaları sonraki servis başlatmada yüklenir.
 
 ## Kalan işler
 
