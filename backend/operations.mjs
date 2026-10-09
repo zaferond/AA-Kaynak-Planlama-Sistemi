@@ -1,23 +1,10 @@
 import { ownValue } from "../shared/records.ts";
 import { parseAllocationKey } from "../shared/allocation-key.ts";
-import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
 import { z } from "zod";
-import { fail, admin, publicUser } from "./auth.mjs";
-import {
-  allowedTeam,
-  prepareImport,
-  validate,
-  migrate,
-  versionAt,
-  actualVersionAt,
-} from "./domain/index.mjs";
-import { entityCollections as kinds } from "../shared/entity-kinds.ts";
+import { fail, publicUser } from "./auth.mjs";
+import { allowedTeam, validate, actualVersionAt } from "./domain/index.mjs";
 import { orderedProjects } from "../shared/project-order.ts";
 import { stageRiskChange, stageRiskSystemChange } from "./risk-commands.mjs";
-import {
-  DIRECTORY_REVISION_KEY,
-  directoryRevision,
-} from "../shared/directory-policy.ts";
 import { stageTeamChange } from "./directory-commands.mjs";
 import { stageProjectResourceChange } from "./project-resource-commands.mjs";
 import {
@@ -29,6 +16,7 @@ import {
 } from "./actual-calendar-commands.mjs";
 // Keep the existing operations entry point for routes, tools and tests.
 export { applyLeaderChange } from "./directory-commands.mjs";
+export { reset, importRows, restore } from "./bulk-data-commands.mjs";
 const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
 const changesSchema = z
   .array(
@@ -190,123 +178,4 @@ function stageParsedChanges(d, u, changes) {
   if (changes.some((change) => change.kind === "project"))
     d.projects = orderedProjects(d.projects);
   return d;
-}
-export function reset(d, u, expected) {
-  admin(u);
-  if (!expected || typeof expected !== "object")
-    fail(400, "Sürüm bilgisi eksik.");
-  expected = z
-    .record(
-      z.string().startsWith("allocation:"),
-      z.number().int().nonnegative(),
-    )
-    .parse(expected);
-  const actual = Object.fromEntries(
-    Object.entries(d.revisions).filter(([k]) => k.startsWith("allocation:")),
-  );
-  const keys = new Set([...Object.keys(actual), ...Object.keys(expected)]);
-  if ([...keys].some((k) => (actual[k] || 0) !== (expected[k] || 0)))
-    fail(409, "Dağılımlar değişti. Yenileyip tekrar deneyin.");
-  for (const k of Object.keys(d.allocations)) {
-    delete d.allocations[k];
-    d.revisions["allocation:" + k] = (d.revisions["allocation:" + k] || 0) + 1;
-  }
-}
-const rowsSchema = z
-  .array(
-    z.object({
-      row: z.number().int(),
-      values: z.record(z.union([z.string(), z.number(), z.boolean()])),
-      problems: z.array(z.string()),
-      date1904: z.boolean(),
-    }),
-  )
-  .min(1)
-  .max(5000);
-export function importRows(d, u, input) {
-  admin(u);
-  const rows = prepareImport(d, rowsSchema.parse(input));
-  const error = rows.find((r) => r.state === "error");
-  if (error)
-    fail(400, "Satır " + error.source.row + ": " + error.errors.join(" "));
-  let imported = 0;
-  for (const row of rows) {
-    if (row.state !== "ready") continue;
-    const r = row.resource;
-    d.resources.push(r);
-    d.revisions["resource:" + r.id] = 1;
-    const t = d.teams.find((t) => t.id === r.versions[0].team);
-    if (t && !t.lead) {
-      t.lead = row.lead;
-      d.revisions["team:" + t.id] = (d.revisions["team:" + t.id] || 0) + 1;
-    }
-    imported++;
-  }
-  return { imported, skipped: rows.length - imported };
-}
-export function restore(d, u, backup) {
-  admin(u);
-  if (
-    backup?.personAllocations &&
-    Object.keys(backup.personAllocations).length
-  ) {
-    const totals = {};
-    for (const [key, amount] of Object.entries(backup.personAllocations)) {
-      const [resourceId, projectId, month, ...extra] = key.split("|");
-      const resource = backup.resources?.find((r) => r.id === resourceId);
-      const team = resource && versionAt(resource, month)?.team;
-      if (
-        extra.length ||
-        !team ||
-        typeof amount !== "number" ||
-        !Number.isFinite(amount) ||
-        amount < 0 ||
-        amount > 100
-      )
-        fail(400, "Yedekte geçersiz kişi tahsisi var.");
-      const target = team + "|" + projectId + "|" + month;
-      totals[target] = (totals[target] || 0) + amount;
-    }
-    backup = { ...backup, allocations: totals };
-  }
-  // An existing undated employment period may be restored unchanged; a JSON
-  // upload cannot introduce new undated resources/periods or change their policy.
-  const next = validate(migrate(backup), { previousResources: d.resources });
-  assertActualMonthlyLimits(next);
-  // Backup counters belong to another point in time. Rebuild from current
-  // revisions, including deleted records, so no stale client becomes current.
-  next.revisions = {};
-  for (const [kind, c] of Object.entries(kinds)) {
-    const ids = new Set([
-      ...Object.keys(d.revisions)
-        .filter((k) => k.startsWith(kind + ":"))
-        .map((k) => k.slice(kind.length + 1)),
-      ...(kind === "allocation" || kind === "actual"
-        ? Object.keys(next[c] || {})
-        : next[c].map((x) => x.id)),
-    ]);
-    for (const id of ids)
-      next.revisions[kind + ":" + id] = (d.revisions[kind + ":" + id] || 0) + 1;
-  }
-  for (const [kind, collection] of [
-    ["workedHours", "actualWorkedHours"],
-    ["personDay", "personCalendar"],
-  ]) {
-    const prefix = kind + ":";
-    const ids = new Set([
-      ...Object.keys(d.revisions)
-        .filter((key) => key.startsWith(prefix))
-        .map((key) => key.slice(prefix.length)),
-      ...Object.keys(d[collection] || {}),
-      ...Object.keys(next[collection] || {}),
-    ]);
-    for (const id of ids)
-      next.revisions[prefix + id] = (d.revisions[prefix + id] || 0) + 1;
-  }
-  next.revisions["calendar:shared"] = (d.revisions["calendar:shared"] || 0) + 1;
-  // Even an identical JSON restore invalidates previously opened catalog drafts.
-  next.revisions[DIRECTORY_REVISION_KEY] = directoryRevision(d) + 1;
-  // An absent optional archive in the backup must clear the current archive.
-  if (!Object.hasOwn(next, "legacyArchive")) delete d.legacyArchive;
-  Object.assign(d, next);
 }

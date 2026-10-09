@@ -4,7 +4,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import http from "node:http";
-import { restore, applyChanges } from "../backend/operations.mjs";
+import {
+  restore,
+  applyChanges,
+  reset,
+  importRows,
+} from "../backend/operations.mjs";
 import { Store } from "../backend/store.mjs";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
@@ -355,4 +360,303 @@ test("restore preserves account permissions and reports linked-leadership confli
     await store.close();
     await fs.rm(dir, { recursive: true, force: true });
   }
+});
+
+test("bulk commands preserve permissions and roll back after audit/generation SQL writes", async (t) => {
+  for (const name of ["reset", "import", "restore"])
+    await t.test(name, async (t) => {
+      const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-bulk-commands-"));
+      const env = {
+        NODE_ENV: "test",
+        DB_PROVIDER: "sqljs",
+        SQLJS_FILE: path.join(dir, "synthetic.sqlite"),
+      };
+      const store = new Store({ env });
+      t.after(async () => {
+        await store.close();
+        await fs.rm(dir, { recursive: true, force: true });
+      });
+      await store.connect();
+      const password = await hashPassword("Bulk-command-synthetic-only-284!");
+      await store.bootstrapUser({
+        ...admin,
+        username: "bulk.admin",
+        name: "Synthetic Admin",
+        active: true,
+        password,
+        revision: 1,
+        version: 1,
+      });
+      const actor = await store.findUser({ id: admin._id });
+      const seed = fixture();
+      seed.teams.push({
+        id: "unassigned",
+        name: "Synthetic Unassigned",
+        lead: "",
+        excelCapacity: 0,
+        catalog: true,
+      });
+      seed.allocations = { "t|p|2026-09": 0.5 };
+      seed.actualAllocations = { "r|p|2026-09": 0.25 };
+      seed.actualPercentEntries = { "r|p|2026-09": 25 };
+      seed.actualWorkedHours = { "r|2026-09": 180 };
+      seed.personCalendar = {
+        "r|2026-09-02|training": {
+          type: "training",
+          hours: 1,
+          label: "Synthetic training",
+        },
+      };
+      seed.legacyArchive = {
+        teams: [],
+        allocations: { archived: 0.25 },
+        resourceTeams: {},
+      };
+      await store.mutate(actor, (d, u) => restore(d, u, seed));
+      for (const role of ["normal", "manager"])
+        await store.bootstrapUser({
+          _id: role,
+          username: "bulk." + role,
+          name: "Synthetic " + role,
+          role,
+          leaders: ["A"],
+          resourceId: role === "normal" ? "r" : "",
+          active: true,
+          password,
+          revision: 1,
+          version: 1,
+        });
+      const before = await store.read(),
+        beforeUsers = await store.users();
+      const audit = async () =>
+        (await store.db.query("SELECT * FROM kp_audit_events ORDER BY id"))
+          .rows;
+      const beforeAudit = await audit();
+      const expected = Object.fromEntries(
+        Object.entries(before.data.revisions).filter(([key]) =>
+          key.startsWith("allocation:"),
+        ),
+      );
+      const rows = [
+        {
+          row: 2,
+          date1904: false,
+          problems: [],
+          values: {
+            name: "Synthetic Imported",
+            lead: "A",
+            team: "Synthetic Unassigned",
+            status: "Aktif Çalışan",
+            included: "Evet",
+            amount: "1",
+            start: "2026-01-01",
+            end: "",
+            note: "",
+          },
+        },
+      ];
+      const backup = structuredClone(before.data);
+      backup.resources = [];
+      backup.actualAllocations = {};
+      backup.actualPercentEntries = {};
+      backup.actualWorkedHours = {};
+      backup.personCalendar = {};
+      backup.allocations = { "t|p|2026-09": 0.2 };
+      backup.workCalendar = {
+        "2026-09-01": {
+          type: "official",
+          label: "Synthetic half day",
+          fraction: 0.5,
+        },
+      };
+      backup.revisions = { "project:p": 99999, "resource:r": 99999 };
+      delete backup.legacyArchive;
+      const command = (d, u) =>
+        name === "reset"
+          ? reset(d, u, expected)
+          : name === "import"
+            ? importRows(d, u, rows)
+            : restore(d, u, backup);
+      for (const role of ["normal", "manager"])
+        await assert.rejects(
+          () =>
+            store.mutate(
+              beforeUsers.find((u) => u._id === role),
+              command,
+            ),
+          { status: 403 },
+        );
+      if (name === "reset")
+        await assert.rejects(
+          () => store.mutate(actor, (d, u) => reset(d, u, {})),
+          { status: 409 },
+        );
+      if (name === "import")
+        await assert.rejects(
+          () =>
+            store.mutate(actor, (d, u) =>
+              importRows(d, u, [
+                ...rows,
+                {
+                  ...rows[0],
+                  row: 3,
+                  values: {
+                    ...rows[0].values,
+                    name: "Synthetic Invalid",
+                    amount: "-1",
+                  },
+                },
+              ]),
+            ),
+          { status: 400 },
+        );
+      if (name === "restore") {
+        const invalid = structuredClone(backup);
+        invalid.projects.push({ ...invalid.projects[0] });
+        await assert.rejects(
+          () => store.mutate(actor, (d, u) => restore(d, u, invalid)),
+          /Tekrarlanan/,
+        );
+      }
+      assert.deepEqual(await store.read(), before);
+      assert.deepEqual(await store.users(), beforeUsers);
+      assert.deepEqual(await audit(), beforeAudit);
+      // This fixture's transaction delegates to the existing adapter and wraps
+      // only its owned connection; the actual UPDATE, audit and FK writes happen
+      // before the synthetic fault. Never override a global adapter or real DB.
+      const transaction = store.transaction;
+      let reached = false;
+      store.transaction = function (fn, readOnly = false) {
+        return transaction.call(
+          this,
+          (connection) =>
+            fn(
+              new Proxy(connection, {
+                get(target, property) {
+                  const value = Reflect.get(target, property, target);
+                  if (property === "query")
+                    return async (text, params) => {
+                      const result = await value.call(target, text, params);
+                      if (text.startsWith("UPDATE kp_settings SET ")) {
+                        reached = true;
+                        const row = (
+                          await value.call(
+                            target,
+                            "SELECT generation FROM kp_settings WHERE id=1",
+                          )
+                        ).rows[0];
+                        assert.equal(row.generation, before.generation + 1);
+                        throw Error("Synthetic post-generation bulk failure");
+                      }
+                      return result;
+                    };
+                  return typeof value === "function"
+                    ? value.bind(target)
+                    : value;
+                },
+              }),
+            ),
+          readOnly,
+        );
+      };
+      try {
+        await assert.rejects(
+          () => store.mutate(actor, command),
+          /Synthetic post-generation bulk failure/,
+        );
+      } finally {
+        delete store.transaction;
+      }
+      assert(reached);
+      assert.deepEqual(await store.read(), before);
+      assert.deepEqual(await store.users(), beforeUsers);
+      assert.deepEqual(await audit(), beforeAudit);
+      const result = await store.mutate(actor, command),
+        after = await store.read();
+      assert.equal(after.generation, before.generation + 1);
+      if (name === "reset") {
+        assert.deepEqual(after.data.allocations, {});
+        for (const key of Object.keys(before.data.allocations))
+          assert.equal(
+            after.data.revisions["allocation:" + key],
+            before.data.revisions["allocation:" + key] + 1,
+          );
+        assert.deepEqual(
+          after.data.actualAllocations,
+          before.data.actualAllocations,
+        );
+        assert.deepEqual(after.data.personCalendar, before.data.personCalendar);
+        assert.deepEqual(after.data.resources, before.data.resources);
+        await assert.rejects(() => store.mutate(actor, command), {
+          status: 409,
+        });
+      } else if (name === "import") {
+        assert.deepEqual(result, { imported: 1, skipped: 0 });
+        const imported = after.data.resources.find(
+          (r) => r.name === "Synthetic Imported",
+        );
+        assert(imported);
+        assert.equal(imported.versions[0].team, "unassigned");
+        assert.equal(imported.versions[0].lead, "A");
+        assert.equal(after.data.revisions["resource:" + imported.id], 1);
+        assert.equal(
+          after.data.teams.find((t) => t.id === "unassigned").lead,
+          "A",
+        );
+        assert.equal(
+          after.data.revisions["team:unassigned"],
+          before.data.revisions["team:unassigned"] + 1,
+        );
+        assert.deepEqual(
+          after.data.actualAllocations,
+          before.data.actualAllocations,
+        );
+        assert.deepEqual(await store.mutate(actor, command), {
+          imported: 0,
+          skipped: 1,
+        });
+      } else {
+        assert.deepEqual(after.data.resources, []);
+        assert.deepEqual(after.data.workCalendar, backup.workCalendar);
+        assert.equal(Object.hasOwn(after.data, "legacyArchive"), false);
+        assert.equal(
+          after.data.revisions["project:p"],
+          before.data.revisions["project:p"] + 1,
+        );
+        assert.equal(
+          after.data.revisions["resource:r"],
+          before.data.revisions["resource:r"] + 1,
+        );
+        await assert.rejects(
+          () =>
+            store.mutate(actor, (d, u) =>
+              applyChanges(d, u, [
+                {
+                  kind: "actual",
+                  id: "r|p|2026-09",
+                  value: 0.1,
+                  revision: before.data.revisions["actual:r|p|2026-09"],
+                },
+              ]),
+            ),
+          { status: 409 },
+        );
+      }
+      const expectedUsers = beforeUsers.map((u) =>
+        name === "restore" && u.resourceId === "r"
+          ? { ...u, resourceId: "" }
+          : u,
+      );
+      assert.deepEqual(await store.users(), expectedUsers);
+      const persisted = await store.read();
+      await store.close();
+      const reopened = new Store({ env });
+      try {
+        await reopened.connect();
+        assert.deepEqual(await reopened.read(), persisted);
+        assert.deepEqual(await reopened.users(), expectedUsers);
+      } finally {
+        await reopened.close();
+      }
+    });
 });
