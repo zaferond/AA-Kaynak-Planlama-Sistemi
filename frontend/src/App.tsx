@@ -12,6 +12,7 @@ import { usePortalData } from "./features/usePortalData";
 import WriteRecoveryNotice from "./features/WriteRecoveryNotice";
 import { usePortalRefresh } from "./features/usePortalRefresh";
 import { usePortalEditor } from "./features/usePortalEditor";
+import { useWorkspaceNavigation } from "./features/workspace/useWorkspaceNavigation";
 import WorkspaceHeader, { FullPlanHeader } from "./features/WorkspaceHeader";
 import WorkspaceNavigation from "./features/WorkspaceNavigation";
 import WorkspaceFilters from "./features/WorkspaceFilters";
@@ -28,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ClipboardPaste, Copy, Info } from "lucide-react";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import AbsenceReport from "./AbsenceReport";
 import WorkspaceReports from "./features/workspace/WorkspaceReports";
 import AccessPanel from "./AccessPanel";
@@ -36,20 +37,14 @@ import PortalEditorDialog from "./features/PortalEditorDialog";
 import { usePlannedGrid } from "./features/usePlannedGrid";
 import { fmt, monthLabel } from "./format";
 import { Project, phaseStyle } from "./model";
-import {
-  allowedDefaultTabs,
-  defaultTabKey,
-  readDefaultTab,
-} from "./navigation";
 import PersonAllocationPanel from "./PersonAllocationPanel";
 import ProjectInfoReport from "./ProjectInfoReport";
 import ProjectResponsible from "./ProjectResponsible";
 import ProjectTimelinePanel from "./features/ProjectTimelinePanel";
 import ResourcesPanel from "./features/ResourcesPanel";
 import RiskManagement from "./RiskManagement";
-import type { RiskLeaveGuard } from "./RiskTable";
-import { DEFAULT_FILTERS, TAB_LABELS } from "./settings";
-import { captureSessionGuard, currentUser, logout, readLocal } from "./storage";
+import { DEFAULT_FILTERS } from "./settings";
+import { captureSessionGuard, currentUser, readLocal } from "./storage";
 import TeamDirectory from "./TeamDirectory";
 ("use client");
 const openingOptions = readWorkspaceOptions(
@@ -59,15 +54,7 @@ const openingOptions = readWorkspaceOptions(
 const fullPlan = openingOptions.fullPlan;
 export default function Portal() {
   const assertSessionRef = useRef(captureSessionGuard());
-  const riskLeaveGuard = useRef<RiskLeaveGuard | null>(null);
-  const riskEditingRef = useRef(false);
-  const [riskEditing, setRiskEditing] = useState(false);
   const [directoryEditing, setDirectoryEditing] = useState(false);
-  const onRiskEditingChange = useCallback((editing: boolean) => {
-    riskEditingRef.current = editing;
-    setRiskEditing(editing);
-  }, []);
-  const tabRequest = useRef(0);
   const mainTabsRef = useRef<HTMLDivElement>(null),
     capacityTableRef = useRef<HTMLTableElement>(null),
     planTableRef = useRef<HTMLTableElement>(null);
@@ -100,12 +87,24 @@ export default function Portal() {
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager";
   const readOnlyAllLeaders = !isAdmin && !(isManager && !!user?.leaders.length);
-  const [defaultTab, setDefaultTab] = useState(() =>
-      readDefaultTab(currentUser()),
-    ),
-    [tab, setTab] = useState(() =>
-      fullPlan ? "plan" : readDefaultTab(currentUser()),
-    );
+  const {
+    tab,
+    defaultTab,
+    setOpeningTab,
+    riskLeaveGuard,
+    riskEditingRef,
+    riskEditing,
+    onRiskEditingChange,
+    flushRiskDraft,
+    changeTab,
+    signOut,
+  } = useWorkspaceNavigation({
+    user,
+    fullPlan,
+    assertSessionRef,
+    setError,
+    setNotice,
+  });
   const {
     leads,
     setLeads,
@@ -202,10 +201,8 @@ export default function Portal() {
     setPlanMenu(null);
   }, [leads, teamIds, projectIds, start, count, search, view]);
   useEffect(() => {
-    if (!allowedDefaultTabs(user).includes(tab))
-      setTab(allowedDefaultTabs(user)[0]);
     if (!isAdmin) setEditor(null);
-  }, [isAdmin, user?.role, tab]);
+  }, [isAdmin, user?.role]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       const list = mainTabsRef.current;
@@ -223,9 +220,6 @@ export default function Portal() {
     return () => cancelAnimationFrame(frame);
   }, [tab]);
   useEffect(() => {
-    setDefaultTab(readDefaultTab(user));
-  }, [user?.id, user?.role]);
-  useEffect(() => {
     if (!fullPlan) return;
     const sync = () => setBrowserFullScreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", sync);
@@ -234,20 +228,6 @@ export default function Portal() {
   useEffect(() => {
     if (fullPlan) history.replaceState(null, "", planWorkspaceUrl());
   }, [view, start, count, density, leads, teamIds, projectIds]);
-  function setOpeningTab(nextTab: string) {
-    if (!user || !allowedDefaultTabs(user).includes(nextTab)) return;
-    try {
-      localStorage.setItem(defaultTabKey(user.id), nextTab);
-      setDefaultTab(nextTab);
-      setNotice(
-        "Varsayılan Sekme ayarlandı: " +
-          TAB_LABELS[nextTab as keyof typeof TAB_LABELS] +
-          ". Sonraki açılışta bu sekme gösterilir.",
-      );
-    } catch {
-      setError("Varsayılan Sekme bu tarayıcıda kaydedilemedi.");
-    }
-  }
   useSynchronizedTableScroll({
     enabled: !!data && tab === "plan" && view === "project" && showCapacity,
     primaryRef: planTableRef,
@@ -405,28 +385,6 @@ export default function Portal() {
       setNotice(
         "Tarayıcı ekranı kaplamaya izin vermedi; geniş sekme görünümü açık kalır.",
       );
-    }
-  }
-  async function flushRiskDraft() {
-    return (
-      tab !== "risk" ||
-      !riskLeaveGuard.current ||
-      (await riskLeaveGuard.current())
-    );
-  }
-  async function changeTab(nextTab: string) {
-    const request = ++tabRequest.current;
-    if (!(await flushRiskDraft()) || request !== tabRequest.current) return;
-    setTab(nextTab);
-  }
-  async function signOut() {
-    if (!(await flushRiskDraft())) return;
-    try {
-      assertSessionRef.current();
-      await logout();
-      location.reload();
-    } catch (e) {
-      setError((e as Error).message);
     }
   }
   const editTeams = data?.teams || [];
