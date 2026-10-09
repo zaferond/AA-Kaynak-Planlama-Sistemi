@@ -28,6 +28,7 @@ import { checkViewportScroll } from "./browser-checks/viewport-scroll.mjs";
 import { checkTransportRecovery } from "./browser-checks/transport-recovery.mjs";
 import { checkMilestoneParentDates } from "./browser-checks/milestone-parent-dates.mjs";
 import { checkWorkspaceNavigation } from "./browser-checks/workspace-navigation.mjs";
+import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 
 const f = await fixture();
 try {
@@ -36,6 +37,7 @@ try {
   await checkTableStyles(f);
   await checkSessionConsistency(f);
   await checkWorkspaceNavigation(f);
+  await checkPortalRefresh(f);
   await checkEntityEditors(f);
   await checkDirectoryManagement(f);
   await checkRiskSystems(f);

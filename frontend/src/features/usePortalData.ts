@@ -19,7 +19,10 @@ export function usePortalData(assertSessionRef: RefObject<() => void>) {
   const [saving, setSaving] = useState(false);
   async function reload(onUnauthenticated: () => void) {
     try {
-      setData(await readLocal());
+      assertSessionRef.current();
+      const next = await readLocal();
+      assertSessionRef.current();
+      setData(next);
       setUser(currentUser());
       setError("");
     } catch (e) {

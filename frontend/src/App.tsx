@@ -196,6 +196,8 @@ export default function Portal() {
     saving,
     riskEditing,
     riskEditingRef,
+    assertSessionRef,
+    setError,
   });
   useEffect(() => {
     setPlanMenu(null);
