@@ -1,5 +1,17 @@
 # CI kanıt arşivi
 
+## 9 Ekim 2026 — Frontend geçiş ve oturum koordinasyonu
+
+Test edilen kod **`8e29bc2093f2310bd6bca694b5d998ece05d9e50`**. [Modül ayrımı, yeniden üretilen yinelenen çıkış hatası ve yerel 63 test / 27 kontrol ve fixture sonrası 13 tarayıcı kontrolü](MIMARI-FRONTEND-GECIS-VE-OTURUM-KOORDINASYONU-2026-10-09.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı:** Ubuntu 588/588, Windows 238/238, Chromium 143; biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği | [37910942963](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37910942963) |
+
+[Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-8e29bc2-receipt.json). Fail/skipped/cancelled 0; Windows ile genel süit örtüşür. Yeni coordinator 14 unit test ve 2 browser kontrolüyle sınandı: taslak beklemesi dahil yinelenen çıkış tek istektir; başarısız çıkış açıkça tekrar denenir; son sekme isteği kazanır; confirm reddi, save hatası ve oturum değişimi taslağı/erişim kapsamını korur. Eski 93c0dca derlemesinde yinelenen çıkış güvenli sentetik browser testi iki istekle başarısız oldu; yeni derleme geçti.
+
+Native MSSQL bu kaynak için yeniden çalıştırılmadı; önceki native koşu bu commit'in kanıtı değildir. Backend Orta bağımlılık uyarısı, N3 snapshot/global lock, N6 canlı geçiş/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü devam eder. Ham loglar Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i üretim kodunu değiştirmez ve yeni tam CI başarısı iddiası değildir.
+
 ## 9 Ekim 2026 — Toplu veri komutları
 
 Test edilen kod **`056590ed43a214cfad5c50e44ae4354cf85b748c`**. [Modül ayrımı, korunan sözleşmeler ve yerel 61 test / 10 tarayıcı kontrolü](MIMARI-TOPLU-VERI-MODUL-AYRIMI-2026-10-09.md).

@@ -50,4 +50,10 @@ Bu çalışma uygulamanın tümü için güvenlik/stabilite veya gerçek kurum o
 
 Sıradaki dar frontend çalışma: `usePortalRefresh` arka plan yenilemesinin effect yaşam döngüsü, geciken callback'ler ve düzenleme sırasında okuma koordinasyonu. Önceden ayrılmış data/editor/filters/view/grid/menu modülleri yeniden ayrılmayacak.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`8e29bc2093f2310bd6bca694b5d998ece05d9e50`**. [Kalite koşusu 37910942963](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37910942963) başarılı: **Ubuntu 588/588**, **Windows 238/238**, **Chromium 143 kontrol**. Fail/skipped/cancelled 0; Windows ile genel süit örtüşür ve toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği mevcut backend Orta uyarısını kapatmaz.
+
+[Güvenli metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-8e29bc2-receipt.json). Ham loglar veya bağlantı bilgileri Git'e eklenmez. Kanıt/dokümantasyon commit'i üretim kodunu değiştirmez; ayrı tam CI koşusu iddiası değildir.
+
+Uygulama klasörüne aktarım kontrolü önceki manifest ve dosya hash'lerini, yerel değişikliklerin korunmasını ve doğrulanmış geçici derlemeyle **396 kaynak / 411 site çıktısı / 7 güncel çıktı** eşitliğini denetler. Doğrulanmış yeni JS ve index plain/gzip çıktıları seçilerek aktarılır; tarihî bundle'lar silinmez. Seçilen dosyalar geri alınabilir yedekle aktarılır, manifest en son yazılır. Yedek konumu: `.deployment-backups/2026-10-09-workspace-navigation-final`. Bu işlem servis yeniden başlatması veya çalışan veritabanına işlem içermez.
