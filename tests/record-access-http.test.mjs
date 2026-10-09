@@ -1372,3 +1372,198 @@ test("HTTP session identity is stable for one session, rotates on login without 
   assert.equal(forgery.status, 401);
   assert.equal(forgery.response.headers.get("X-Session-Identity"), null);
 });
+
+test("mixed actual/calendar batches preserve deferred revisions and roll back every staged kind", async (t) => {
+  for (const reverse of [false, true])
+    await t.test(
+      reverse ? "reverse command order" : "forward command order",
+      async (t) => {
+        const { store, state, write } = await setup(t);
+        const team = (await state()).data.teams.find((item) => item.lead);
+        const month = "2026-09";
+        const actual = (resource, project, period = month) =>
+          `${resource}|${project}|${period}`;
+        const resource = (id) => ({
+          id,
+          name: "Synthetic " + id,
+          note: "",
+          versions: [
+            {
+              effective: "2026-01",
+              start: "2026-01-01",
+              end: "",
+              team: team.id,
+              lead: team.lead,
+              status: "Aktif Çalışan",
+              included: true,
+              amount: 1,
+            },
+          ],
+        });
+        assert.equal(
+          (
+            await write([
+              ...["p", "q"].map((id) => ({
+                kind: "project",
+                id,
+                value: {
+                  id,
+                  name: "Synthetic " + id,
+                  start: "2026-01",
+                  end: "2026-12",
+                  phases: {},
+                },
+              })),
+              ...["r", "s"].map((id) => ({
+                kind: "resource",
+                id,
+                value: resource(id),
+              })),
+              { kind: "workedHours", id: "r|" + month, value: 200 },
+              {
+                kind: "actual",
+                id: actual("r", "p"),
+                value: { unit: "percent", value: 50 },
+              },
+              {
+                kind: "actual",
+                id: actual("r", "q"),
+                value: { unit: "percent", value: 25 },
+              },
+              {
+                kind: "actual",
+                id: actual("s", "p"),
+                value: { unit: "percent", value: 50 },
+              },
+              {
+                kind: "actual",
+                id: actual("s", "p", "2026-08"),
+                value: { unit: "percent", value: 50 },
+              },
+            ])
+          ).status,
+          200,
+        );
+        const before = await state();
+        const changes = [
+          {
+            kind: "calendar",
+            id: "shared",
+            value: {
+              "2026-09-01": {
+                type: "official",
+                label: "Synthetic half day",
+                fraction: 0.5,
+              },
+            },
+          },
+          {
+            kind: "personDay",
+            id: "r|2026-09-02|leave",
+            value: { type: "leave", hours: 2, label: "" },
+          },
+          {
+            kind: "personDay",
+            id: "r|2026-09-03|training",
+            value: { type: "training", hours: 3, label: "" },
+          },
+          { kind: "workedHours", id: "r|" + month, value: 100 },
+          {
+            kind: "actual",
+            id: actual("r", "p"),
+            value: { unit: "hours", value: 30 },
+          },
+          {
+            kind: "actual",
+            id: actual("r", "q"),
+            value: { unit: "percent", value: 20 },
+          },
+        ];
+        const ordered = reverse ? [...changes].reverse() : changes;
+        const audit = async () =>
+          (await store.db.query("SELECT * FROM kp_audit_events ORDER BY id"))
+            .rows;
+        const beforeAudit = await audit();
+        // A late stale revision must undo calendar, personal day, hours and actual edits.
+        assert.equal(
+          (
+            await write(
+              ordered.map((change, index) =>
+                index === ordered.length - 1
+                  ? { ...change, revision: 999 }
+                  : change,
+              ),
+            )
+          ).status,
+          409,
+        );
+        assert.deepEqual(await state(), before);
+        assert.deepEqual(await audit(), beforeAudit);
+        // A valid command sequence that exceeds capacity fails only at finalization.
+        assert.equal(
+          (
+            await write([
+              ...ordered,
+              { kind: "workedHours", id: "s|" + month, value: 1 },
+            ])
+          ).status,
+          400,
+        );
+        assert.deepEqual(await state(), before);
+        assert.deepEqual(await audit(), beforeAudit);
+        assert.equal((await write(ordered)).status, 200);
+        const saved = await state();
+        const d = saved.data;
+        // Percent input uses the hours at its position in the command sequence;
+        // final percentages use final hours. Both existing semantics must survive.
+        const qHours = reverse ? 40 : 18.7;
+        // 100 manual hours minus 4.5 holiday hours and 2 leave hours.
+        const finalHours = 93.5;
+        assert(
+          Math.abs(d.actualAllocations[actual("r", "q")] * 180 - qHours) < 1e-9,
+        );
+        assert(
+          Math.abs(
+            d.actualPercentEntries[actual("r", "q")] -
+              (qHours / finalHours) * 100,
+          ) < 1e-9,
+        );
+        assert.equal(
+          d.revisions["actual:" + actual("r", "q")],
+          reverse ? 3 : 2,
+        );
+        assert.equal(d.actualAllocations[actual("r", "p")], 30 / 180);
+        assert.equal(d.actualPercentEntries[actual("r", "p")], undefined);
+        assert.equal(d.revisions["actual:" + actual("r", "p")], 2);
+        assert.equal(d.actualWorkedHours["r|" + month], 100);
+        assert.equal(d.personCalendar["r|2026-09-02|leave"].hours, 2);
+        assert.equal(d.personCalendar["r|2026-09-03|training"].hours, 3);
+        const otherKey = actual("s", "p"),
+          untouchedKey = actual("s", "p", "2026-08");
+        assert.equal(
+          d.actualAllocations[otherKey],
+          before.data.actualAllocations[otherKey],
+        );
+        assert(
+          d.actualPercentEntries[otherKey] >
+            before.data.actualPercentEntries[otherKey],
+        );
+        assert.equal(d.revisions["actual:" + otherKey], 2);
+        assert.equal(
+          d.actualPercentEntries[untouchedKey],
+          before.data.actualPercentEntries[untouchedKey],
+        );
+        assert.equal(d.revisions["actual:" + untouchedKey], 1);
+        assert.equal(saved.generation, before.generation + 1);
+        const persisted = await store.read();
+        await store.close();
+        const reopened = new Store({ env: store.env });
+        try {
+          await reopened.connect();
+          assert.deepEqual(await reopened.read(), persisted);
+        } finally {
+          await reopened.close();
+        }
+      },
+    );
+});

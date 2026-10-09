@@ -1,14 +1,6 @@
 import { ownValue } from "../shared/records.ts";
 import { parseAllocationKey } from "../shared/allocation-key.ts";
-import {
-  validPlanningMonth,
-  validPlanningDate,
-} from "../shared/planning-dates.ts";
 import { assertActualMonthlyLimits } from "../shared/actual-limits.ts";
-import {
-  MAX_RECORDED_MONTHLY_HOURS,
-  createPersonMonthHoursIndex,
-} from "../shared/actual-units.ts";
 import { z } from "zod";
 import { fail, admin, publicUser } from "./auth.mjs";
 import {
@@ -18,11 +10,6 @@ import {
   migrate,
   versionAt,
   actualVersionAt,
-  currentPlanningMonth,
-  actualInputToFte,
-  effectivePersonHoursInMonth,
-  DEFAULT_MONTHLY_HOURS,
-  personDaySchema,
 } from "./domain/index.mjs";
 import { entityCollections as kinds } from "../shared/entity-kinds.ts";
 import { orderedProjects } from "../shared/project-order.ts";
@@ -32,6 +19,13 @@ import {
   directoryRevision,
 } from "../shared/directory-policy.ts";
 import { stageTeamChange } from "./directory-commands.mjs";
+import {
+  stageActualChange,
+  stageWorkedHoursChange,
+  stageCalendarChange,
+  stagePersonDayChange,
+  finalizeActualChanges,
+} from "./actual-calendar-commands.mjs";
 // Keep the existing operations entry point for routes, tools and tests.
 export { applyLeaderChange } from "./directory-commands.mjs";
 const id = z.string().regex(/^[a-zA-Z0-9_|-]{1,300}$/);
@@ -58,61 +52,6 @@ const changesSchema = z
   )
   .min(1)
   .max(100000);
-const actualEntrySchema = z
-  .object({
-    unit: z.enum(["percent", "days", "hours"]),
-    value: z.number().finite().min(0).max(100000),
-  })
-  .strict();
-const workedHoursSchema = z
-  .number()
-  .finite()
-  .min(0)
-  .max(MAX_RECORDED_MONTHLY_HOURS);
-const calendarSchema = z.record(
-  z
-    .object({
-      type: z.enum(["official", "religious", "company"]),
-      label: z.string().trim().min(1).max(100),
-      fraction: z.union([z.literal(0.5), z.literal(1)]),
-    })
-    .strict(),
-);
-const effectiveHours = (d, resourceId, month) =>
-  effectivePersonHoursInMonth(
-    month,
-    resourceId,
-    d.actualWorkedHours?.[resourceId + "|" + month],
-    d.workCalendar,
-    d.personCalendar,
-  );
-function recalculateActualPercentages(d, affectedMonths) {
-  if (affectedMonths.size === 0) return;
-  const resources = new Set(d.resources.map((resource) => resource.id));
-  const personHours = createPersonMonthHoursIndex(d);
-  // Scan once for the entire final batch; a calendar edit may affect every
-  // person. Do not cache during the command loop, where calendars/hours change.
-  for (const actualKey of Object.keys(d.actualPercentEntries || {})) {
-    const [entryResource, , entryMonth] = actualKey.split("|");
-    if (
-      !resources.has(entryResource) ||
-      !affectedMonths.has(entryResource + "|" + entryMonth)
-    )
-      continue;
-    const percent = d.actualPercentEntries[actualKey];
-    const hours = personHours.get(entryResource, entryMonth).effectiveHours;
-    const nextPercent = hours
-      ? (((d.actualAllocations[actualKey] || 0) * DEFAULT_MONTHLY_HOURS) /
-          hours) *
-        100
-      : 0;
-    if (Math.abs(percent - nextPercent) > 1e-10) {
-      d.actualPercentEntries[actualKey] = nextPercent;
-      d.revisions["actual:" + actualKey] =
-        (d.revisions["actual:" + actualKey] || 0) + 1;
-    }
-  }
-}
 export function applyChanges(d, u, input) {
   const previousResources = structuredClone(d.resources);
   stageChanges(d, u, input);
@@ -146,8 +85,6 @@ export const isPlanningCommand = (command) => planningCommands.has(command);
 function stageParsedChanges(d, u, changes) {
   const seen = new Set(),
     affectedActualMonths = new Set();
-  const affectMonth = (resourceId, month) =>
-    affectedActualMonths.add(resourceId + "|" + month);
   for (const ch of changes) {
     const { kind, id, value, revision, operation } = ch,
       k = kind + ":" + id;
@@ -223,12 +160,6 @@ function stageParsedChanges(d, u, changes) {
       )
         continue;
     }
-    if (
-      kind === "actual" &&
-      !operation &&
-      id.split("|")[2] > currentPlanningMonth()
-    )
-      fail(400, "Gelecek aylara gerçekleşen kaynak dağılımı girilemez.");
     if (kind === "riskSystem") {
       stageRiskSystemChange(d, ch);
     } else if (kind === "risk") {
@@ -237,95 +168,13 @@ function stageParsedChanges(d, u, changes) {
       if (operation) delete d.allocations[id];
       else d.allocations[id] = value;
     } else if (kind === "actual") {
-      d.actualAllocations ??= {};
-      d.actualPercentEntries ??= {};
-      if (operation) {
-        delete d.actualAllocations[id];
-        delete d.actualPercentEntries[id];
-      } else if (typeof value === "number") {
-        d.actualAllocations[id] = value;
-        delete d.actualPercentEntries[id];
-      } else {
-        const entry = actualEntrySchema.parse(value);
-        const [resourceId, , month] = id.split("|");
-        if (entry.unit === "percent" && entry.value > 100)
-          fail(400, "Yüzde girişi %100'ü aşamaz.");
-        const amount = actualInputToFte(
-          entry.value,
-          entry.unit,
-          month,
-          effectiveHours(d, resourceId, month),
-        );
-        if (!Number.isFinite(amount) || amount > 100)
-          fail(400, "Giriş, izin verilen kaynak sınırını aşıyor.");
-        d.actualAllocations[id] = amount;
-        if (entry.unit === "percent") d.actualPercentEntries[id] = entry.value;
-        else delete d.actualPercentEntries[id];
-      }
-      const [resourceId, , month] = id.split("|");
-      if (resourceId && month) affectMonth(resourceId, month);
+      stageActualChange(d, ch, affectedActualMonths);
     } else if (kind === "workedHours") {
-      const [resourceId, month, ...extra] = id.split("|");
-      if (extra.length || !resourceId || !validPlanningMonth(month || ""))
-        fail(400, "Çalışılan saat kaydı geçersiz.");
-      if (!d.resources.some((resource) => resource.id === resourceId))
-        fail(404, "Çalışan kaynak bulunamadı.");
-      if (!operation && value !== null && month > currentPlanningMonth())
-        fail(400, "Gelecek aylara çalışılan saat girilemez.");
-      d.actualWorkedHours ??= {};
-      if (
-        (operation || value === null) &&
-        ownValue(d.actualWorkedHours, id) === undefined
-      )
-        continue;
-      if (operation || value === null) delete d.actualWorkedHours[id];
-      else d.actualWorkedHours[id] = workedHoursSchema.parse(value);
-      affectMonth(resourceId, month);
+      if (!stageWorkedHoursChange(d, ch, affectedActualMonths)) continue;
     } else if (kind === "calendar") {
-      if (id !== "shared" || operation)
-        fail(400, "Çalışma takvimi işlemi geçersiz.");
-      const previous = d.workCalendar || {};
-      const next = calendarSchema.parse(value);
-      const changedMonths = new Set(
-        [...new Set([...Object.keys(previous), ...Object.keys(next)])]
-          .filter((date) => previous[date]?.fraction !== next[date]?.fraction)
-          .map((date) => date.slice(0, 7)),
-      );
-      d.workCalendar = next;
-      for (const key of Object.keys(d.actualAllocations || {})) {
-        const [resourceId, , month] = key.split("|");
-        if (changedMonths.has(month)) affectMonth(resourceId, month);
-      }
-      for (const key of Object.keys(d.personCalendar || {})) {
-        const [resourceId, date] = key.split("|");
-        const month = date.slice(0, 7);
-        if (changedMonths.has(month)) affectMonth(resourceId, month);
-      }
+      stageCalendarChange(d, ch, affectedActualMonths);
     } else if (kind === "personDay") {
-      const [resourceId, date, type, ...extra] = id.split("|");
-      if (
-        extra.length ||
-        (type !== undefined && !["leave", "training"].includes(type)) ||
-        !d.resources.some((resource) => resource.id === resourceId) ||
-        !validPlanningDate(date || "")
-      )
-        fail(400, "Kişisel takvim tarihi geçersiz.");
-      d.personCalendar ??= {};
-      if (operation && ownValue(d.personCalendar, id) === undefined) continue;
-      if (operation) delete d.personCalendar[id];
-      else {
-        const entry = personDaySchema.parse(value);
-        if (type !== undefined && type !== entry.type)
-          fail(400, "Takvim kayıt türü kimliğiyle eşleşmiyor.");
-        if (d.personCalendar[id] && d.personCalendar[id].type !== entry.type)
-          fail(
-            400,
-            "Bu tarihte farklı türde kayıt var. İzin ve eğitimi ayrı kayıtlar olarak ekleyin.",
-          );
-        d.personCalendar[id] = entry;
-      }
-      const month = date.slice(0, 7);
-      affectMonth(resourceId, month);
+      if (!stagePersonDayChange(d, ch, affectedActualMonths)) continue;
     } else if (kind === "team") {
       stageTeamChange(d, ch);
     } else {
@@ -406,8 +255,7 @@ function stageParsedChanges(d, u, changes) {
   // Validate the final batch: moving allocations between projects or adjusting
   // a calendar together with allocations must not fail on an intermediate total.
   // Recalculate only after explicit revisions have been checked for every change.
-  assertActualMonthlyLimits(d, affectedActualMonths);
-  recalculateActualPercentages(d, affectedActualMonths);
+  finalizeActualChanges(d, affectedActualMonths);
   if (changes.some((change) => change.kind === "project"))
     d.projects = orderedProjects(d.projects);
   return d;
