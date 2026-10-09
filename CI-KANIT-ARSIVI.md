@@ -1,5 +1,17 @@
 # CI kanıt arşivi
 
+## 9 Ekim 2026 — Arka plan yenileme yaşam döngüsü
+
+Test edilen kod **`20c66088f321905e437c5b50c1f329f7c317709c`**. [Scheduler ayrımı, geciken sürüm yanıtı ve yerel 77 test / 22 tarayıcı kontrolü](MIMARI-ARKA-PLAN-YENILEME-2026-10-09.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı:** Ubuntu 602/602, Windows 252/252, Chromium 145; biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği | [37915006005](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37915006005) |
+
+[Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-20c6608-receipt.json). Fail/skipped/cancelled 0; Windows ile genel süit örtüşür. Yeni scheduler 14 unit test ve 2 browser kontrolüyle sınandı. Eski 5334d79 derlemesinde editordan önce başlayan sürüm kontrolü editor açıkken tam okuma başlattı (1 !== 0); yeni derleme deferred read ile geçti. Yeni kontrol notification burst sırasında paralel snapshot okumayı engelledi; tek takip okuması aradaki değişikliği korudu. Mevcut editor/revision, risk conflict, session/CSRF ve calendar draft kontrolleri korundu.
+
+Native MSSQL bu kaynak için yeniden çalıştırılmadı; önceki native koşu bu commit'in kanıtı değildir. Backend Orta bağımlılık uyarısı, N3 snapshot/global lock, N6 canlı geçiş/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü devam eder. Ham loglar Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i üretim kodunu değiştirmez ve yeni tam CI başarısı iddiası değildir.
+
 ## 9 Ekim 2026 — Frontend geçiş ve oturum koordinasyonu
 
 Test edilen kod **`8e29bc2093f2310bd6bca694b5d998ece05d9e50`**. [Modül ayrımı, yeniden üretilen yinelenen çıkış hatası ve yerel 63 test / 27 kontrol ve fixture sonrası 13 tarayıcı kontrolü](MIMARI-FRONTEND-GECIS-VE-OTURUM-KOORDINASYONU-2026-10-09.md).

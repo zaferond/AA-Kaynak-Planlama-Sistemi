@@ -45,4 +45,10 @@ Bu inceleme tüm uygulamanın güvenli/stabil olduğunun veya kurum ortamında p
 
 Sıradaki konu: **N3 — backend mutasyonlarında tam snapshot okuma/kopyalama/doğrulama maliyeti**. Güncel sentetik ölçüm ve çağrı zinciri üzerinden en pahalı aşama belirlenecek; CAS, aylık limit ve transaction bütünlüğünü koruyan dar iyileştirme değerlendirilecek. SQL.js ölçümü native MSSQL kilit bekleme veya gerçek p95/p99 kabulünün yerine geçmez.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`20c66088f321905e437c5b50c1f329f7c317709c`**. [Kalite koşusu 37915006005](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37915006005) başarılı: **Ubuntu 602/602**, **Windows 252/252**, **Chromium 145 kontrol**. Fail/skipped/cancelled 0; Windows ile genel süit örtüşür ve toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği mevcut backend Orta uyarısını kapatmaz.
+
+[Güvenli metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-20c6608-receipt.json). Ham loglar veya bağlantı bilgileri Git'e eklenmez. Kanıt/dokümantasyon commit'i üretim kodunu değiştirmez; ayrı tam CI koşusu iddiası değildir.
+
+Uygulama klasörüne aktarım kontrolü önceki manifest ve dosya hash'lerini, yerel değişikliklerin korunmasını ve doğrulanmış geçici derlemeyle **398 kaynak / 413 site çıktısı / 7 güncel çıktı** eşitliğini denetler. Doğrulanmış yeni JS ve index plain/gzip çıktıları seçilerek aktarılır; tarihî bundle'lar silinmez. Seçilen dosyalar geri alınabilir yedekle aktarılır, manifest en son yazılır. Yedek konumu: `.deployment-backups/2026-10-09-portal-refresh-final`. Bu işlem servis yeniden başlatması veya çalışan veritabanına işlem içermez.
