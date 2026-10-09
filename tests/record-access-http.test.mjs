@@ -8,7 +8,7 @@ import { Store } from "../backend/store.mjs";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 import { activeTeamMembers } from "../shared/model.ts";
-import { applyLeaderChange } from "../backend/operations.mjs";
+import { applyLeaderChange, stageChanges } from "../backend/operations.mjs";
 import {
   DIRECTORY_REVISION_KEY,
   directoryRevision,
@@ -1566,4 +1566,344 @@ test("mixed actual/calendar batches preserve deferred revisions and roll back ev
         }
       },
     );
+});
+
+test("project/resource cascades roll back after SQL deletion and retain child ABA protection", async (t) => {
+  for (const kind of ["project", "resource"])
+    await t.test(kind, async (t) => {
+      const { store, state, write, user, request } = await setup(t);
+      const team = (await state()).data.teams.find((item) => item.lead);
+      const key = (resource, project) => `${resource}|${project}|2026-09`;
+      const project = (id) => ({
+        id,
+        name: "Synthetic " + id,
+        start: "2026-01",
+        end: "2026-12",
+        sortOrder: id === "p" ? 0 : 1,
+        phases: { "2026-09": "Analysis" },
+        phaseColors: { "2026-09": "blue" },
+        milestones: [
+          {
+            id: "heading",
+            name: "Synthetic heading",
+            start: "2026-09-01",
+            end: "2026-09-02",
+            barNotes: [
+              {
+                text: "Synthetic note",
+                includeInReport: true,
+                start: "2026-09-01",
+                end: "2026-09-02",
+              },
+            ],
+          },
+        ],
+      });
+      const resource = (id) => ({
+        id,
+        name: "Synthetic " + id,
+        note: "",
+        versions: ["2026-01", "2026-07"].map((effective) => ({
+          effective,
+          start: "2026-01-01",
+          end: "",
+          team: team.id,
+          lead: team.lead,
+          status: "Aktif Çalışan",
+          included: true,
+          amount: 1,
+        })),
+      });
+      assert.equal(
+        (
+          await write([
+            ...["p", "q"].map((id) => ({
+              kind: "project",
+              id,
+              value: project(id),
+            })),
+            ...["r", "s"].map((id) => ({
+              kind: "resource",
+              id,
+              value: resource(id),
+            })),
+            ...["p", "q"].map((id) => ({ kind: "risk", id, value: risk(id) })),
+            ...["p", "q"].map((id) => ({
+              kind: "allocation",
+              id: key(team.id, id),
+              value: 0.5,
+            })),
+            ...["r", "s"].flatMap((id) => [
+              { kind: "workedHours", id: id + "|2026-09", value: 180 },
+              {
+                kind: "personDay",
+                id: id + "|2026-09-01|leave",
+                value: { type: "leave", hours: 2, label: "" },
+              },
+              ...["p", "q"].map((p) => ({
+                kind: "actual",
+                id: key(id, p),
+                value: { unit: "percent", value: 25 },
+              })),
+            ]),
+          ])
+        ).status,
+        200,
+      );
+      const owner = await user("cascade-owner", "normal", "r");
+      const actor = await store.findUser({ id: "admin" });
+      // Synthetic historical archive, written only to this temporary fixture.
+      await store.mutate(actor, (d) => {
+        d.legacyArchive = {
+          teams: [],
+          resourceTeams: {},
+          allocations: {
+            [key("archived", "p")]: 0.4,
+            [key("archived", "q")]: 0.6,
+          },
+        };
+      });
+      const before = await state(),
+        beforeOwner = await store.findUser({ id: "cascade-owner" });
+      const targetId = kind === "project" ? "p" : "r";
+      const deletion = {
+        kind,
+        id: targetId,
+        operation: "delete",
+        revision: before.data.revisions[kind + ":" + targetId],
+      };
+      const audit = async () =>
+        (await store.db.query("SELECT * FROM kp_audit_events ORDER BY id"))
+          .rows;
+      const beforeAudit = await audit();
+      const staleChild =
+        kind === "project"
+          ? {
+              kind: "risk",
+              id: "p",
+              value: before.data.risks.find((r) => r.id === "p"),
+              revision: before.data.revisions["risk:p"],
+            }
+          : {
+              kind: "personDay",
+              id: "r|2026-09-01|leave",
+              operation: "delete",
+              revision: before.data.revisions["personDay:r|2026-09-01|leave"],
+            };
+      assert.equal((await write([deletion, staleChild])).status, 409);
+      assert.deepEqual(await state(), before);
+      assert.deepEqual(await audit(), beforeAudit);
+      assert.deepEqual(
+        await store.findUser({ id: "cascade-owner" }),
+        beforeOwner,
+      );
+      // This Store instance's persistence receives a local connection proxy.
+      // Let parent/child SQL deletes (and resource FK SET NULL) really execute,
+      // then fail before revision/audit/generation persistence can complete.
+      const persist = store.persist;
+      let reached = false;
+      store.persist = function (previous, next, connection) {
+        return persist.call(
+          this,
+          previous,
+          next,
+          new Proxy(connection, {
+            get(target, property) {
+              const fn = Reflect.get(target, property, target);
+              if (property === "remove")
+                return async (name, keys) => {
+                  const result = await fn.call(target, name, keys);
+                  if (
+                    name === (kind === "project" ? "projects" : "resources") &&
+                    keys.some((k) => k.id === targetId)
+                  ) {
+                    reached = true;
+                    if (kind === "resource") {
+                      const row = (
+                        await target.query(
+                          "SELECT resource_id FROM kp_users WHERE id=@p0",
+                          ["cascade-owner"],
+                        )
+                      ).rows[0];
+                      assert.equal(row.resource_id, null);
+                    } else {
+                      const rows = (
+                        await target.query(
+                          "SELECT COUNT(*) AS n FROM kp_project_milestones WHERE project_id=@p0",
+                          ["p"],
+                        )
+                      ).rows;
+                      assert.equal(rows[0].n, 0);
+                    }
+                    throw Error("Synthetic late cascade failure");
+                  }
+                  return result;
+                };
+              return typeof fn === "function" ? fn.bind(target) : fn;
+            },
+          }),
+        );
+      };
+      try {
+        await assert.rejects(
+          () => store.mutate(actor, (d, u) => stageChanges(d, u, [deletion])),
+          /Synthetic late cascade failure/,
+        );
+      } finally {
+        delete store.persist;
+      }
+      assert(reached);
+      assert.deepEqual(await state(), before);
+      assert.deepEqual(await audit(), beforeAudit);
+      assert.deepEqual(
+        await store.findUser({ id: "cascade-owner" }),
+        beforeOwner,
+      );
+      assert.equal((await write([deletion])).status, 200);
+      const removed = await state(),
+        d = removed.data;
+      const children = [];
+      assert.equal(removed.generation, before.generation + 1);
+      assert.equal(d.revisions[kind + ":" + targetId], deletion.revision + 1);
+      for (const r of ["r", "s"])
+        for (const p of ["p", "q"]) {
+          const id = key(r, p),
+            matches = kind === "project" ? p === "p" : r === "r";
+          if (matches) {
+            assert.equal(d.actualAllocations[id], undefined);
+            assert.equal(d.actualPercentEntries[id], undefined);
+            assert.equal(
+              d.revisions["actual:" + id],
+              before.data.revisions["actual:" + id] + 1,
+            );
+            children.push({
+              kind: "actual",
+              id,
+              value: 0.1,
+              revision: before.data.revisions["actual:" + id],
+            });
+          } else {
+            assert.equal(
+              d.actualAllocations[id],
+              before.data.actualAllocations[id],
+            );
+            assert.equal(
+              d.actualPercentEntries[id],
+              before.data.actualPercentEntries[id],
+            );
+            assert.equal(
+              d.revisions["actual:" + id],
+              before.data.revisions["actual:" + id],
+            );
+          }
+        }
+      if (kind === "project") {
+        assert.deepEqual(d.projects, [
+          before.data.projects.find((p) => p.id === "q"),
+        ]);
+        assert.deepEqual(d.resources, before.data.resources);
+        assert.equal(
+          d.risks.find((r) => r.id === "p"),
+          undefined,
+        );
+        assert.deepEqual(
+          d.risks.find((r) => r.id === "q"),
+          before.data.risks.find((r) => r.id === "q"),
+        );
+        assert.equal(d.allocations[key(team.id, "p")], undefined);
+        assert.equal(
+          d.revisions["allocation:" + key(team.id, "p")],
+          before.data.revisions["allocation:" + key(team.id, "p")] + 1,
+        );
+        assert.equal(
+          d.legacyArchive.allocations[key("archived", "p")],
+          undefined,
+        );
+        assert.equal(d.legacyArchive.allocations[key("archived", "q")], 0.6);
+        assert.deepEqual(d.actualWorkedHours, before.data.actualWorkedHours);
+        assert.deepEqual(d.personCalendar, before.data.personCalendar);
+        assert.deepEqual(
+          await store.findUser({ id: "cascade-owner" }),
+          beforeOwner,
+        );
+        children.push(staleChild, {
+          kind: "allocation",
+          id: key(team.id, "p"),
+          value: 0.2,
+          revision: before.data.revisions["allocation:" + key(team.id, "p")],
+        });
+      } else {
+        assert.deepEqual(d.projects, before.data.projects);
+        assert.deepEqual(d.risks, before.data.risks);
+        assert.deepEqual(d.allocations, before.data.allocations);
+        assert.equal(
+          d.resources.some((r) => r.id === "r"),
+          false,
+        );
+        assert.deepEqual(
+          d.resources.find((r) => r.id === "s"),
+          before.data.resources.find((r) => r.id === "s"),
+        );
+        assert.equal(d.actualWorkedHours["r|2026-09"], undefined);
+        assert.equal(d.personCalendar["r|2026-09-01|leave"], undefined);
+        assert.equal(
+          (await store.findUser({ id: "cascade-owner" })).resourceId,
+          "",
+        );
+        assert.equal(
+          (await request("/auth/me", undefined, owner)).json.user.resourceId,
+          "",
+        );
+        children.push(staleChild, {
+          kind: "workedHours",
+          id: "r|2026-09",
+          value: 180,
+          revision: before.data.revisions["workedHours:r|2026-09"],
+        });
+      }
+      const collection = kind === "project" ? "projects" : "resources";
+      assert.equal(
+        (
+          await write([
+            {
+              kind,
+              id: targetId,
+              value: before.data[collection].find((x) => x.id === targetId),
+            },
+          ])
+        ).status,
+        200,
+      );
+      const recreated = await state(),
+        recreatedAudit = await audit();
+      for (const child of children)
+        assert.equal((await write([child])).status, 409);
+      assert.deepEqual(await state(), recreated);
+      assert.deepEqual(await audit(), recreatedAudit);
+      if (kind === "resource") {
+        assert.equal(
+          (await store.findUser({ id: "cascade-owner" })).resourceId,
+          "",
+          "recreation must not silently re-link an account",
+        );
+        assert.equal(
+          (
+            await write(
+              [{ kind: "actual", id: key("r", "p"), value: 0.1 }],
+              owner,
+            )
+          ).status,
+          403,
+        );
+      }
+      const persisted = await store.read();
+      await store.close();
+      const reopened = new Store({ env: store.env });
+      try {
+        await reopened.connect();
+        assert.deepEqual(await reopened.read(), persisted);
+      } finally {
+        await reopened.close();
+      }
+    });
 });
