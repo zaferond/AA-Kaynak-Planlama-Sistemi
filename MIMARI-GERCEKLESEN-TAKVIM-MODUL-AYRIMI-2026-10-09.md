@@ -56,4 +56,10 @@ DB testleri açıkça tanımlanmış geçici SQL.js dosyaları; HTTP/tarayıcı 
 - SQL.js ve sentetik test başarısı kurum verisiyle yük/Native MSSQL kabulü değildir. Bu kaynak için native koşu yapılmadı; önceki native sonucu yeni commit'in kanıtı değildir.
 - Gerçek hesap/DB/ayar okunmadı; servis yeniden başlatılmadı. Disk manifesti çalışan backend sürecinin yeni kodu yüklediğini kanıtlamaz. Önceden farklı yerel milestone tarih testi korunur.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`5b1ba099db2a877487172bd8fb76e962c79abeed`**. [Kalite koşusu 37899268951](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37899268951) başarılı: **Ubuntu 567/567**, **Windows 217/217**, **Chromium 141 kontrol**. Fail/skipped/cancelled 0; Windows ile genel süit örtüşür ve toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği mevcut backend Orta uyarısını kapatmaz.
+
+[Güvenli metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-5b1ba09-receipt.json). Ham loglar veya bağlantı bilgileri Git'e eklenmez. Kanıt/dokümantasyon commit'i üretim kodunu değiştirmez; ayrı tam CI koşusu iddiası değildir.
+
+Uygulama klasörüne aktarım kontrolü önceki manifest ve dosya hash'lerini, yerel değişikliklerin korunmasını ve doğrulanmış geçici derlemeyle **391 kaynak / 409 site çıktısı / 7 güncel çıktı** eşitliğini denetler. Mevcut site çıktıları aynı olduğundan yeniden yazılmaz veya silinmez. Seçilen dosyalar geri alınabilir yedekle aktarılır, manifest en son yazılır. Yedek konumu: `.deployment-backups/2026-10-09-architecture-actual-calendar-final`. Bu işlem servis yeniden başlatması veya çalışan veritabanına işlem içermez.
