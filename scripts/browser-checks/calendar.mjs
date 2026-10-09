@@ -54,7 +54,7 @@ export async function checkCalendar(f) {
           .click();
         await dialog(page)
           .getByRole("button", {
-            name: "2026-01-07 tarihini kaldır",
+            name: "2026-01-07 – 2026-01-07 çalışma dışı tarih aralığını sil",
             exact: true,
           })
           .click();
@@ -62,6 +62,72 @@ export async function checkCalendar(f) {
           .getByRole("button", { name: "Kapat", exact: true })
           .click();
         assert((await f.state()).workCalendar["2026-01-07"]);
+      },
+    );
+    await f.check(
+      "calendar: shared range is one row; edit and delete affect every date and persist",
+      async () => {
+        await page
+          .getByRole("button", { name: "Çalışma Takvimi'ni aç", exact: true })
+          .click();
+        await dialog(page)
+          .getByLabel("Başlangıç", { exact: true })
+          .fill("2026-01-12");
+        await dialog(page)
+          .getByLabel("Bitiş", { exact: true })
+          .fill("2026-01-14");
+        await dialog(page)
+          .getByLabel("Açıklama", { exact: true })
+          .fill("Shared grouped range");
+        await dialog(page)
+          .getByRole("button", { name: "Ekle", exact: true })
+          .click();
+        let row = dialog(page)
+          .locator(".work-calendar-range-row")
+          .filter({ hasText: "Shared grouped range" });
+        assert.equal(await row.count(), 1);
+        await row.getByRole("button", { name: /düzenle$/ }).click();
+        await dialog(page)
+          .getByLabel("Başlangıç", { exact: true })
+          .fill("2026-01-13");
+        await dialog(page)
+          .getByLabel("Bitiş", { exact: true })
+          .fill("2026-01-15");
+        await dialog(page)
+          .getByLabel("Süre", { exact: true })
+          .selectOption("0.5");
+        await dialog(page)
+          .getByRole("button", { name: "Güncelle", exact: true })
+          .click();
+        assert((await row.innerText()).includes("13.01.2026 → 15.01.2026"));
+        await dialog(page)
+          .getByRole("button", { name: "Takvimi Kaydet", exact: true })
+          .click();
+        await dialog(page).waitFor({ state: "hidden" });
+        let state = await f.state();
+        assert.equal(state.workCalendar["2026-01-12"], undefined);
+        assert.equal(state.workCalendar["2026-01-15"].fraction, 0.5);
+        assert.deepEqual(state.workCalendar["2026-01-14"].range, {
+          from: "2026-01-13",
+          to: "2026-01-15",
+        });
+        await page
+          .getByRole("button", { name: "Çalışma Takvimi'ni aç", exact: true })
+          .click();
+        row = dialog(page)
+          .locator(".work-calendar-range-row")
+          .filter({ hasText: "Shared grouped range" });
+        assert.equal(await row.count(), 1);
+        await f.capture(page, "shared-calendar-grouped-range");
+        await row.getByRole("button", { name: /sil$/ }).click();
+        await dialog(page)
+          .getByRole("button", { name: "Takvimi Kaydet", exact: true })
+          .click();
+        await dialog(page).waitFor({ state: "hidden" });
+        state = await f.state();
+        for (const day of ["13", "14", "15"])
+          assert.equal(state.workCalendar["2026-01-" + day], undefined);
+        assert.equal(state.workCalendar["2026-01-08"].fraction, 0.5);
       },
     );
     const employee = await f.client("employee"),
@@ -105,14 +171,24 @@ export async function checkCalendar(f) {
       },
     );
     await f.check(
-      "calendar: hourly leave and training coexist; weekend entries do not change hours",
+      "calendar: hourly leave and training coexist; non-working ranges are rejected without changing hours",
       async () => {
         async function add(date, type, hours, label) {
-          await dialog(p).getByLabel("Tarih", { exact: true }).fill(date);
+          await dialog(p)
+            .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+            .fill(date);
+          const returning = new Date(Date.parse(date + "T12:00:00Z") + 86400000)
+            .toISOString()
+            .slice(0, 10);
+          await dialog(p)
+            .getByLabel(/Dönüş Tarihi/)
+            .fill(returning);
           await dialog(p)
             .locator(".work-calendar-fields select")
             .selectOption(type);
-          await dialog(p).getByLabel("Saat", { exact: true }).fill(hours);
+          await dialog(p)
+            .getByLabel("Günlük Saat", { exact: true })
+            .fill(hours);
           await dialog(p).getByLabel("Açıklama", { exact: true }).fill(label);
           await dialog(p)
             .getByRole("button", { name: "Kaydet", exact: true })
@@ -134,18 +210,39 @@ export async function checkCalendar(f) {
         }
         await add("2026-01-05", "leave", "4", "PRIVATE_LEAVE_LABEL");
         await add("2026-01-05", "training", "2", "Training label");
-        await add("2026-01-10", "leave", "9", "Weekend leave");
+        await dialog(p)
+          .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+          .fill("2026-01-10");
+        await dialog(p)
+          .getByLabel(/Dönüş Tarihi/)
+          .fill("2026-01-12");
+        await dialog(p)
+          .getByRole("button", { name: "Kaydet", exact: true })
+          .click();
+        await dialog(p)
+          .getByRole("alert")
+          .filter({ hasText: "çalışılabilir gün yok" })
+          .waitFor();
+        assert.equal(
+          (await f.state()).personCalendar["r-own|2026-01-10|leave"],
+          undefined,
+        );
         assert(
           (await calendarMonth(p).innerText()).includes(
             "İzin 4 sa · Eğitim 2 sa",
           ),
         );
         assert((await calendarMonth(p).innerText()).includes("180,5 saat"));
-        await dialog(p).getByLabel("Tarih", { exact: true }).fill("2026-01-05");
+        await dialog(p)
+          .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+          .fill("2026-01-05");
+        await dialog(p)
+          .getByLabel(/Dönüş Tarihi/)
+          .fill("2026-01-06");
         await dialog(p)
           .locator(".work-calendar-fields select")
           .selectOption("training");
-        await dialog(p).getByLabel("Saat", { exact: true }).fill("6");
+        await dialog(p).getByLabel("Günlük Saat", { exact: true }).fill("6");
         await dialog(p)
           .getByRole("button", { name: "Kaydet", exact: true })
           .click();
@@ -154,25 +251,19 @@ export async function checkCalendar(f) {
           (await f.state()).personCalendar["r-own|2026-01-05|training"].hours,
           2,
         );
-        await dialog(p)
-          .getByRole("button", {
-            name: "2026-01-10 kaydını kaldır",
-            exact: true,
-          })
-          .click();
-        await f.wait(
-          async () =>
-            !(await f.state()).personCalendar["r-own|2026-01-10|leave"],
-          "remove personal weekend",
-        );
         assert((await calendarMonth(p).innerText()).includes("180,5 saat"));
       },
     );
     await f.check(
       "calendar: delayed save freezes form fields and retry keeps failed input",
       async () => {
-        await dialog(p).getByLabel("Tarih", { exact: true }).fill("2026-01-06");
-        await dialog(p).getByLabel("Saat", { exact: true }).fill("1");
+        await dialog(p)
+          .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+          .fill("2026-01-06");
+        await dialog(p)
+          .getByLabel(/Dönüş Tarihi/)
+          .fill("2026-01-07");
+        await dialog(p).getByLabel("Günlük Saat", { exact: true }).fill("1");
         await p.route(
           "**/api/changes",
           (route) =>
@@ -191,7 +282,9 @@ export async function checkCalendar(f) {
           .filter({ hasText: "Synthetic calendar failure" })
           .waitFor();
         assert.equal(
-          await dialog(p).getByLabel("Tarih", { exact: true }).inputValue(),
+          await dialog(p)
+            .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+            .inputValue(),
           "2026-01-06",
         );
         let release,
@@ -211,10 +304,14 @@ export async function checkCalendar(f) {
             .click();
           await f.wait(() => held, "calendar save held");
           assert(
-            await dialog(p).getByLabel("Tarih", { exact: true }).isDisabled(),
+            await dialog(p)
+              .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+              .isDisabled(),
           );
           assert(
-            await dialog(p).getByLabel("Saat", { exact: true }).isDisabled(),
+            await dialog(p)
+              .getByLabel("Günlük Saat", { exact: true })
+              .isDisabled(),
           );
           release();
           await f.wait(
@@ -237,7 +334,7 @@ export async function checkCalendar(f) {
         }
         await dialog(p)
           .getByRole("button", {
-            name: "2026-01-06 kaydını kaldır",
+            name: "2026-01-06 – 2026-01-07 eğitim aralığını sil",
             exact: true,
           })
           .click();
@@ -246,6 +343,118 @@ export async function checkCalendar(f) {
             !(await f.state()).personCalendar["r-own|2026-01-06|training"],
           "temporary training removed",
         );
+        await dialog(p)
+          .getByRole("button", { name: "Kapat", exact: true })
+          .click();
+      },
+    );
+    await f.check(
+      "calendar: range preview, exclusive return, multi-day edit and removal update monthly capacity",
+      async () => {
+        await p
+          .getByRole("button", {
+            name: "Browser Employee izin ve eğitim takvimini aç",
+            exact: true,
+          })
+          .first()
+          .click();
+        await dialog(p)
+          .locator(".work-calendar-fields select")
+          .selectOption("leave");
+        await dialog(p)
+          .getByLabel("İzin Ayrılış Tarihi", { exact: true })
+          .fill("2026-01-12");
+        assert.equal(
+          await dialog(p)
+            .getByLabel("İzin Dönüş Tarihi", { exact: true })
+            .inputValue(),
+          "2026-01-13",
+        );
+        await dialog(p)
+          .getByLabel("İzin Dönüş Tarihi", { exact: true })
+          .fill("2026-01-15");
+        await dialog(p).getByLabel("Günlük Saat", { exact: true }).fill("9");
+        assert(
+          (
+            await dialog(p).locator(".work-calendar-range-preview").innerText()
+          ).includes("3 çalışma günü · 27 saat · Dönüş günü hariç"),
+        );
+        await f.capture(p, "personal-calendar-range-preview");
+        await dialog(p)
+          .getByRole("button", { name: "Kaydet", exact: true })
+          .click();
+        await f.wait(
+          async () =>
+            Boolean((await f.state()).personCalendar["r-own|2026-01-14|leave"]),
+          "personal range saved",
+        );
+        assert.equal(
+          (await f.state()).personCalendar["r-own|2026-01-15|leave"],
+          undefined,
+        );
+        await f.wait(
+          async () =>
+            (await calendarMonth(p).innerText()).includes("153,5 saat"),
+          "range monthly hours rendered",
+        );
+        await f.capture(p, "personal-calendar-range");
+        const rangeRow = dialog(p)
+          .locator(".work-calendar-range-row")
+          .filter({ hasText: "12.01.2026 → 15.01.2026" });
+        assert.equal(await rangeRow.count(), 1);
+        assert(
+          (await rangeRow.innerText()).includes("3 çalışma günü · 27 saat"),
+        );
+        await rangeRow.getByRole("button", { name: /düzenle$/ }).click();
+        await dialog(p)
+          .getByLabel("İzin Ayrılış Tarihi", { exact: true })
+          .fill("2026-01-13");
+        await dialog(p)
+          .getByLabel("İzin Dönüş Tarihi", { exact: true })
+          .fill("2026-01-16");
+        await dialog(p).getByLabel("Günlük Saat", { exact: true }).fill("3");
+        await dialog(p)
+          .getByRole("button", { name: "Güncelle", exact: true })
+          .click();
+        await f.wait(
+          async () =>
+            (await f.state()).personCalendar["r-own|2026-01-15|leave"]
+              ?.hours === 3,
+          "range edit committed",
+        );
+        assert.equal(
+          (await f.state()).personCalendar["r-own|2026-01-12|leave"],
+          undefined,
+        );
+        await f.wait(
+          async () =>
+            !(await dialog(p)
+              .getByRole("button", { name: "Kaydet", exact: true })
+              .isDisabled()),
+          "range edit settled",
+        );
+        assert((await calendarMonth(p).innerText()).includes("171,5 saat"));
+        await f.capture(p, "personal-calendar-grouped-range");
+        await dialog(p)
+          .getByRole("button", {
+            name: "2026-01-13 – 2026-01-16 izin aralığını sil",
+            exact: true,
+          })
+          .click();
+        await f.wait(async () => {
+          const data = await f.state();
+          return ["13", "14", "15"].every(
+            (day) => !data.personCalendar["r-own|2026-01-" + day + "|leave"],
+          );
+        }, "whole range removed");
+        await f.wait(
+          async () =>
+            !(await dialog(p)
+              .getByRole("button", { name: "Kaydet", exact: true })
+              .isDisabled()),
+          "range removal settled",
+        );
+        assert((await calendarMonth(p).innerText()).includes("180,5 saat"));
         await dialog(p)
           .getByRole("button", { name: "Kapat", exact: true })
           .click();
@@ -353,6 +562,118 @@ export async function checkCalendar(f) {
           await unmapped.page.locator(".person-calendar-trigger").count(),
           0,
         );
+      },
+    );
+    await f.check(
+      "calendar: employee report groups a saved range and admin edits/deletes the whole range",
+      async () => {
+        await p
+          .getByRole("button", {
+            name: "Browser Employee izin ve eğitim takvimini aç",
+            exact: true,
+          })
+          .first()
+          .click();
+        await dialog(p)
+          .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+          .fill("2026-01-20");
+        await dialog(p)
+          .getByLabel(/Dönüş Tarihi/)
+          .fill("2026-01-23");
+        await dialog(p)
+          .locator(".work-calendar-fields select")
+          .selectOption("leave");
+        await dialog(p).getByLabel("Günlük Saat", { exact: true }).fill("2");
+        await dialog(p)
+          .getByLabel("Açıklama", { exact: true })
+          .fill("Report grouped leave");
+        await dialog(p)
+          .getByRole("button", { name: "Kaydet", exact: true })
+          .click();
+        await f.wait(
+          async () =>
+            Boolean((await f.state()).personCalendar["r-own|2026-01-22|leave"]),
+          "report fixture range saved",
+        );
+        await f.wait(
+          async () =>
+            !(await dialog(p)
+              .getByRole("button", { name: "Kaydet", exact: true })
+              .isDisabled()),
+          "report fixture save settled",
+        );
+        await dialog(p)
+          .getByRole("button", { name: "Kapat", exact: true })
+          .click();
+        await page.reload();
+        await page
+          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
+          .click();
+        const report = page.locator(".absence-report");
+        const row = report
+          .locator("tbody tr")
+          .filter({ hasText: "Report grouped leave" });
+        await row.waitFor();
+        assert.equal(await row.count(), 1);
+        assert.equal(await report.locator("tbody tr").count(), 3);
+        assert.equal((await row.locator("td").nth(5).innerText()).trim(), "3");
+        assert.equal((await row.locator("td").nth(6).innerText()).trim(), "6");
+        await row.getByRole("button", { name: "Düzenle", exact: true }).click();
+        assert.equal(
+          await dialog(page)
+            .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+            .inputValue(),
+          "2026-01-20",
+        );
+        assert.equal(
+          await dialog(page)
+            .getByLabel(/Dönüş Tarihi/)
+            .inputValue(),
+          "2026-01-23",
+        );
+        await dialog(page)
+          .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
+          .fill("2026-01-21");
+        await dialog(page)
+          .getByLabel(/Dönüş Tarihi/)
+          .fill("2026-01-24");
+        await dialog(page).getByLabel("Günlük Saat", { exact: true }).fill("3");
+        await dialog(page)
+          .getByRole("button", { name: "Güncelle", exact: true })
+          .click();
+        await f.wait(
+          async () =>
+            (await f.state()).personCalendar["r-own|2026-01-23|leave"]
+              ?.hours === 3,
+          "report range edit saved",
+        );
+        await f.wait(
+          async () =>
+            !(await dialog(page)
+              .getByRole("button", { name: "Kaydet", exact: true })
+              .isDisabled()),
+          "report edit settled",
+        );
+        await dialog(page)
+          .getByRole("button", { name: "Kapat", exact: true })
+          .click();
+        assert.equal(await row.count(), 1);
+        assert.equal((await row.locator("td").nth(6).innerText()).trim(), "9");
+        assert.equal(
+          (await f.state()).personCalendar["r-own|2026-01-20|leave"],
+          undefined,
+        );
+        await f.capture(page, "employee-report-grouped-range");
+        await row.getByRole("button", { name: "Sil", exact: true }).click();
+        await row.waitFor({ state: "hidden" });
+        const state = await f.state();
+        for (const day of ["21", "22", "23"])
+          assert.equal(
+            state.personCalendar["r-own|2026-01-" + day + "|leave"],
+            undefined,
+          );
+        assert.equal(await report.locator("tbody tr").count(), 2);
+        assert.equal(state.personCalendar["r-own|2026-01-05|leave"].hours, 4);
       },
     );
     await Promise.all(

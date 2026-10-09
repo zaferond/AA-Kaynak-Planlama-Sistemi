@@ -146,10 +146,15 @@ export default function HeadcountTrend({
                 x2={x(firstFuture) - 25}
                 y1={35}
                 y2={194}
-                stroke="#d8b28a"
+                stroke="var(--report-forecast-color, #b45309)"
                 strokeDasharray="4 5"
               />
-              <text x={x(firstFuture) - 18} y={31} fontSize={11} fill="#9a642e">
+              <text
+                x={x(firstFuture) - 18}
+                y={31}
+                fontSize={11}
+                fill="var(--report-forecast-color, #b45309)"
+              >
                 Öngörü
               </text>
             </g>
@@ -158,8 +163,8 @@ export default function HeadcountTrend({
             <path
               d={path(actual)}
               fill="none"
-              stroke="var(--report-current-color, #1766bd)"
-              strokeWidth={3}
+              stroke="var(--report-current-color, #087f6a)"
+              strokeWidth={3.5}
               strokeLinejoin="round"
               strokeLinecap="round"
             />
@@ -168,8 +173,8 @@ export default function HeadcountTrend({
             <path
               d={path(projected)}
               fill="none"
-              stroke="#bf772f"
-              strokeWidth={3}
+              stroke="var(--report-forecast-color, #b45309)"
+              strokeWidth={3.5}
               strokeDasharray="7 5"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -187,8 +192,8 @@ export default function HeadcountTrend({
                   r={4.5}
                   fill={
                     point.future
-                      ? "#bf772f"
-                      : "var(--report-current-color, #1766bd)"
+                      ? "var(--report-forecast-color, #b45309)"
+                      : "var(--report-current-color, #087f6a)"
                   }
                   stroke="#fff"
                   strokeWidth={1.5}

@@ -33,7 +33,7 @@ export default function PlanningEffectivenessChart({
           {
             name: "Etkinlik",
             values: effectiveness.months.map((point) => point.percent),
-            color: "var(--brand-primary, #405341)",
+            color: "var(--report-effectiveness-color, #6d28d9)",
           },
         ]}
         unit="percent"

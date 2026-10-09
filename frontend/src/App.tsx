@@ -31,6 +31,7 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ClipboardPaste, Copy, Info } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import AbsenceReport from "./AbsenceReport";
+import MonthlyActivityReport from "./features/activity-report/MonthlyActivityReport";
 import WorkspaceReports from "./features/workspace/WorkspaceReports";
 import AccessPanel from "./AccessPanel";
 import PortalEditorDialog from "./features/PortalEditorDialog";
@@ -489,16 +490,21 @@ export default function Portal() {
             </div>
           ) : (
             <>
-              {tab === "overview" ? (
+              {tab === "overview" || tab === "activity" ? (
                 <div className="reports-filter-dock">
                   {workspaceFilters}
                   <WorkspaceFilterSummary
                     title="Uygulanan Filtreler"
-                    ariaLabel="Raporlarda uygulanan filtreler"
+                    ariaLabel={
+                      tab === "activity"
+                        ? "Aylık aktivite raporunda uygulanan filtreler"
+                        : "Raporlarda uygulanan filtreler"
+                    }
                     className="reports-filter-summary"
                     filters={[
                       ...capacityFilters.filter(
-                        (filter) => filter.label !== "Proje",
+                        (filter) =>
+                          tab === "activity" || filter.label !== "Proje",
                       ),
                       {
                         label: "Bitiş Ayı",
@@ -724,6 +730,23 @@ export default function Portal() {
                   )}
                 </TabsContent>
               )}
+              {tab === "activity" && (
+                <TabsContent value="activity">
+                  <MonthlyActivityReport
+                    data={data}
+                    teams={teams}
+                    projects={projects}
+                    months={months}
+                    currentMonth={currentMonth}
+                    todayDate={todayDate}
+                    ownResourceId={
+                      user?.role === "normal"
+                        ? user.resourceId || ""
+                        : undefined
+                    }
+                  />
+                </TabsContent>
+              )}
               {isAdmin && tab === "resources" && (
                 <TabsContent value="resources">
                   <ResourcesPanel
@@ -751,7 +774,17 @@ export default function Portal() {
                       setResourceIds([]);
                     }}
                   />
-                  <AbsenceReport data={data} teamIds={ids} months={months} />
+                  <AbsenceReport
+                    data={data}
+                    teamIds={ids}
+                    months={months}
+                    canEdit={!!isAdmin}
+                    onSaved={(next) => {
+                      setData(next);
+                      setNotice("İzin / eğitim kayıtları güncellendi.");
+                      setError("");
+                    }}
+                  />
                 </TabsContent>
               )}
               {(isAdmin || isManager) && tab === "critical" && (

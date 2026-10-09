@@ -66,6 +66,7 @@
 .resource-chart-axis {
   fill: var(--report-label-color, #60715e);
   font-size: 11px;
+  font-weight: 500;
 }
 .resource-chart-legend {
   display: flex;
@@ -82,8 +83,11 @@
 }
 .resource-chart-legend i {
   width: 18px;
-  height: 3px;
-  background: var(--series-color);
+  height: 0;
+  border-top: 3.5px solid var(--series-color);
+}
+.resource-chart-legend i.dashed {
+  border-top-style: dashed;
 }
 .resource-chart-legend small {
   margin-left: auto;
@@ -229,7 +233,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--brand-mid, #617052);
+  background: var(--report-shortage-color, #c2410c);
 }
 .resource-rank-value {
   text-align: right;

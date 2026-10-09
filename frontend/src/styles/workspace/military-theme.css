@@ -22,10 +22,13 @@ html[data-theme="military"] {
     #405341 60%,
     #617052 100%
   );
-  --report-current-color: var(--brand-primary);
-  --report-shortage-color: var(--brand-mid);
-  --report-grid-color: #e0e6d9;
-  --report-label-color: var(--brand-muted);
+  --report-current-color: #087f6a;
+  --report-planned-color: #1d4ed8;
+  --report-shortage-color: #c2410c;
+  --report-forecast-color: #b45309;
+  --report-effectiveness-color: #6d28d9;
+  --report-grid-color: #dce3e7;
+  --report-label-color: #475569;
   --background: #f3f4ef;
   --foreground: var(--brand-text);
   --card-foreground: var(--brand-text);
@@ -630,10 +633,20 @@ html[data-theme="military"]
   .headcount-metrics
   > div:last-child:not(:first-child)
   strong {
-  color: #a46123;
+  color: var(--report-forecast-color);
 }
 html[data-theme="military"] .headcount-key:not(.projected) {
-  border-top-color: var(--brand-primary);
+  border-top-color: var(--report-current-color);
+}
+html[data-theme="military"] .headcount-metrics > div:first-child strong {
+  color: var(--report-current-color);
+}
+html[data-theme="military"] .monthly-shortage-trend .shortage-summary {
+  background: #fff7ed;
+  border-color: #f2c6a6;
+}
+html[data-theme="military"] .monthly-shortage-trend .shortage-summary strong {
+  color: var(--report-shortage-color);
 }
 html[data-theme="military"] .app .capacitystrip {
   border-color: var(--brand-border);
@@ -723,15 +736,17 @@ html[data-theme="military"] .app.tab-resources .resource-table td strong {
   color: var(--brand-text);
 }
 html[data-theme="military"] .project-info-group > header {
-  background: var(--brand-surface);
-  border-color: var(--brand-border);
+  background: var(--brand-dark);
+  border-color: var(--brand-dark);
 }
 html[data-theme="military"] .project-info-project-mark {
-  background: var(--brand-mid);
+  background: #a8c498;
 }
-html[data-theme="military"] .project-info-group h3,
+html[data-theme="military"] .project-info-group h3 {
+  color: #fff;
+}
 html[data-theme="military"] .project-info-entry h4 {
-  color: var(--brand-primary);
+  color: var(--brand-dark);
 }
 html[data-theme="military"]
   :is(
@@ -751,18 +766,22 @@ html[data-theme="military"]
   background: var(--brand-selected);
   border-color: var(--brand-focus);
 }
-html[data-theme="military"]
-  :is(.project-info-entry-index, .project-info-topic-content small) {
-  background: var(--brand-surface);
-  color: var(--brand-muted);
+html[data-theme="military"] .project-info-topic-content small {
+  background: #e9efea;
+  color: #3b5042;
 }
 html[data-theme="military"] .project-info-entry li:not(.completed) {
-  background: var(--brand-surface-soft);
-  border-color: var(--brand-border);
-  color: var(--brand-text);
+  background: #fff;
+  border-color: #d7e0dc;
+  color: #22332c;
+}
+html[data-theme="military"]
+  .project-info-entry
+  li:nth-child(even):not(.completed) {
+  background: #f3f6f4;
 }
 html[data-theme="military"] .project-info-entry li:not(.completed)::before {
-  background: var(--brand-mid);
+  background: #405e4d;
 }
 
 /* Leadership, team management, permissions and working calendars. */

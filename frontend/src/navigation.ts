@@ -1,6 +1,7 @@
 import { currentUser } from "./storage";
 const adminDefaultTabs = [
   "actual",
+  "activity",
   "plan",
   "projects",
   "risk",
@@ -12,13 +13,14 @@ const adminDefaultTabs = [
 ] as const;
 const managerDefaultTabs = [
   "actual",
+  "activity",
   "plan",
   "projects",
   "risk",
   "critical",
   "overview",
 ] as const;
-const normalDefaultTabs = ["actual", "projects", "risk"] as const;
+const normalDefaultTabs = ["actual", "activity", "projects", "risk"] as const;
 export const defaultTabKey = (userId: string) =>
   "aa-kaynak-varsayilan-sekme-v1:" + userId;
 export function allowedDefaultTabs(

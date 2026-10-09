@@ -3,16 +3,19 @@ export const HOURS_PER_WORKDAY = 9;
 export const DEFAULT_MONTHLY_HOURS = 180;
 export const MAX_RECORDED_MONTHLY_HOURS = 1000;
 export const DEFAULT_MONTHLY_DAYS = DEFAULT_MONTHLY_HOURS / HOURS_PER_WORKDAY;
+export type CalendarRange = { from: string; to: string };
 export type CalendarDay = {
   type: "official" | "religious" | "company";
   label: string;
   fraction: 0.5 | 1;
+  range?: CalendarRange;
 };
 export type WorkCalendar = Record<string, CalendarDay>;
 export type PersonDay = {
   type: "leave" | "training";
   hours: number;
   label: string;
+  range?: CalendarRange & { hours: number };
 };
 export type PersonCalendar = Record<string, PersonDay>;
 
@@ -53,6 +56,16 @@ export function workdaysInMonth(month: string): number {
   return workdays;
 }
 
+/** Capacity of one calendar date, shared by range entry and monthly totals. */
+export function workingHoursOnDate(
+  date: string,
+  calendar: WorkCalendar = {},
+): number {
+  const weekday = new Date(date + "T12:00:00Z").getUTCDay();
+  if (weekday === 0 || weekday === 6) return 0;
+  return HOURS_PER_WORKDAY * (1 - (calendar[date]?.fraction || 0));
+}
+
 /** Weekends never contribute hours; marked weekdays subtract full or half days. */
 export function calendarHoursInMonth(
   month: string,
@@ -63,10 +76,8 @@ export function calendarHoursInMonth(
   const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
   let hours = 0;
   for (let day = 1; day <= lastDay; day++) {
-    const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
-    if (weekday === 0 || weekday === 6) continue;
     const date = month + "-" + String(day).padStart(2, "0");
-    hours += HOURS_PER_WORKDAY * (1 - (calendar[date]?.fraction || 0));
+    hours += workingHoursOnDate(date, calendar);
   }
   return hours;
 }
@@ -85,10 +96,8 @@ export function personCalendarHoursInMonth(
     leaveHours = 0,
     trainingHours = 0;
   for (let day = 1; day <= lastDay; day++) {
-    const weekday = new Date(Date.UTC(year, monthIndex, day)).getUTCDay();
-    if (weekday === 0 || weekday === 6) continue;
     const date = month + "-" + String(day).padStart(2, "0");
-    const available = HOURS_PER_WORKDAY * (1 - (calendar[date]?.fraction || 0));
+    const available = workingHoursOnDate(date, calendar);
     baseHours += available;
     const entries = personalDayEntries(resourceId, date, personal);
     const leave = Math.min(

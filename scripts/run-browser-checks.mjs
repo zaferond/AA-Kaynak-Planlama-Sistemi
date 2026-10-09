@@ -23,6 +23,7 @@ import { checkHeadcountForecast } from "./browser-checks/headcount-forecast.mjs"
 import { checkRiskSaveConfirmation } from "./browser-checks/risk-save-confirmation.mjs";
 import { checkExcelXmlCharacters } from "./browser-checks/excel-xml-characters.mjs";
 import { checkRiskSystems } from "./browser-checks/risk-systems.mjs";
+import { checkActivityReport } from "./browser-checks/activity-report.mjs";
 import { checkResourceReports } from "./browser-checks/resource-reports.mjs";
 import { checkViewportScroll } from "./browser-checks/viewport-scroll.mjs";
 import { checkTransportRecovery } from "./browser-checks/transport-recovery.mjs";
@@ -60,6 +61,7 @@ try {
   await checkMilestoneOverlap(f);
   await checkTimelineLayers(f);
   await checkResourceReports(f);
+  await checkActivityReport(f);
   await checkViewportScroll(f);
   assert.deepEqual(f.errors, []);
   await f.report("passed");

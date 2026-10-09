@@ -1,8 +1,9 @@
 import type { Data, Resource } from "../../model";
 import type {
   addCalendarDates,
-  preparePersonalDayChange,
+  preparePersonalRangeChanges,
 } from "../calendar-commands";
+import type { PersonalCalendarRange } from "./calendar-ranges";
 
 export type WorkCalendarDialogProps = {
   open: boolean;
@@ -14,8 +15,9 @@ export type WorkCalendarDialogProps = {
   canEditPersonal: boolean;
   onSaved: (data: Data) => void;
   initialYear: number;
+  initialPersonalRange?: PersonalCalendarRange;
 };
 export type SharedCalendarForm = Parameters<typeof addCalendarDates>[1];
 export type PersonalCalendarForm = Parameters<
-  typeof preparePersonalDayChange
+  typeof preparePersonalRangeChanges
 >[2];

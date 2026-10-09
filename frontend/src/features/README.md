@@ -220,6 +220,8 @@ Takım sıralaması, her takımın seçili dönemdeki aylık pozitif açıkları
 
 İzin/eğitim listesi Çalışan & Kaynak sekmesinde kaynak tablosunun altındadır; bu sekmedeki dönem seçimi listeyi de filtreler. Sekme yetkileri değişmez. `resource-planning-reports.test.mjs` hesap/filtre/sıralamaları, `browser-checks/resource-reports.mjs` aylık gerçek değerleri, bağımsız seri seçimlerini, ilk 10 sınırını, dar/uzun dönem görünümünü ve raporun taşınmasını denetler.
 
+Kişisel takvim girişinde ayrılış/başlangıç dahil, dönüş tarihi hariçtir. `preparePersonalRangeChanges` en fazla 366 günlük aralığı mevcut günlük kayıt komutlarına dönüştürür; hafta sonları ve tam tatiller atlanır, yarım tatillerde günlük saat çalışılabilir süreyle sınırlandırılır. Önizleme çalışma günü ve toplam saati gösterir. Tek `writeBatch` ile günlerin revision ve yetki kontrolleri aynı transaction içinde yapılır; çakışmada kısmi kayıt oluşmaz. Eski günlük kayıtlar korunur. `calendar-commands.test.mjs` tarih aralığı, ay/yıl geçişi, eski kayıtlar, aylık hesap ve atomik kayıt senaryolarını; `browser-checks/calendar.mjs` aralık girişini, önizlemeyi ve aylık saat/yüzde güncellemesini sentetik verilerle doğrular.
+
 ## Liderlik kataloğu eşzamanlı kayıt kontrolü (Y4)
 
 `useDirectoryEditor` liderlik taslağı açıldığında `data.revisions["directory:shared"]` değerini alır ve kayıt/silme boyunca korur. Snapshot yenilenmesi açılış revision'ını değiştirmez. Sunucuda `applyLeaderChange` kontrolü, `Store.mutate` içindeki aynı transaction/kilit altında yapılır. `directoryCatalogChanged`, liderlik adları/yöneticileri ve takım katalog alanları değiştiğinde revision'ı bir kez artırır; proje/risk/tahsis yazımları artırmaz. Takım bazlı mevcut revision kontrolü ayrıca devam eder.
@@ -236,3 +238,14 @@ Proje ve planlanan dağılım tabloları bütün filtre sonuçlarını tek kayd�
 Takvimde sayısal kaynak editörünün odak katmanı yalnız `.cell input:focus` içeren hücrede yükseltilir. Aşama düğmelerine ve proje adındaki kontrollere uygulanmaz; yatay kaydırmada aşama seçimi/odağı sabit proje sütununun önüne çıkmaz. Bu sınır gerçek tarayıcı hit-test ile doğrulanır.
 
 Görünüm seçenekleri filtre bileşeninde tutulmaz: plan paneli gerçekleşen dağılım anahtarını, proje paneli detay ve haftalık anahtarlarını kendi özetinin altında gösterir. Ortak `.workspace-view-options` stili dar satırı boyutlandırır ve viewport panelinde küçülmeden görünür tutar. Durum App'te kalır; gerçekleşen dağılım anahtarı değişince tekil açılmış takım seçimleri önceki davranışla temizlenir. Haftalık açıklama etiketin başlık ipucunda korunur. Proje özeti başlığı “Filtrelenen Projeler”dir.
+
+
+## Takvim aralıklarının düzenlenmesi ve raporlanması
+
+Ortak takvim kayıtları dahil başlangıç/bitiş; kişisel izin/eğitim kayıtları dahil başlangıç/hariç dönüş ve nominal günlük saat metadata’sını mevcut JSON alanında saklar. Şema değişikliği veya günlük kayıt migration’ı yapılmaz. Sunucu metadata tarih sınırlarını, kaydın aralık içinde olmasını ve nominal saat üst sınırını doğrular. Eski kayıtlar aynı tür/açıklama ve uyumlu süreli ardışık çalışma günleri olarak birleştirilir; kişisel aralıklardaki hafta sonu/tam tatil boşlukları geçilir. Yeni girişler bitişik olsa da ayrı aralık olarak kalır.
+
+`calendar-ranges.ts` ortak ve kişisel listeleri tek satırlı gruplara dönüştürür. Düzenleme eski grubun günlük anahtarlarını kaldırıp yeni tarihleri oluşturur; başka bir kayıtla çakışma engellenir. Kişisel düzenleme açılış revision’larını korur; silme ve güncelleme günlük komutları tek transaction’da uygular. Ortak değişiklikler önce taslakta yapılır, ardından Takvimi Kaydet ile paylaşılır. Aylık hesaplama günlük verilerden devam eder.
+
+Çalışan & Kaynak altındaki izin/eğitim raporu `absence-range-report.ts` ile aynı gruplamayı kullanır. Tarihler tam kaynak aralığını, gün ve saatler seçili aylar ve tarihsel takım filtresini gösterir; kısmi filtre satırda belirtilir. Eğitim saatleri izin sonrası kalan çalışılabilir saatle sınırlanır. Yöneticiye görünen günlük metadata başka liderlikteki ayların tarihlerini açığa çıkarmaz; kaynağın sahibi kendi aralığının tamamını görür. Raporun mevcut admin kapsamındaki Düzenle/Sil işlemleri aralığın tamamını hedefler, yetkileri sunucu denetler.
+
+`calendar-commands.test.mjs` gruplama, eski kayıt uyumu, ay/yıl/takım filtreleri, metadata doğrulama, açılış revision’ı ve atomik hata senaryolarını kapsar. `browser-checks/calendar.mjs` tek satırlı ortak/kişisel aralıkların kalıcı düzenlenmesini ve silinmesini, çalışan raporundaki doğrudan aralık düzenleme/silmeyi sentetik ortamda kontrol eder.

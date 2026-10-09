@@ -8,6 +8,10 @@ import {
 } from "../../actual-units";
 import type { WorkCalendarDialogProps } from "./types";
 import { monthFormat } from "./format";
+import {
+  sharedCalendarRanges,
+  personalCalendarRanges,
+} from "./calendar-ranges";
 
 export function useWorkCalendarView({
   data,
@@ -21,16 +25,24 @@ export function useWorkCalendarView({
 }) {
   const entries = useMemo(
     () =>
-      Object.entries(calendar)
-        .filter(([date]) => date.startsWith(String(year) + "-"))
-        .sort(([a], [b]) => a.localeCompare(b)),
+      sharedCalendarRanges(calendar).filter((range) =>
+        range.keys.some((date) => date.startsWith(String(year) + "-")),
+      ),
     [calendar, year],
   );
-  const personalEntries = Object.entries(data.personCalendar || {})
-    .filter(
-      ([key]) => resource && key.startsWith(resource.id + "|" + year + "-"),
-    )
-    .sort(([a], [b]) => a.localeCompare(b));
+  const personalEntries = useMemo(
+    () =>
+      resource
+        ? personalCalendarRanges(
+            resource.id,
+            data.personCalendar || {},
+            calendar,
+          ).filter((range) =>
+            range.keys.some((key) => key.split("|")[1].startsWith(year + "-")),
+          )
+        : [],
+    [data.personCalendar, resource?.id, calendar, year],
+  );
   const monthRows = useMemo(
     () =>
       Array.from({ length: 12 }, (_, index) => {

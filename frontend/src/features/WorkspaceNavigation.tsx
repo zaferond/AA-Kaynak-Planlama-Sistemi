@@ -58,6 +58,12 @@ export default function WorkspaceNavigation({
             {TAB_LABELS.actual}
           </TabsTrigger>
         )}
+        {(isAdmin || isManager || user?.role === "normal") && (
+          <TabsTrigger value="activity">
+            <CalendarDays />
+            {TAB_LABELS.activity}
+          </TabsTrigger>
+        )}
         {(isAdmin || isManager) && (
           <TabsTrigger value="plan">
             <CalendarDays />
@@ -101,7 +107,7 @@ export default function WorkspaceNavigation({
           </>
         )}
       </TabsList>
-      {!["access", "teams", "critical", "risk"].includes(tab) && (
+      {!["access", "teams", "critical", "risk", "activity"].includes(tab) && (
         <div className="workspace-nav-actions">
           {["plan", "actual", "projects", "overview"].includes(tab) && (
             <label className="densitycontrol">

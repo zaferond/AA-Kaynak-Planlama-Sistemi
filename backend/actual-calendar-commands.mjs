@@ -9,6 +9,10 @@ import {
   createPersonMonthHoursIndex,
 } from "../shared/actual-units.ts";
 import { z } from "zod";
+import {
+  calendarDaySchema,
+  rangeContainsDate,
+} from "../shared/calendar-rules.ts";
 import { fail } from "./auth.mjs";
 import {
   currentPlanningMonth,
@@ -29,15 +33,7 @@ const workedHoursSchema = z
   .finite()
   .min(0)
   .max(MAX_RECORDED_MONTHLY_HOURS);
-const calendarSchema = z.record(
-  z
-    .object({
-      type: z.enum(["official", "religious", "company"]),
-      label: z.string().trim().min(1).max(100),
-      fraction: z.union([z.literal(0.5), z.literal(1)]),
-    })
-    .strict(),
-);
+const calendarSchema = z.record(calendarDaySchema);
 const effectiveHours = (d, resourceId, month) =>
   effectivePersonHoursInMonth(
     month,
@@ -144,6 +140,9 @@ export function stageCalendarChange(
     fail(400, "Çalışma takvimi işlemi geçersiz.");
   const previous = d.workCalendar || {};
   const next = calendarSchema.parse(value);
+  for (const [date, entry] of Object.entries(next))
+    if (!validPlanningDate(date) || !rangeContainsDate(entry.range, date))
+      fail(400, "Çalışma takviminde geçersiz tarih/aralık var.");
   const changedMonths = new Set(
     [...new Set([...Object.keys(previous), ...Object.keys(next)])]
       .filter((date) => previous[date]?.fraction !== next[date]?.fraction)
@@ -181,6 +180,11 @@ export function stagePersonDayChange(
   if (operation) delete d.personCalendar[id];
   else {
     const entry = personDaySchema.parse(value);
+    if (
+      !rangeContainsDate(entry.range, date, true) ||
+      (entry.range && entry.hours > entry.range.hours)
+    )
+      fail(400, "Kişisel takvim tarihi aralıkla eşleşmiyor.");
     if (type !== undefined && type !== entry.type)
       fail(400, "Takvim kayıt türü kimliğiyle eşleşmiyor.");
     if (d.personCalendar[id] && d.personCalendar[id].type !== entry.type)

@@ -52,7 +52,10 @@ export default function MonthlyComparison({
       <div className="resource-chart-legend">
         {series.map((item) => (
           <span key={item.name}>
-            <i style={{ "--series-color": item.color } as CSSProperties} />
+            <i
+              className={item.dashed ? "dashed" : undefined}
+              style={{ "--series-color": item.color } as CSSProperties}
+            />
             {item.name}
           </span>
         ))}
@@ -106,7 +109,7 @@ export default function MonthlyComparison({
                 x2={right}
                 y1={y(reference)}
                 y2={y(reference)}
-                stroke="#92754a"
+                stroke="var(--report-forecast-color, #b45309)"
                 strokeDasharray="6 5"
               />
               <text
@@ -138,7 +141,7 @@ export default function MonthlyComparison({
                 d={path}
                 fill="none"
                 stroke={item.color}
-                strokeWidth={3}
+                strokeWidth={3.5}
                 strokeDasharray={item.dashed ? "7 5" : undefined}
               />
             );

@@ -10,8 +10,8 @@ import MonthlyComparison from "./MonthlyComparison";
 import ProjectAllocationChart from "./ProjectAllocationChart";
 import PlanningEffectivenessChart from "./PlanningEffectivenessChart";
 
-const actualColor = "var(--brand-primary, #405341)";
-const demandColor = "#92754a";
+const actualColor = "var(--report-current-color, #087f6a)";
+const demandColor = "var(--report-planned-color, #1d4ed8)";
 
 export default function ResourcePlanningCharts({
   data,
@@ -64,6 +64,7 @@ export default function ResourcePlanningCharts({
             {
               name: "Dağıtılan Kaynak",
               color: demandColor,
+              dashed: true,
               values: comparison.months.map((point) => point.planned),
             },
           ]}

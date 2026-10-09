@@ -125,7 +125,7 @@ export default function MonthlyShortageTrend({
                     width={barWidth}
                     height={Math.max(0, baseline - y(point.total))}
                     rx={3}
-                    fill="var(--report-shortage-color, #527ca9)"
+                    fill="var(--report-shortage-color, #c2410c)"
                   >
                     <title>
                       {label} · Eksik kaynak: {fmt(point.total)} kişi eşdeğeri ·

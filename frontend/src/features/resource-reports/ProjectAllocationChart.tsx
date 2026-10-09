@@ -49,7 +49,7 @@ export default function ProjectAllocationChart({
           {
             key: "plannedTotal" as const,
             name: "Dağıtılan Kaynak",
-            color: "#92754a",
+            color: "var(--report-planned-color, #1d4ed8)",
           },
         ]
       : []),
@@ -58,7 +58,7 @@ export default function ProjectAllocationChart({
           {
             key: "actualTotal" as const,
             name: "Gerçekleşen Kaynak",
-            color: "var(--brand-primary, #405341)",
+            color: "var(--report-current-color, #087f6a)",
           },
         ]
       : []),
@@ -102,7 +102,7 @@ export default function ProjectAllocationChart({
             checked={showPlanned}
             onCheckedChange={setShowPlanned}
           />{" "}
-          <i style={{ background: "#92754a" }} />
+          <i style={{ background: "var(--report-planned-color, #1d4ed8)" }} />
           Dağıtılan Kaynak
         </label>
         <label>
@@ -111,7 +111,7 @@ export default function ProjectAllocationChart({
             checked={showActual}
             onCheckedChange={setShowActual}
           />{" "}
-          <i style={{ background: "var(--brand-primary, #405341)" }} />
+          <i style={{ background: "var(--report-current-color, #087f6a)" }} />
           Gerçekleşen Kaynak
         </label>
         <small>Birim: dönem toplamı (kişi-ay)</small>

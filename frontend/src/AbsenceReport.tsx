@@ -1,6 +1,12 @@
 import { monthLabel } from "./format";
 import type { Data } from "./model";
-import { actualVersionAt } from "./model";
+import { useMemo, useState } from "react";
+import { Pencil, Trash2 } from "lucide-react";
+import { absenceRangeRows } from "./features/work-calendar/absence-range-report";
+import type { PersonalCalendarRange } from "./features/work-calendar/calendar-ranges";
+import { preparePersonalRangeRemoval } from "./features/calendar-commands";
+import { writeBatch } from "./storage";
+import WorkCalendarDialog from "./WorkCalendarDialog";
 import {
   Table,
   TableHeader,
@@ -19,32 +25,46 @@ export default function AbsenceReport({
   data,
   teamIds,
   months,
+  canEdit = false,
+  onSaved,
 }: {
   data: Data;
   teamIds: string[];
   months: string[];
+  canEdit?: boolean;
+  onSaved?: (data: Data) => void;
 }) {
-  const ids = new Set(teamIds),
-    monthSet = new Set(months);
-  const rows = Object.entries(data.personCalendar || {})
-    .flatMap(([key, item]) => {
-      const [resourceId, date] = key.split("|"),
-        resource = data.resources.find(
-          (resource) => resource.id === resourceId,
-        );
-      if (!resource || !monthSet.has(date.slice(0, 7))) return [];
-      const team = data.teams.find(
-        (team) => team.id === actualVersionAt(resource, date.slice(0, 7))?.team,
+  const rows = useMemo(
+    () => absenceRangeRows(data, teamIds, months),
+    [data, teamIds, months],
+  );
+  const total = rows.reduce((sum, row) => sum + row.hours, 0);
+  const [editing, setEditing] = useState<{
+    resourceId: string;
+    range: PersonalCalendarRange;
+  } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const editable = canEdit && !!onSaved;
+  const selectedResource =
+    data.resources.find((resource) => resource.id === editing?.resourceId) ||
+    null;
+  async function removeRange(row: (typeof rows)[number]) {
+    if (!editable || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      onSaved!(
+        await writeBatch(
+          preparePersonalRangeRemoval(data, row.resource.id, row.range),
+        ),
       );
-      if (!team || !ids.has(team.id)) return [];
-      return [{ key, date, item, resource, team }];
-    })
-    .sort(
-      (a, b) =>
-        a.date.localeCompare(b.date) ||
-        a.resource.name.localeCompare(b.resource.name, "tr"),
-    );
-  const total = rows.reduce((sum, row) => sum + row.item.hours, 0);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <section className="panel absence-report">
       <div className="panelhead">
@@ -52,7 +72,8 @@ export default function AbsenceReport({
           <h2>Çalışan İzin ve Eğitim Kayıtları</h2>
           <p>
             İzin aylık çalışma saatinden düşer; eğitim dağıtılan kaynak
-            yüzdesine eklenir.
+            yüzdesine eklenir. Aralıklar tek satırda gösterilir; gün ve saat
+            toplamları seçili filtrelere göre hesaplanır.
           </p>
           <p>
             {months.length
@@ -69,37 +90,102 @@ export default function AbsenceReport({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Tarih</TableHead>
+              <TableHead>Ayrılış / Başlangıç</TableHead>
+              <TableHead>Dönüş (Hariç)</TableHead>
               <TableHead>Çalışan</TableHead>
               <TableHead>Takım</TableHead>
               <TableHead>Tür</TableHead>
-              <TableHead>Saat</TableHead>
+              <TableHead>Çalışma Günü</TableHead>
+              <TableHead>Toplam Saat</TableHead>
               <TableHead>Açıklama</TableHead>
+              {editable && <TableHead>İşlemler</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
               <TableRow key={row.key}>
                 <TableCell>
-                  {dateFormat.format(new Date(row.date + "T12:00:00"))}
+                  {dateFormat.format(new Date(row.range.from + "T12:00:00"))}
+                </TableCell>
+                <TableCell>
+                  {dateFormat.format(new Date(row.range.to + "T12:00:00"))}
+                  {row.partial && (
+                    <small className="absence-filtered-part">
+                      Filtredeki günler hesaplandı
+                    </small>
+                  )}
                 </TableCell>
                 <TableCell>
                   <strong>{row.resource.name}</strong>
                 </TableCell>
-                <TableCell>{row.team.name}</TableCell>
+                <TableCell>{row.teamNames.join(", ")}</TableCell>
                 <TableCell>
-                  <span className={"absence-type " + row.item.type}>
-                    {row.item.type === "leave" ? "İzin" : "Eğitim"}
+                  <span className={"absence-type " + row.range.entry.type}>
+                    {row.range.entry.type === "leave" ? "İzin" : "Eğitim"}
                   </span>
                 </TableCell>
-                <TableCell>{row.item.hours.toLocaleString("tr-TR")}</TableCell>
-                <TableCell>{row.item.label || "—"}</TableCell>
+                <TableCell>{row.days}</TableCell>
+                <TableCell>{row.hours.toLocaleString("tr-TR")}</TableCell>
+                <TableCell>{row.range.entry.label || "—"}</TableCell>
+                {editable && (
+                  <TableCell>
+                    <div className="absence-range-actions">
+                      <button
+                        type="button"
+                        className="button"
+                        disabled={busy}
+                        onClick={() => {
+                          setError("");
+                          setEditing({
+                            resourceId: row.resource.id,
+                            range: row.range,
+                          });
+                        }}
+                        title="Aralığın tamamını düzenle"
+                      >
+                        <Pencil size={13} />
+                        Düzenle
+                      </button>
+                      <button
+                        type="button"
+                        className="button danger"
+                        disabled={busy}
+                        onClick={() => void removeRange(row)}
+                        title="Aralığın tamamını sil"
+                      >
+                        <Trash2 size={13} />
+                        Sil
+                      </button>
+                    </div>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       ) : (
         <p className="emptymsg">Seçili dönemde izin veya eğitim kaydı yok.</p>
+      )}
+      {error && (
+        <p role="alert" className="work-calendar-error">
+          {error}
+        </p>
+      )}
+      {editing && selectedResource && (
+        <WorkCalendarDialog
+          open={true}
+          onOpenChange={(open) => {
+            if (!open) setEditing(null);
+          }}
+          data={data}
+          mode="personal"
+          resource={selectedResource}
+          canEdit={false}
+          canEditPersonal={editable}
+          onSaved={(next) => onSaved?.(next)}
+          initialYear={Number(editing.range.from.slice(0, 4))}
+          initialPersonalRange={editing.range}
+        />
       )}
     </section>
   );

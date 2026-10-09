@@ -1,7 +1,12 @@
+import { numericRecordSchema } from "./numeric-record-schema.ts";
 import { riskCategories, riskStatuses, riskStrategies } from "./risk-policy.ts";
 import { validPlanningMonth, validPlanningDate } from "./planning-dates.ts";
 import { parseAllocationKey } from "./allocation-key.ts";
-import { personDaySchema } from "./calendar-rules.ts";
+import {
+  personDaySchema,
+  calendarDaySchema,
+  rangeContainsDate,
+} from "./calendar-rules.ts";
 export { personDaySchema } from "./calendar-rules.ts";
 const bad = (message: string) => Object.assign(Error(message), { status: 400 });
 import { z } from "zod";
@@ -210,23 +215,15 @@ const schema = z.object({
     .array(riskSystemSchema)
     .max(5000)
     .default(() => initialRiskSystems.map((item) => ({ ...item }))),
-  allocations: z.record(z.number().min(0).max(10000)),
-  actualAllocations: z.record(z.number().min(0).max(100)).optional(),
-  actualWorkedHours: z
-    .record(z.number().min(0).max(MAX_RECORDED_MONTHLY_HOURS))
-    .optional(),
-  actualPercentEntries: z.record(z.number().min(0).max(10000)).optional(),
-  workCalendar: z
-    .record(
-      z.object({
-        type: z.enum(["official", "religious", "company"]),
-        label: z.string().trim().min(1).max(100),
-        fraction: z.union([z.literal(0.5), z.literal(1)]),
-      }),
-    )
-    .default({}),
+  allocations: numericRecordSchema({ max: 10000 }),
+  actualAllocations: numericRecordSchema({ max: 100 }).optional(),
+  actualWorkedHours: numericRecordSchema({
+    max: MAX_RECORDED_MONTHLY_HOURS,
+  }).optional(),
+  actualPercentEntries: numericRecordSchema({ max: 10000 }).optional(),
+  workCalendar: z.record(calendarDaySchema.strip()).default({}),
   personCalendar: z.record(personDaySchema).default({}),
-  revisions: z.record(z.number().int().min(0)),
+  revisions: numericRecordSchema({ integer: true }),
   leaders: z.array(z.string()).optional(),
   leaderManagers: leaderManagersSchema.default({}),
   catalogVersion: z.number().optional(),
@@ -264,7 +261,10 @@ export function validate(
   if (Object.keys(d.workCalendar || {}).length > 5000)
     throw bad("Çalışma takviminde en fazla 5000 tarih bulunabilir.");
   for (const date of Object.keys(d.workCalendar || {}))
-    if (!validPlanningDate(date))
+    if (
+      !validPlanningDate(date) ||
+      !rangeContainsDate(d.workCalendar![date].range, date)
+    )
       throw bad("Çalışma takviminde geçersiz tarih var.");
   if (Object.keys(d.personCalendar || {}).length > 100000)
     throw bad("Kişisel takvimde çok fazla kayıt var.");
@@ -322,6 +322,8 @@ export function validate(
       extra.length ||
       !resourcesById.has(resourceId) ||
       !validPlanningDate(date) ||
+      !rangeContainsDate(entry.range, date, true) ||
+      (entry.range && entry.hours > entry.range.hours) ||
       (type !== undefined && type !== entry.type)
     )
       throw bad("Geçersiz kişisel takvim kaydı.");

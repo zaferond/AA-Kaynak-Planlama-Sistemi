@@ -7,6 +7,7 @@ export const TAB_LABELS = {
   resources: "Çalışan & Kaynak",
   teams: "Liderlik ve Takımlar",
   actual: "AA Gerçekleşen Kaynak Dağılımı",
+  activity: "Aylık Aktivite Raporu",
   critical: "Kritik Proje Konuları",
   overview: "Raporlar",
   access: "Yetki Kontrol Ekranı",

@@ -43,7 +43,7 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
           <DialogDescription>
             {mode === "shared"
               ? "Resmî tatil, bayram ve Otokar çalışma dışı günlerini burada tanımlayın. Kaydedilen tarihler tüm çalışanların aylık saat hesabına uygulanır."
-              : "Seçili çalışanın izin ve eğitim günlerini tam gün veya saatlik olarak girin. Ortak tatiller bu hesapta otomatik dikkate alınır."}
+              : "Ayrılış/başlangıç ve dönüş tarihlerini seçerek izin veya eğitim aralığını girin. Dönüş günü hesaba katılmaz; çalışma takvimi otomatik uygulanır."}
           </DialogDescription>
         </DialogHeader>
         <div className="work-calendar-body">
@@ -72,11 +72,16 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
             <PersonalCalendarSection
               form={editor.personalForm}
               update={editor.updatePersonal}
+              setPersonalStart={editor.setPersonalStart}
+              preview={editor.personalPreview}
               entries={personalEntries}
               canEdit={canEditPersonal}
               busy={busy}
               savePersonal={editor.savePersonal}
               removePersonal={editor.removePersonal}
+              editing={!!editor.editingPersonal}
+              editPersonal={editor.editPersonal}
+              cancelEdit={editor.cancelPersonalEdit}
             />
           )}
           {mode === "shared" && (
@@ -89,6 +94,9 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
               setSharedStart={editor.setSharedStart}
               addDates={editor.addDates}
               removeDate={editor.removeDate}
+              editing={!!editor.editingShared}
+              editShared={editor.editShared}
+              cancelEdit={editor.cancelSharedEdit}
             />
           )}
           <CalendarHoursSummary rows={monthRows} />
@@ -111,7 +119,7 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
             <button
               type="button"
               className="button primary"
-              disabled={busy || !dirty}
+              disabled={busy || !dirty || !!editor.editingShared}
               onClick={() => void save()}
             >
               {busy ? "Kaydediliyor…" : "Takvimi Kaydet"}

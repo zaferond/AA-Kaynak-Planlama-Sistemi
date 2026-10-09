@@ -39,7 +39,7 @@
   padding-top: 4px;
 }
 .project-info-report {
-  background: #f7f9fc;
+  background: #eef2ef;
 }
 .app.tab-critical > main {
   padding-inline: 8px;
@@ -59,15 +59,15 @@
 }
 .project-info-report .panelhead h2 {
   margin: 0;
-  color: #183d5d;
-  font-size: 17px;
+  color: #243b2d;
+  font-size: 18px;
   line-height: 1.3;
 }
 .project-info-report .panelhead p {
-  margin: 4px 0 0;
-  color: #667e92;
+  margin: 5px 0 0;
+  color: #52665b;
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 .project-info-export {
   display: inline-flex;
@@ -81,15 +81,15 @@
 }
 .project-info-groups {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   width: 100%;
-  padding: 14px 0 18px;
+  padding: 16px 0 18px;
 }
 .project-info-group {
-  border: 1px solid #d8e3ed;
+  border: 1px solid #b9c9bd;
   border-radius: 9px;
   background: #fff;
-  box-shadow: 0 2px 8px #183b5910;
+  box-shadow: 0 3px 12px #233c2d0b;
   overflow: hidden;
 }
 .project-info-group > header {
@@ -97,9 +97,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 14px 18px;
-  border-bottom: 1px solid #dce6ef;
-  background: #edf4fa;
+  padding: 16px 20px;
+  border-bottom: 1px solid #29372d;
+  background: var(--brand-dark, #29372d);
 }
 .project-info-project-title {
   display: flex;
@@ -113,24 +113,24 @@
 .project-info-project-mark {
   flex: none;
   width: 5px;
-  height: 34px;
+  height: 38px;
   border-radius: 3px;
-  background: #487fa8;
+  background: #a8c498;
 }
 .project-info-group h3 {
   margin: 0;
-  color: #173f66;
-  font-size: 15px;
+  color: #fff;
+  font-size: 16px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .project-info-project-title small {
   display: block;
-  margin-top: 2px;
-  color: #607a91;
-  font-size: 10px;
-  line-height: 1.3;
+  margin-top: 4px;
+  color: #dbe7d6;
+  font-size: 11px;
+  line-height: 1.4;
 }
 .project-info-add,
 .project-info-edit {
@@ -166,17 +166,22 @@
   cursor: default;
 }
 .project-info-entry {
-  padding: 15px 18px 18px;
+  padding: 18px 20px 20px;
 }
 .project-info-entry + .project-info-entry {
-  border-top: 1px solid #e7edf3;
+  border-top: 2px solid #cbd7ce;
 }
 .project-info-entry-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 11px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid #d5dfd2;
+  border-left: 3px solid #617052;
+  border-radius: 5px;
+  background: #edf1e8;
 }
 .project-info-entry-title {
   display: flex;
@@ -188,57 +193,72 @@
   display: grid;
   place-items: center;
   flex: none;
-  width: 25px;
-  height: 25px;
+  width: 28px;
+  height: 28px;
   border-radius: 5px;
-  background: #e8f1f8;
-  color: #3b6c94;
-  font-size: 10px;
+  background: var(--brand-primary, #405341);
+  color: #fff;
+  font-size: 11px;
   font-weight: 700;
 }
 .project-info-entry h4 {
   min-width: 0;
   margin: 0;
-  color: #2b526f;
-  font-size: 13px;
+  color: #243b2d;
+  font-size: 14px;
   font-weight: 700;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
 .project-info-entry-count {
   flex: none;
-  color: #7890a3;
+  padding: 3px 7px;
+  border: 1px solid #c7d5c3;
+  border-radius: 4px;
+  background: #fff;
+  color: #405341;
   font-size: 10px;
   white-space: nowrap;
 }
 .project-info-entry ul {
   display: grid;
-  gap: 8px;
+  gap: 0;
   margin: 0;
   padding: 0;
+  border: 1px solid #ccd8d0;
+  border-radius: 7px;
+  overflow: hidden;
   list-style: none;
 }
 .project-info-entry li {
   position: relative;
   min-width: 0;
-  padding: 11px 12px 11px 27px;
-  border: 1px solid #e1e9f0;
-  border-radius: 6px;
-  background: #fbfdff;
-  color: #263f55;
+  padding: 13px 14px 13px 31px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-bottom: 1px solid #d7e0dc;
+  border-radius: 0;
+  background: #fff;
+  color: #22332c;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   overflow-wrap: anywhere;
+}
+.project-info-entry li:nth-child(even):not(.completed) {
+  background: #f3f6f4;
+}
+.project-info-entry li:last-child {
+  border-bottom: 0;
 }
 .project-info-entry li::before {
   content: "";
   position: absolute;
-  top: 19px;
+  top: 20px;
   left: 13px;
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: #5d91b8;
+  background: #405e4d;
 }
 .project-info-topic {
   display: flex;
@@ -251,7 +271,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
+  gap: 6px;
   min-width: 0;
   flex: 1;
 }
@@ -263,21 +283,25 @@
   overflow-wrap: anywhere;
 }
 .project-info-entry li.completed {
-  border-color: #bedbc8;
-  background: #f4fbf6;
+  border-left-color: #299367;
+  background: #eaf5ee;
 }
 .project-info-entry li.completed::before {
-  background: #439267;
+  background: #16824f;
 }
 .project-info-entry li.completed .project-info-topic-content > span {
-  color: #258052;
+  color: #17643b;
   text-decoration: line-through;
-  text-decoration-color: #579e75;
+  text-decoration-color: #388260;
   text-decoration-thickness: 1px;
 }
 .project-info-complete-label {
   display: inline-block;
-  color: #267851;
+  padding: 2px 7px;
+  border: 1px solid #b5d7c1;
+  border-radius: 4px;
+  background: #d9efe1;
+  color: #17643b;
   font-size: 10px;
   font-style: normal;
   font-weight: 700;
@@ -321,13 +345,15 @@
 }
 .project-info-topic-content small {
   display: inline-block;
-  padding: 2px 6px;
+  padding: 3px 7px;
+  border: 1px solid #d3ddd7;
   border-radius: 4px;
-  background: #edf3f8;
-  color: #5c748a;
+  background: #e9efea;
+  color: #3b5042;
   font-size: 10px;
+  font-weight: 600;
   line-height: 1.4;
-  white-space: nowrap;
+  white-space: normal;
   font-variant-numeric: tabular-nums;
 }
 .project-info-topic-actions {
@@ -335,6 +361,8 @@
   gap: 6px;
   flex: none;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .project-info-topic-actions button {
   min-height: 26px;
@@ -481,11 +509,11 @@
 }
 .headcount-key {
   display: inline-block;
-  width: 22px;
-  border-top: 3px solid #1766bd;
+  width: 24px;
+  border-top: 3.5px solid var(--report-current-color, #087f6a);
 }
 .headcount-key.projected {
-  border-top: 3px dashed #bf772f;
+  border-top: 3.5px dashed var(--report-forecast-color, #b45309);
 }
 .headcount-trend .chartnote {
   margin: 0;

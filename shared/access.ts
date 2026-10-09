@@ -116,6 +116,37 @@ export function scopeData(d: Data, u: Principal): Data {
   });
   for (const key of riskKeys) revisions[key] = d.revisions[key];
 
+  const personCalendar = filterOwnRecords(d.personCalendar, canSeePersonDay);
+  // A transferred employee's range must not reveal dates from another manager's months.
+  if (u.role === "manager")
+    for (const [key, entry] of Object.entries(personCalendar)) {
+      if (!entry.range) continue;
+      const resourceId = key.split("|")[0];
+      const from = entry.range.from;
+      const last = new Date(
+        Date.parse(entry.range.to + "T12:00:00Z") - 86400000,
+      ).toISOString();
+      const firstMonth =
+        Number(from.slice(0, 4)) * 12 + Number(from.slice(5, 7)) - 1;
+      const lastMonth =
+        Number(last.slice(0, 4)) * 12 + Number(last.slice(5, 7)) - 1;
+      let visible = true;
+      for (let index = firstMonth; index <= lastMonth; index++) {
+        const month =
+          Math.floor(index / 12) +
+          "-" +
+          String((index % 12) + 1).padStart(2, "0");
+        if (!canSeeResourceMonth(resourceId, month)) {
+          visible = false;
+          break;
+        }
+      }
+      if (!visible) {
+        const { range, ...day } = entry;
+        personCalendar[key] = day;
+      }
+    }
+
   return {
     ...d,
     users: undefined,
@@ -153,7 +184,7 @@ export function scopeData(d: Data, u: Principal): Data {
     actualAllocations: actualEntries(d.actualAllocations, "actual"),
     actualWorkedHours: actualEntries(d.actualWorkedHours, "workedHours"),
     actualPercentEntries: actualEntries(d.actualPercentEntries, "actual"),
-    personCalendar: filterOwnRecords(d.personCalendar, canSeePersonDay),
+    personCalendar,
     actualTeamTotals: actualTeamTotalIndex(d, ids, assignments),
     revisions,
     risks: d.risks || [],
