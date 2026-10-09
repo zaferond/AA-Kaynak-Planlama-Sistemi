@@ -1,5 +1,17 @@
 # CI kanıt arşivi
 
+## 9 Ekim 2026 — Toplu veri komutları
+
+Test edilen kod **`056590ed43a214cfad5c50e44ae4354cf85b748c`**. [Modül ayrımı, korunan sözleşmeler ve yerel 61 test / 10 tarayıcı kontrolü](MIMARI-TOPLU-VERI-MODUL-AYRIMI-2026-10-09.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı:** Ubuntu 574/574, Windows 224/224, Chromium 141; biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği | [37907125530](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37907125530) |
+
+[Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-056590e-receipt.json). Fail/skipped/cancelled 0; Windows ile genel süit örtüşür. Yeni regresyon üç toplu komutta normal/manager retlerini; final settings/generation SQL yazısı gerçekten uygulandıktan sonra sentetik hatada tam veri/audit/generation/hesap rollback'ini; aynı girdilerle başarılı tekrar ve yeniden açılışı sınar. Sıfırlama yalnız planlanan dağılımı temizler; import tek yeni kaynak ve boş takımın liderlik eşleşmesini atomik kaydeder, tekrarları atlar; restore backup counter'larını kullanmaz, isteğe bağlı arşivi kaldırır ve eski taslakları reddeder.
+
+Native MSSQL bu kaynak için yeniden çalıştırılmadı; önceki native koşu bu commit'in kanıtı değildir. Backend Orta bağımlılık uyarısı, N3 snapshot/global lock, N6 canlı geçiş/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü devam eder. Ham loglar Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i üretim kodunu değiştirmez ve yeni tam CI başarısı iddiası değildir.
+
 ## 9 Ekim 2026 — Proje ve kaynak komutları
 
 Test edilen kod **`736ba2cddf7871b5d59a6aa3a88e827a0d53afec`**. [Modül ayrımı, korunan sözleşmeler ve yerel 45 test / 9 tarayıcı kontrolü](MIMARI-PROJE-KAYNAK-MODUL-AYRIMI-2026-10-09.md).

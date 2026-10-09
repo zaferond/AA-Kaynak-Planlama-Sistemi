@@ -52,4 +52,10 @@ Git archive'dan yeni geçici kopya oluşturuldu; gerçek `.env`, DB, kullanıcı
 - Bu kaynak için yeni Native MSSQL koşusu yapılmadı. SQL.js late fault/rollback kanıtı native kurum yedeği veya gerçek yük kabulü değildir; önceki native sonucu yeni commit'in kanıtı değildir.
 - Gerçek hesap/DB/ayar okunmadı; servis yeniden başlatılmadı. Disk manifesti çalışan backend'in yeni kodu yüklediğini kanıtlamaz. Önceden farklı yerel milestone tarih testi korunur.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`056590ed43a214cfad5c50e44ae4354cf85b748c`**. [Kalite koşusu 37907125530](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37907125530) başarılı: **Ubuntu 574/574**, **Windows 224/224**, **Chromium 141 kontrol**. Fail/skipped/cancelled 0; Windows ile genel süit örtüşür ve toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği mevcut backend Orta uyarısını kapatmaz.
+
+[Güvenli metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-056590e-receipt.json). Ham loglar veya bağlantı bilgileri Git'e eklenmez. Kanıt/dokümantasyon commit'i üretim kodunu değiştirmez; ayrı tam CI koşusu iddiası değildir.
+
+Uygulama klasörüne aktarım kontrolü önceki manifest ve dosya hash'lerini, yerel değişikliklerin korunmasını ve doğrulanmış geçici derlemeyle **393 kaynak / 409 site çıktısı / 7 güncel çıktı** eşitliğini denetler. Mevcut site çıktıları aynı olduğundan yeniden yazılmaz veya silinmez. Seçilen dosyalar geri alınabilir yedekle aktarılır, manifest en son yazılır. Yedek konumu: `.deployment-backups/2026-10-09-architecture-bulk-data-final`. Bu işlem servis yeniden başlatması veya çalışan veritabanına işlem içermez.
