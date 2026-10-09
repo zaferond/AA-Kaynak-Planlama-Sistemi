@@ -187,12 +187,33 @@ test("legacy double validation is labeled callback, while invalid production opt
   assert.equal(report.commandMode, "callback");
   assert.equal(report.validationMode, "double");
   assert.equal(report.results[0].observations[0].generalDraftCopies, 1);
+  const fullOutput = path.join(dir, "full-copy.json");
+  await execute(
+    process.execPath,
+    [
+      script,
+      "--sizes=2",
+      "--samples=1",
+      "--resources=2",
+      "--calendar-days=0",
+      "--response=delta",
+      "--snapshot-copy=full",
+      `--output=${fullOutput}`,
+    ],
+    options,
+  );
+  const full = JSON.parse(await fs.readFile(fullOutput, "utf8"));
+  assert.equal(full.commandMode, "production");
+  assert.equal(full.results[0].observations[0].planningDraftCopies, 0);
+  assert.equal(full.results[0].observations[0].generalDraftCopies, 1);
+  assert.equal(full.results[0].medians.domainMs, null);
   assert.equal(
     await fs.readFile(sentinel, "utf8"),
     "synthetic sentinel, not a database",
   );
   assert.deepEqual((await fs.readdir(dir)).sort(), [
     ".env",
+    "full-copy.json",
     "report.json",
     "untouched.sqlite",
   ]);

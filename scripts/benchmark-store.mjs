@@ -124,7 +124,7 @@ function instrument(store) {
           if (current) {
             current.snapshotCopyMs += performance.now() - start;
             current[
-              args[1]?.planningOnly
+              args[1]?.planningOnly && snapshotCopy === "numeric"
                 ? "planningDraftCopies"
                 : "generalDraftCopies"
             ]++;
@@ -379,7 +379,9 @@ for (const size of sizes) {
       );
       observation.mutateMs = performance.now() - start;
       const planning =
-        commandMode === "production" && operation === "allocation";
+        commandMode === "production" &&
+        operation === "allocation" &&
+        snapshotCopy === "numeric";
       assert.equal(observation.planningDraftCopies, planning ? 1 : 0);
       assert.equal(observation.generalDraftCopies, planning ? 0 : 1);
       const viewStart = performance.now();

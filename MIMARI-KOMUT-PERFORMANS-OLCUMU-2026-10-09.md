@@ -2,7 +2,7 @@
 
 ## Sonuç ve kapsam
 
-Başlangıç: temiz `main == origin/main`, `fda36edd96ff357aa56e4c74062122856ac1205c`. 7 Ekim mimari/güvenlik/performance raporundaki **N3 kısmen giderildi** durumunu güncel Store, komut, response, okuyucu ve writer çağrı zinciri üzerinden yeniden kontrol ettim. Bu adım ölçüm aracını düzeltti; uygulamanın iş kurallarını veya doğrulama kapsamını değiştirmedi. Yeni bir uygulama hızlandırması ya da N3'ün kapandığı iddiası değildir.
+Başlangıç: temiz `main == origin/main`, `fda36edd96ff357aa56e4c74062122856ac1205c`. 7 Ekim mimari/güvenlik/performans raporundaki **N3 kısmen giderildi** durumunu güncel Store, komut, response, okuyucu ve writer çağrı zinciri üzerinden yeniden kontrol ettim. Bu adım ölçüm aracını düzeltti; uygulamanın iş kurallarını veya doğrulama kapsamını değiştirmedi. Yeni bir uygulama hızlandırması ya da N3'ün kapandığı iddiası değildir.
 
 Gerçek hesaplar, `.env`, çalışan veritabanı ve servis kullanılmadı. Ölçümler geçici dizinde oluşturulup kaldırılan SQL.js veritabanlarında, sentetik admin/çalışan/izin/dağıtım verileriyle yapıldı. Yeni kod yalnız `scripts`, `tests` ve CI kalite kapısındadır; backend/frontend/shared uygulama kodu aynı kaldı.
 
@@ -28,10 +28,10 @@ Her mod için 7 örnek, öncesinde aynı zincirde warm-up. İki koşu sırayla y
 
 | Planlanan hücre | Komut | Mutasyon/yanıt medyanı | Snapshot okuma medyanı | Draft kopyalama medyanı | Örnek p95 |
 |---|---|---:|---:|---:|---:|
-| 1.000 | Eski callback | 91,04 ms | 25,07 ms | 5,50 ms | 150,76 ms |
-| 1.000 | Mevcut production | 87,71 ms | 24,99 ms | 2,35 ms | 109,59 ms |
-| 10.000 | Eski callback | 122,50 ms | 39,69 ms | 8,86 ms | 137,51 ms |
-| 10.000 | Mevcut production | 113,41 ms | 39,05 ms | 5,22 ms | 130,07 ms |
+| 1.000 | Eski callback | 90,37 ms | 25,43 ms | 5,41 ms | 105,38 ms |
+| 1.000 | Mevcut production | 86,59 ms | 26,02 ms | 2,23 ms | 102,49 ms |
+| 10.000 | Eski callback | 118,96 ms | 39,38 ms | 10,85 ms | 132,50 ms |
+| 10.000 | Mevcut production | 115,86 ms | 41,34 ms | 5,20 ms | 132,09 ms |
 
 `pipelineMs` mutasyon + seçilen yanıt okumasını ölçer. JSON encode/decode ve istemci merge ayrı ölçülür; HTTP/ağ/tarayıcı süresi değildir. İç içe sürelerin medyanları toplanmamalıdır. Yedi örneğin p95'i en yüksek örnektir; operasyonel p95/SLA kanıtı değildir. Tam doğrulama/audit/settings/projection/GC maliyetleri bu çalışmada ayrı ölçülmedi; kalan zamanı sadece validation'a atfetmiyorum.
 
