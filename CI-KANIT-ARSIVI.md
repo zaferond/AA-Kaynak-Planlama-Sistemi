@@ -1,5 +1,17 @@
 # CI kanıt arşivi
 
+## 9 Ekim 2026 — N3 komut performansı ölçüm doğrulaması
+
+Test edilen kaynak **`7c46c23bee294a410ee885c7a51d5f9ae9dc6c64`**. [Gerçek owned komut sınırı, karşılaştırmalı ölçümler ve 37 yerel test](MIMARI-KOMUT-PERFORMANS-OLCUMU-2026-10-09.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Kalite | **Başarılı:** Ubuntu 607/607, Windows 257/257, Chromium 145; biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği | [37918831327](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37918831327) |
+
+[Metadata, test toplamları ve log hash kaydı](ci-evidence/quality-7c46c23-receipt.json). Fail/skipped/cancelled 0; Windows ve genel süit örtüşür. Yeni 5 test gerçek geçici SQL.js Store ile production/callback actual/allocation, marker, legacy double validation, forced full copy, sentetik ortam/.env dosyasının DB seçiminden ayrılması ve cleanup davranışlarını doğrular. [Yerel 7 örnekli iki boyut karşılaştırması ve model digest eşitliği](ci-evidence/store-command-2026-10-09.json) yeni uygulama hızlanması veya üretim kapasitesi kanıtı değildir.
+
+Uygulama/backend/shared iş kuralları değiştirilmedi; dar draft zaten mevcut production davranışıdır. N3 tam snapshot/validation/global kilit **kısmen giderildi** olarak kalır. N2 Orta bağımlılık, N6 canlı geçiş/eski varlık saklama ve kurum servis/CA/proxy/yedek/yük kabulü sürer. Bu kaynak için native koşu çalıştırılmadı. Ham loglar Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i ayrı tam CI başarısı iddiası değildir.
+
 ## 9 Ekim 2026 — Arka plan yenileme yaşam döngüsü
 
 Test edilen kod **`20c66088f321905e437c5b50c1f329f7c317709c`**. [Scheduler ayrımı, geciken sürüm yanıtı ve yerel 77 test / 22 tarayıcı kontrolü](MIMARI-ARKA-PLAN-YENILEME-2026-10-09.md).

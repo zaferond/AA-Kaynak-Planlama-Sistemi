@@ -61,7 +61,13 @@ Kaynaklar temiz Git arşivinden geçici dizine çıkarıldı; kilit dosyaları d
 
 İlk yeni test denemesinde gerçekleşen hücre için yanlışlıkla iki okuma bekleniyordu; metadata değişmediği için mevcut Store bir okuma kullanıyor. Test beklentisi güncel çağrı zincirine göre düzeltildi; uygulama değiştirilmedi. Son 37 testlik koşu başarılıdır.
 
-CI sonucu ve test edilen kaynak commit'i ayrıca kaydedilecektir.
+## CI kanıtı ve aktarım kontrolü
+
+Test edilen kaynak **`7c46c23bee294a410ee885c7a51d5f9ae9dc6c64`**. [Kalite koşusu 37918831327](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37918831327) başarılı: **Ubuntu 607/607**, **Windows 257/257**, **Chromium 145 kontrol**. Fail/skipped/cancelled 0; Windows ve genel süit örtüşür, toplamlar toplanmaz. Biçim/domain/TypeScript/build/manifest, iki işletim sisteminde temiz paket kabulü ve iki audit Yüksek eşiği geçti. Audit eşiği backend Orta bağımlılık uyarısını kapatmaz.
+
+[Metadata, test toplamları ve indirilen log hash kaydı](ci-evidence/quality-7c46c23-receipt.json). Ham loglar, kişisel veriler veya bağlantı bilgileri Git'e eklenmez. Sonraki kanıt/dokümantasyon commit'i uygulama kodunu değiştirmez ve ayrı tam CI başarısı iddiası değildir. İlk kaynak gönderimine ek olarak forced-full-copy sayacı ve kabul kontrolü daraltıldı; kanıt son kaynak commit'ine aittir.
+
+Aktarım ön kontrolü önceki manifest/file hash'lerini, yerel test değişikliğinin korunmasını ve doğrulanmış geçici derlemeyle **399 kaynak / 413 site çıktısı / 7 güncel çıktı** eşitliğini denetledi. Frontend çıktıları byte olarak aynı; yeni bundle üretilmedi veya tarihî çıktı silinmedi. Seçilen kod/test/CI/rapor dosyaları geri alınabilir yedekle aktarılır, manifest son yazılır. Yedek: `.deployment-backups/2026-10-09-store-command-final`. Çalışan servis yeniden başlatılmaz; gerçek veritabanına işlem yapılmaz.
 
 ## Kalan iş ve önerilen sıra
 
