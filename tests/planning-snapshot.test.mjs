@@ -1136,3 +1136,54 @@ test("failure while preparing a direct delta rolls back persisted values, audit 
     await reopened.close();
   }
 });
+
+test("validation, settings and response stage failures preserve committed data, audit and generation across restart", async (t) => {
+  const { store, env, users, key } = await setup(t);
+  const before = await store.view(users.admin),
+    audit = (await store.auditLog(users.admin)).total;
+  const file = await fs.readFile(env.SQLJS_FILE);
+  for (const method of [
+    "validateSnapshot",
+    "prepareMutationSettings",
+    "prepareMutationView",
+  ]) {
+    const original = store[method],
+      failure = Error("Synthetic " + method + " failure");
+    const mock = t.mock.method(store, method, function (...args) {
+      const result = original.apply(this, args);
+      if (method === "prepareMutationView")
+        return result.then(() => {
+          throw failure;
+        });
+      throw failure;
+    });
+    try {
+      await assert.rejects(
+        changeAndView(
+          store,
+          users.admin,
+          [{ kind: "allocation", id: key, value: 0.5, revision: 0 }],
+          {
+            responseMode: "planning-delta-v1",
+            baseGeneration: before.generation,
+          },
+        ),
+        (error) => error === failure,
+      );
+    } finally {
+      mock.mock.restore();
+    }
+    assert.deepEqual(await store.view(users.admin), before);
+    assert.equal((await store.auditLog(users.admin)).total, audit);
+    assert.deepEqual(await fs.readFile(env.SQLJS_FILE), file);
+  }
+  await store.close();
+  const reopened = new Store({ env });
+  try {
+    await reopened.connect();
+    assert.deepEqual(await reopened.view(users.admin), before);
+    assert.equal((await reopened.auditLog(users.admin)).total, audit);
+  } finally {
+    await reopened.close();
+  }
+});

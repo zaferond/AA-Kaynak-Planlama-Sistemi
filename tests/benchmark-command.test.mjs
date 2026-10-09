@@ -110,6 +110,15 @@ test("temporary SQL.js benchmarks prove draft selection and equal complete model
         assert.equal(observation.domainMs === null, planning);
         assert.equal(observation.changedRecords[operation], 1);
         assert.equal(observation.readCalls, 1);
+        for (const method of [
+          "validateSnapshot",
+          "prepareMutationSettings",
+          "prepareMutationView",
+        ]) {
+          assert.equal(observation[method + "Calls"], 1);
+          assert(Number.isFinite(observation[method + "Ms"]));
+          assert(observation[method + "Ms"] >= 0);
+        }
       }
       assert.equal(result.medians.domainMs === null, planning);
       results.push(result);

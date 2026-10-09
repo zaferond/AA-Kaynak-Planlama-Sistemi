@@ -1,6 +1,7 @@
 import * as identity from "./identity-repository.mjs";
 import { readPlanningSnapshot } from "./planning-reader.mjs";
 import { persistPlanningSnapshot } from "./planning-writer.mjs";
+import { prepareMutationSettings } from "./mutation-settings.mjs";
 import { auditEntries } from "./audit.mjs";
 import { isPlanningCommand } from "./operations.mjs";
 import { planningDeltaView } from "./planning-response.mjs";
@@ -16,7 +17,6 @@ import { validate, scopeData } from "./domain/index.mjs";
 import { publicUser, fail, admin } from "./auth.mjs";
 import { SqlJsAdapter } from "./adapters/sqljs.mjs";
 import { MssqlAdapter, sqlConfig } from "./adapters/mssql.mjs";
-import { ident } from "./tables.mjs";
 import {
   DIRECTORY_REVISION_KEY,
   directoryRevision,
@@ -168,6 +168,53 @@ export class Store {
   projectPlanningDelta(options) {
     return planningDeltaView(options);
   }
+  validateSnapshot(data, options) {
+    return validate(data, options);
+  }
+  prepareMutationSettings(before, valid) {
+    return prepareMutationSettings(before, valid);
+  }
+  async prepareMutationView({
+    before,
+    valid,
+    generation,
+    active,
+    c,
+    changeSet,
+    planningDelta,
+    metadataEquality = new Map(),
+  }) {
+    const metadataKeys = new Set([
+      ...Object.keys(before),
+      ...Object.keys(valid),
+    ]);
+    for (const key of numericSnapshotMaps) metadataKeys.delete(key);
+    const unchanged = [...metadataKeys].every((key) =>
+      metadataEquality.has(key)
+        ? metadataEquality.get(key)
+        : JSON.stringify(before[key]) === JSON.stringify(valid[key]),
+    );
+    const delta = this.projectPlanningDelta({
+      before,
+      valid,
+      generation,
+      active,
+      changeSet,
+      planningDelta,
+      metadataUnchanged: unchanged,
+    });
+    if (delta) return delta;
+    const responseData = unchanged
+      ? {
+          ...before,
+          ...Object.fromEntries(
+            numericSnapshotMaps.map((key) => [key, valid[key]]),
+          ),
+          revisions: { ...valid.revisions },
+        }
+      : (await this.read(c)).data;
+    return this.projectView(responseData, generation + 1, active, c);
+  }
   async mutate(
     u,
     fn,
@@ -190,7 +237,9 @@ export class Store {
         generation = snapshot.generation;
       const beforeUsers = auditUsers ? await this.users(c) : [];
       const result = await fn(data, active, c, generation);
-      const valid = validate(data, { previousResources: before.resources });
+      const valid = this.validateSnapshot(data, {
+        previousResources: before.resources,
+      });
       // Same transaction/lock as the command. Imports and cascading team edits
       // participate too; unrelated risk/project/allocation writes do not.
       if (directoryCatalogChanged(before, valid))
@@ -205,28 +254,8 @@ export class Store {
           changeSet,
         }),
       );
-      const assignments = ["generation=generation+1"],
-        values = [];
-      // Column names are fixed here; changed JSON values remain SQL parameters.
-      for (const [column, oldValue, newValue] of [
-        [
-          "legacy_archive",
-          before.legacyArchive || null,
-          valid.legacyArchive || null,
-        ],
-        ["calendar_days", before.workCalendar || {}, valid.workCalendar || {}],
-        [
-          "person_calendar",
-          before.personCalendar || {},
-          valid.personCalendar || {},
-        ],
-      ]) {
-        const oldJson = JSON.stringify(oldValue),
-          newJson = JSON.stringify(newValue);
-        if (oldJson === newJson) continue;
-        assignments.push(ident(column) + "=@p" + values.length);
-        values.push(newValue === null ? null : newJson);
-      }
+      const settings = this.prepareMutationSettings(before, valid);
+      const { assignments, values } = settings;
       await c.query(
         "UPDATE kp_settings SET " + assignments.join(",") + " WHERE id=1",
         values,
@@ -235,39 +264,16 @@ export class Store {
         // The optional result envelope carries import counters with this commit.
         // Preserve the SQL read representation of unchanged entities. If
         // validation normalized metadata, re-read within the same transaction.
-        const metadataKeys = new Set([
-          ...Object.keys(before),
-          ...Object.keys(valid),
-        ]);
-        for (const key of numericSnapshotMaps) metadataKeys.delete(key);
-        const unchanged = [...metadataKeys].every(
-          (key) => JSON.stringify(before[key]) === JSON.stringify(valid[key]),
-        );
-        const delta = this.projectPlanningDelta({
+        const view = await this.prepareMutationView({
           before,
           valid,
           generation,
           active,
+          c,
           changeSet,
           planningDelta,
-          metadataUnchanged: unchanged,
+          metadataEquality: settings.metadataEquality,
         });
-        if (delta) return returnResult ? { view: delta, result } : delta;
-        const responseData = unchanged
-          ? {
-              ...before,
-              ...Object.fromEntries(
-                numericSnapshotMaps.map((key) => [key, valid[key]]),
-              ),
-              revisions: { ...valid.revisions },
-            }
-          : (await this.read(c)).data;
-        const view = await this.projectView(
-          responseData,
-          generation + 1,
-          active,
-          c,
-        );
         return returnResult ? { view, result } : view;
       }
       return result;

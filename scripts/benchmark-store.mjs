@@ -87,7 +87,7 @@ function instrument(store) {
       target[name] = original;
     });
   };
-  for (const method of ["read", "persist"])
+  for (const method of ["read", "persist", "prepareMutationView"])
     wrap(
       store,
       method,
@@ -104,6 +104,23 @@ function instrument(store) {
                 ]),
               );
             return result;
+          } finally {
+            if (current) {
+              current[method + "Ms"] += performance.now() - start;
+              current[method + "Calls"]++;
+            }
+          }
+        },
+    );
+  for (const method of ["validateSnapshot", "prepareMutationSettings"])
+    wrap(
+      store,
+      method,
+      (original) =>
+        function (...args) {
+          const start = performance.now();
+          try {
+            return original.apply(this, args);
           } finally {
             if (current) {
               current[method + "Ms"] += performance.now() - start;
@@ -250,6 +267,12 @@ function instrument(store) {
         readCalls: 0,
         persistMs: 0,
         persistCalls: 0,
+        validateSnapshotMs: 0,
+        validateSnapshotCalls: 0,
+        prepareMutationSettingsMs: 0,
+        prepareMutationSettingsCalls: 0,
+        prepareMutationViewMs: 0,
+        prepareMutationViewCalls: 0,
         domainMs:
           commandMode === "production" && operation === "allocation" ? null : 0,
         planningDraftCopies: 0,
@@ -384,6 +407,12 @@ for (const size of sizes) {
         snapshotCopy === "numeric";
       assert.equal(observation.planningDraftCopies, planning ? 1 : 0);
       assert.equal(observation.generalDraftCopies, planning ? 0 : 1);
+      assert.equal(observation.validateSnapshotCalls, 1);
+      assert.equal(observation.prepareMutationSettingsCalls, 1);
+      assert.equal(
+        observation.prepareMutationViewCalls,
+        responseMode === "separate" ? 0 : 1,
+      );
       const viewStart = performance.now();
       const wire =
         responseMode !== "separate" ? result : await store.view(user);
@@ -431,6 +460,9 @@ for (const size of sizes) {
         "viewMs",
         "readMs",
         "persistMs",
+        "validateSnapshotMs",
+        "prepareMutationSettingsMs",
+        "prepareMutationViewMs",
         "domainMs",
         "cloneMs",
         "snapshotCopyMs",
@@ -538,6 +570,8 @@ const report = {
   commandMode,
   domainTimingScope:
     "domainMs measures callback staging only, excludes Store final validation, and is null for owned planning commands to preserve their marker. Other stage medians overlap and must not be added.",
+  mutationTimingScope:
+    "validateSnapshotMs is final full validation; prepareMutationSettingsMs is settings JSON comparison/preparation; prepareMutationViewMs includes metadata comparison, delta/full projection and any transaction-local re-read. These are separate stages but readMs overlaps response re-reads; medians must not be added.",
   commandSha256: createHash("sha256")
     .update(
       await fs.readFile(new URL("./benchmark-command.mjs", import.meta.url)),
