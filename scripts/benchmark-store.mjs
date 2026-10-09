@@ -6,7 +6,7 @@ import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 import { mergePlanningDelta } from "../shared/planning-response.ts";
 import { Store } from "../backend/store.mjs";
-import { applyChanges, stageChanges } from "../backend/operations.mjs";
+import { benchmarkCommand } from "./benchmark-command.mjs";
 import { seedBenchmarkStore } from "./benchmark-fixture.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 
@@ -14,12 +14,12 @@ import { hashPassword } from "../backend/auth.mjs";
 const options = new Map(
   process.argv.slice(2).map((arg) => {
     const match =
-      /^--(sizes|samples|resources|actuals|percentages|calendar-days|audit-events|operation|response|validation|snapshot-copy|output)=(.+)$/.exec(
+      /^--(sizes|samples|resources|actuals|percentages|calendar-days|audit-events|operation|response|validation|snapshot-copy|command|output)=(.+)$/.exec(
         arg,
       );
     if (!match)
       throw Error(
-        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --percentages=0 --calendar-days=1000 --audit-events=0 --operation=allocation|actual --response=separate|planning|full|delta --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
+        "Use --sizes=1000,10000,50000 --samples=5 --resources=200 --actuals=0 --percentages=0 --calendar-days=1000 --audit-events=0 --operation=allocation|actual --response=separate|planning|full|delta --command=production|callback --validation=double|single --snapshot-copy=numeric|full --output=/tmp/result.json",
       );
     return [match[1], match[2]];
   }),
@@ -51,7 +51,11 @@ if (operation === "actual" && (!actuals || responseMode === "delta"))
 const validationMode = options.get("validation") || "single";
 if (!["single", "double"].includes(validationMode))
   throw Error("Expected --validation=single or --validation=double.");
-const apply = validationMode === "single" ? stageChanges : applyChanges;
+const commandMode =
+  options.get("command") ||
+  (validationMode === "double" ? "callback" : "production");
+// Reject incompatible options before creating accounts or a temporary database.
+benchmarkCommand([], { mode: commandMode, validation: validationMode });
 const snapshotCopy = options.get("snapshot-copy") || "numeric";
 if (!["numeric", "full"].includes(snapshotCopy))
   throw Error("Expected --snapshot-copy=numeric or full.");
@@ -117,7 +121,14 @@ function instrument(store) {
         try {
           return original.apply(this, args);
         } finally {
-          if (current) current.snapshotCopyMs += performance.now() - start;
+          if (current) {
+            current.snapshotCopyMs += performance.now() - start;
+            current[
+              args[1]?.planningOnly
+                ? "planningDraftCopies"
+                : "generalDraftCopies"
+            ]++;
+          }
         }
       },
   );
@@ -239,7 +250,10 @@ function instrument(store) {
         readCalls: 0,
         persistMs: 0,
         persistCalls: 0,
-        domainMs: 0,
+        domainMs:
+          commandMode === "production" && operation === "allocation" ? null : 0,
+        planningDraftCopies: 0,
+        generalDraftCopies: 0,
         cloneMs: 0,
         cloneCalls: 0,
         snapshotCopyMs: 0,
@@ -308,15 +322,17 @@ for (const size of sizes) {
     // Warm up the same code paths, including SQL and file commit, outside measurements.
     await store.mutate(
       user,
-      (data, active) =>
-        apply(data, active, [
+      benchmarkCommand(
+        [
           {
             kind: operation,
             id: key,
             value: amount(true),
-            revision: data.revisions[operation + ":" + key],
+            revision: state.data.revisions[operation + ":" + key],
           },
-        ]),
+        ],
+        { mode: commandMode, validation: validationMode },
+      ).command,
       {
         returnView: responseMode !== "separate",
         planningDelta:
@@ -326,6 +342,7 @@ for (const size of sizes) {
       },
     );
     state = await store.view(user);
+    const unchangedModel = structuredClone(state);
     const initialGeneration = state.generation,
       initialAudit = (await store.auditLog(user)).total;
     metrics = instrument(store);
@@ -335,18 +352,23 @@ for (const size of sizes) {
         start = performance.now();
       const result = await store.mutate(
         user,
-        (data, active) => {
-          const domainStart = performance.now();
-          apply(data, active, [
+        benchmarkCommand(
+          [
             {
               kind: operation,
               id: key,
               value: amount(i % 2),
               revision: state.data.revisions[operation + ":" + key],
             },
-          ]);
-          observation.domainMs += performance.now() - domainStart;
-        },
+          ],
+          {
+            mode: commandMode,
+            validation: validationMode,
+            observe: (ms) => {
+              observation.domainMs += ms;
+            },
+          },
+        ).command,
         {
           returnView: responseMode !== "separate",
           planningDelta:
@@ -356,6 +378,10 @@ for (const size of sizes) {
         },
       );
       observation.mutateMs = performance.now() - start;
+      const planning =
+        commandMode === "production" && operation === "allocation";
+      assert.equal(observation.planningDraftCopies, planning ? 1 : 0);
+      assert.equal(observation.generalDraftCopies, planning ? 0 : 1);
       const viewStart = performance.now();
       const wire =
         responseMode !== "separate" ? result : await store.view(user);
@@ -383,6 +409,19 @@ for (const size of sizes) {
     assert.equal(state.generation, initialGeneration + samples);
     assert.equal((await store.auditLog(user)).total, initialAudit + samples);
     assert.equal(state.data.revisions[operation + ":" + key], 2 + samples);
+    const finalMap =
+      operation === "allocation" ? "allocations" : "actualAllocations";
+    assert.equal(state.data[finalMap][key], amount((samples - 1) % 2));
+    const finalModel = structuredClone(state);
+    finalModel.generation = unchangedModel.generation;
+    finalModel.data[finalMap][key] = unchangedModel.data[finalMap][key];
+    finalModel.data.revisions[operation + ":" + key] =
+      unchangedModel.data.revisions[operation + ":" + key];
+    assert.deepEqual(
+      finalModel,
+      unchangedModel,
+      "all untouched model fields must be preserved",
+    );
     const medians = Object.fromEntries(
       [
         "pipelineMs",
@@ -400,12 +439,14 @@ for (const size of sizes) {
         "mergeMs",
       ].map((key) => [
         key,
-        round(
-          percentile(
-            observations.map((item) => item[key]),
-            0.5,
-          ),
-        ),
+        observations[0][key] === null
+          ? null
+          : round(
+              percentile(
+                observations.map((item) => item[key]),
+                0.5,
+              ),
+            ),
       ]),
     );
     const result = {
@@ -414,6 +455,7 @@ for (const size of sizes) {
       responseMode,
       validationMode,
       snapshotCopy,
+      commandMode,
       resources,
       actualAllocations: actuals,
       actualPercentEntries: percentages,
@@ -440,6 +482,7 @@ for (const size of sizes) {
         responseMode,
         validationMode,
         snapshotCopy,
+        commandMode,
         resources,
         actualAllocations: actuals,
         actualPercentEntries: percentages,
@@ -448,6 +491,8 @@ for (const size of sizes) {
         medians,
         readCalls: observations[0].readCalls,
         cloneCalls: observations[0].cloneCalls,
+        planningDraftCopies: observations[0].planningDraftCopies,
+        generalDraftCopies: observations[0].generalDraftCopies,
         selectedRows: observations[0].selectedRows,
         materializedRows: observations[0].materializedRows,
         exportCalls: observations[0].exportCalls,
@@ -488,6 +533,14 @@ const report = {
   responseMode,
   validationMode,
   snapshotCopy,
+  commandMode,
+  domainTimingScope:
+    "domainMs measures callback staging only, excludes Store final validation, and is null for owned planning commands to preserve their marker. Other stage medians overlap and must not be added.",
+  commandSha256: createHash("sha256")
+    .update(
+      await fs.readFile(new URL("./benchmark-command.mjs", import.meta.url)),
+    )
+    .digest("hex"),
   recordReaderSha256: createHash("sha256")
     .update(
       await fs.readFile(
