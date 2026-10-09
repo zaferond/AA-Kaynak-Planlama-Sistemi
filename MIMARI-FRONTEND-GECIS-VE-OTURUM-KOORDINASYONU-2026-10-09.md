@@ -38,6 +38,12 @@ Yeni unit testleri geçiş tamamlanma sırası, son iptal edilmiş isteğin eski
 
 Yeni workspace-navigation (2), mevcut risk-save-confirmation (4), risk-concurrency (7), session-consistency (7) ve import-restore (7) kontrolleri aynı geçici fixture içinde yürütüldü: **27/27 tarayıcı kontrolü geçti**, pageerror yok. Yinelenen logout artık bir istek; sentetik 503 sonrası tekrar çıkış başarılı. Bekleyen tek risk POST'u son sekmeye geçer; save 503 veya confirm reddi logout göndermez ve taslağı korur. Test edilen derleme geçici `npm run build` çıktısıdır.
 
+## İlk CI koşusu ve fixture temizliği
+
+Kaynak **`5fca2a8b61e46bac5d597e8c7ffdf26774edebca`**, [kalite koşusu 37910297298](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/37910297298): Windows **238/238** ve Ubuntu **588/588** test geçti. Genel tarayıcı süiti başarısız oldu: `scripts/browser-checks/risk.mjs:94` ilk riskin stratejisini `Kontrol` beklerken boş buldu. Yeni navigation kontrolünün oluşturduğu sentetik risk ortak fixture'da kalmıştı; sonraki risk kontrolü ilk kaydı kendi kaydı olarak kullanıyordu. İlk yerel 27 kontrol bu numaralandırma kontrolünü içermiyordu; bu eksiklik açıkça kaydedilir. [Başarısız koşunun güvenli metadata/test toplamları/log hash kanıtı](ci-evidence/quality-5fca2a8-receipt.json).
+
+Düzeltme yalnız yeni browser kontrolünün `finally` bloğuna kendi oluşturduğu sentetik risk için mevcut CAS delete temizliği ekler. Gerçek ortam/veri kullanılmaz, başka testlerin kayıtları silinmez, revision tombstone'ları ve audit korunur. Açılış risk listesiyle temizlik sonrası liste eşitliği denetlenir. **Navigation (2) + mevcut risk kontrolleri (11) art arda 13/13 geçti**, pageerror yok. Uygulama JS davranışı bu fixture düzeltmesiyle değişmedi. Bu 13 kontrol ilk 27 ile örtüşür; toplam olarak toplanmaz.
+
 ## Sınırlar ve kalan işler
 
 Bu çalışma uygulamanın tümü için güvenlik/stabilite veya gerçek kurum ortamında kabul kanıtı değildir. Native MSSQL bu kaynak için yeniden çalıştırılmadı. Backend Orta bağımlılık uyarısı, N3 full snapshot/global lock maliyeti, N6 canlı yayın/eski bundle saklama ve kurum Windows servis/ACL/CA/proxy/TLS/yedek/yük kabulü devam eder. Yeni bir SQL işlemi eklenmedi; bu adım için yeniden geniş native koşu yapılmadı.

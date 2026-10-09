@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { applyChanges } from "../../backend/operations.mjs";
 import { openRisks, acceptRiskSaveConfirmations } from "./risk.mjs";
 
 export async function checkWorkspaceNavigation(f) {
@@ -53,6 +54,8 @@ export async function checkWorkspaceNavigation(f) {
     async () => {
       const { page, context } = await f.client("root-admin");
       const stopConfirming = acceptRiskSaveConfirmations(page);
+      const openingRisks = (await f.state()).risks;
+      let id;
       let release;
       const gate = new Promise((resolve) => (release = resolve));
       let writes = 0,
@@ -76,7 +79,7 @@ export async function checkWorkspaceNavigation(f) {
         await field().fill("Synthetic held navigation draft");
         await page.locator('[data-risk-input="likelihood"]').selectOption("2");
         await page.locator('[data-risk-input="impact"]').selectOption("3");
-        const id = await page
+        id = await page
           .locator(".risk-editing-row")
           .getAttribute("data-risk-id");
         const before = await f.state();
@@ -153,6 +156,22 @@ export async function checkWorkspaceNavigation(f) {
         stopConfirming();
         page.off("request", count);
         await context.close();
+        // The shared CI fixture is reused by the risk numbering/export checks.
+        // Remove only this check's synthetic record; retain real revision tombstones.
+        const state = await f.state();
+        if (id && state.risks.some((risk) => risk.id === id))
+          await f.store.mutate(f.actor, (data, actor) =>
+            applyChanges(data, actor, [
+              {
+                kind: "risk",
+                id,
+                operation: "delete",
+                value: null,
+                revision: state.revisions["risk:" + id],
+              },
+            ]),
+          );
+        assert.deepEqual((await f.state()).risks, openingRisks);
       }
     },
   );
