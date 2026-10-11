@@ -14,6 +14,7 @@ import {
   nativeProfileOptions,
 } from "../scripts/native-contention-profile.mjs";
 import { concurrencySuite } from "./concurrency-suite.mjs";
+import { planningContractSuite } from "./planning-contract-suite.mjs";
 import { planningPreflightSuite } from "./planning-preflight-suite.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
 import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
@@ -59,6 +60,12 @@ test(
         await checked.test(
           "native single-cell preflight matches full staging and preserves rollback, scope and audit",
           (sub) => planningPreflightSuite(stores[0], sub),
+        );
+        await cleanupTestTables(stores[0].db);
+        await stores[0].connect();
+        await checked.test(
+          "native single-cell validation dependency contract matches frozen full commits and rejects unrelated faults",
+          (sub) => planningContractSuite(stores[0], sub),
         );
         // Each profile starts with a fresh schema and no preceding fixture/audit.
         await cleanupTestTables(stores[0].db);
