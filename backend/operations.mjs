@@ -54,22 +54,48 @@ export function stageChanges(d, u, input) {
   return stageParsedChanges(d, u, changesSchema.parse(input));
 }
 
-const planningCommands = new WeakSet();
+const planningCommands = new WeakMap();
 
 // Only this owned command can use an allocation/revision-only draft. Re-check
 // the parsed kinds when invoked inside the transaction, before touching data.
 export function planningCommand(input) {
   const command = (d, u) => {
-    const changes = changesSchema.parse(input);
-    if (!changes.every((change) => change.kind === "allocation"))
-      fail(400, "Yalnız planlanan kaynak dağılımı işlemleri kullanılabilir.");
-    return stageParsedChanges(d, u, changes);
+    return stageParsedChanges(d, u, parsePlanningChanges(input));
   };
-  planningCommands.add(command);
+  planningCommands.set(command, input);
   return command;
 }
 
 export const isPlanningCommand = (command) => planningCommands.has(command);
+
+function parsePlanningChanges(input) {
+  const changes = changesSchema.parse(input);
+  if (!changes.every((change) => change.kind === "allocation"))
+    fail(400, "Yalnız planlanan kaynak dağılımı işlemleri kullanılabilir.");
+  return changes;
+}
+
+// Capture one owned, primitive cell command inside the transaction. Both the
+// narrow preflight and full draft stage this same parsed input. Arbitrary
+// callbacks, batches and legacy/malformed keys keep the complete-read path.
+export function preparePlanningCommand(command) {
+  const input = planningCommands.get(command);
+  if (!Array.isArray(input) || input.length !== 1) return null;
+  const changes = parsePlanningChanges(input),
+    change = changes[0];
+  if (
+    !parseAllocationKey(change.id) ||
+    (!change.operation &&
+      (!Number.isFinite(change.value) ||
+        change.value < 0 ||
+        change.value > 10000))
+  )
+    return null;
+  return {
+    id: change.id,
+    stage: (data, active) => stageParsedChanges(data, active, changes),
+  };
+}
 
 function stageParsedChanges(d, u, changes) {
   const seen = new Set(),

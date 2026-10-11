@@ -3,7 +3,8 @@ import { readPlanningSnapshot } from "./planning-reader.mjs";
 import { persistPlanningSnapshot } from "./planning-writer.mjs";
 import { prepareMutationSettings } from "./mutation-settings.mjs";
 import { auditEntries } from "./audit.mjs";
-import { isPlanningCommand } from "./operations.mjs";
+import { isPlanningCommand, preparePlanningCommand } from "./operations.mjs";
+import { readPlanningPreflight } from "./planning-preflight.mjs";
 import { planningDeltaView } from "./planning-response.mjs";
 import {
   cloneMutationSnapshot,
@@ -229,6 +230,12 @@ export class Store {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
+      // Reject stale/unauthorized single-cell planning writes without loading
+      // unrelated snapshots. A passing preflight still uses full validation,
+      // persistence, auditing and response construction under this same lock.
+      const prepared = preparePlanningCommand(fn);
+      if (prepared)
+        prepared.stage(await readPlanningPreflight(c, prepared.id), active);
       const snapshot = await this.read(c),
         planningOnly = isPlanningCommand(fn),
         copy = this.copySnapshot(snapshot.data, { planningOnly }),
@@ -236,7 +243,7 @@ export class Store {
         data = planningOnly ? copy : snapshot.data,
         generation = snapshot.generation;
       const beforeUsers = auditUsers ? await this.users(c) : [];
-      const result = await fn(data, active, c, generation);
+      const result = await (prepared?.stage || fn)(data, active, c, generation);
       const valid = this.validateSnapshot(data, {
         previousResources: before.resources,
       });

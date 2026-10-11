@@ -11,6 +11,7 @@ import {
   nativeProfileOptions,
 } from "../scripts/native-contention-profile.mjs";
 import { concurrencySuite } from "./concurrency-suite.mjs";
+import { planningPreflightSuite } from "./planning-preflight-suite.mjs";
 import { integrationSuite } from "./integration-suite.mjs";
 import { sharedRateLimitSuite } from "./rate-limit-suite.mjs";
 import {
@@ -50,6 +51,12 @@ test(
           () => integrationSuite(stores[0]),
         );
         await concurrencySuite(stores[0], checked);
+        await cleanupTestTables(stores[0].db);
+        await stores[0].connect();
+        await checked.test(
+          "native single-cell preflight matches full staging and preserves rollback, scope and audit",
+          (sub) => planningPreflightSuite(stores[0], sub),
+        );
         // Each profile starts with a fresh schema and no preceding fixture/audit.
         await cleanupTestTables(stores[0].db);
         await stores[0].connect();
