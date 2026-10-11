@@ -1,4 +1,5 @@
 import test from "node:test";
+import { compareSnapshotValidation } from "./snapshot-validation-suite.mjs";
 import { createPersonMonthHoursIndex } from "../shared/actual-units.ts";
 import { referencePersonMonthHours } from "./person-month-reference.mjs";
 import assert from "node:assert/strict";
@@ -105,6 +106,19 @@ test(
         const before = await stores[0].transaction(
           (c) => stores[0].read(c),
           true,
+        );
+        await checked.test(
+          "native persisted full snapshot matches frozen validation and rejection behavior",
+          () => {
+            const d = before.data;
+            assert(
+              compareSnapshotValidation(d, { previousResources: d.resources })
+                .data,
+            );
+            const invalid = structuredClone(d);
+            invalid.allocations["missing|missing|2026-01"] = 1;
+            assert.equal(compareSnapshotValidation(invalid).error?.status, 400);
+          },
         );
         await checked.test(
           "native persisted calendar/hour snapshot matches the frozen person-month calculation",
