@@ -1,12 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { InvalidCredentialsError } from "ldapts";
+import {
+  InvalidCredentialsError,
+  BerWriter,
+  BerReader,
+  AndFilter,
+  OrFilter,
+  SubstringFilter,
+} from "ldapts";
 import {
   ActiveDirectory,
   activeDirectoryConfig,
   createActiveDirectory,
   disabledDirectory,
-  escapeLdapValue,
 } from "../backend/active-directory.mjs";
 
 const config = {
@@ -77,6 +83,12 @@ function fixture({
   return { directory, calls, state };
 }
 
+function wire(filter) {
+  const writer = new BerWriter();
+  filter.write(writer);
+  return new BerReader(writer.buffer);
+}
+
 test("AD configuration is disabled by default and refuses insecure/malformed endpoints before connecting", async () => {
   assert.equal(activeDirectoryConfig(), null);
   assert.equal(
@@ -114,10 +126,10 @@ test("AD configuration is disabled by default and refuses insecure/malformed end
   assert.equal((await createActiveDirectory(env)).configured, true);
 });
 
-test("directory search escapes LDAP filter injection, scopes by OU/group, exposes only approved profile attributes and stops at 50", async () => {
+test("directory search isolates malicious/UTF-8 input in BER values, scopes by OU/group, exposes approved attributes and stops at 50", async () => {
   const f = fixture({
     entries: Array.from({ length: 51 }, () => entry()),
-    groupDN: "CN=Allowed*(Group),DC=example,DC=test",
+    groupDN: "CN=Allowed*(Grüp),DC=example,DC=test",
   });
   const query = "*)(|(objectClass=*))\0İ";
   const result = await f.directory.listUsers(query);
@@ -133,25 +145,54 @@ test("directory search escapes LDAP filter injection, scopes by OU/group, expose
   assert.equal(search.base, config.baseDN);
   assert.equal(search.options.paged.pageSize, 51);
   assert.equal(search.options.timeLimit, 5);
-  assert(
-    search.options.filter.includes(
-      "memberOf:1.2.840.113556.1.4.1941:=" +
-        escapeLdapValue("CN=Allowed*(Group),DC=example,DC=test"),
-    ),
+  assert(search.options.filter instanceof AndFilter);
+  const group = search.options.filter.filters[3];
+  const groupWire = wire(group);
+  groupWire.readSequence(0xa9);
+  assert.equal(groupWire.readString(0x81), "1.2.840.113556.1.4.1941");
+  assert.equal(groupWire.readString(0x82), "memberOf");
+  assert.deepEqual(
+    groupWire.readString(0x83, true),
+    Buffer.from("CN=Allowed*(Grüp),DC=example,DC=test", "utf8"),
   );
-  assert(
-    search.options.filter.includes(
-      "sAMAccountName=*" + escapeLdapValue(query) + "*",
-    ),
-  );
-  assert(!search.options.filter.includes(query));
+  assert.equal(groupWire.remain, 0);
+  const values = search.options.filter.filters[4];
+  assert(values instanceof OrFilter);
+  assert.equal(values.filters.length, 3);
+  for (const filter of values.filters) {
+    assert(filter instanceof SubstringFilter);
+    const reader = wire(filter);
+    reader.readSequence(0xa4);
+    assert(
+      ["sAMAccountName", "displayName", "mail"].includes(reader.readString()),
+    );
+    reader.readSequence(0x30);
+    assert.deepEqual(reader.readString(0x81, true), Buffer.from(query, "utf8"));
+    assert.equal(reader.remain, 0); // Injection text is one value, never extra filters.
+  }
   assert(!search.options.attributes.some((a) => /pwd|password/i.test(a)));
   assert.equal(
     f.calls.filter((c) => c.method === "unexpected-next-page").length,
     0,
   );
   assert.equal(f.calls.filter((c) => c.method === "unbind").length, 1);
-  assert.equal(escapeLdapValue("*()\\\0"), "\\2a\\28\\29\\5c\\00");
+  await f.directory.findByLogin("şule*)(uid=*)@example.test");
+  const login = f.calls
+    .find((c) => c.method === "search")
+    .options.filter.filters.at(-1);
+  assert.equal(login.filters.length, 2);
+  for (const filter of login.filters) {
+    const reader = wire(filter);
+    reader.readSequence(0xa3);
+    assert(
+      ["sAMAccountName", "userPrincipalName"].includes(reader.readString()),
+    );
+    assert.deepEqual(
+      reader.readString(4, true),
+      Buffer.from("şule*)(uid=*)@example.test", "utf8"),
+    );
+    assert.equal(reader.remain, 0);
+  }
 });
 
 test("stable GUID lookup rejects invalid, ambiguous, referred, disabled, locked and expired profiles", async () => {
@@ -159,13 +200,14 @@ test("stable GUID lookup rejects invalid, ambiguous, referred, disabled, locked 
   assert.equal(await f.directory.getUser("not-a-guid"), null);
   assert.equal(f.calls.length, 0);
   assert.equal((await f.directory.getUser(guid)).id, guid);
-  assert(
-    f.calls
-      .find((c) => c.method === "search")
-      .options.filter.includes(
-        "(objectGUID=\\01\\23\\45\\67\\89\\ab\\cd\\ef\\01\\23\\45\\67\\89\\ab\\cd\\ef)",
-      ),
-  );
+  const guidFilter = f.calls
+    .find((c) => c.method === "search")
+    .options.filter.filters.at(-1);
+  const reader = wire(guidFilter);
+  reader.readSequence(0xa3);
+  assert.equal(reader.readString(), "objectGUID");
+  assert.deepEqual(reader.readString(4, true), Buffer.from(guid, "hex"));
+  assert.equal(reader.remain, 0); // Preserve all 16 bytes, including non-UTF-8 octets.
   for (const patch of [
     { objectGUID: Buffer.from("short") },
     { objectGUID: guid },

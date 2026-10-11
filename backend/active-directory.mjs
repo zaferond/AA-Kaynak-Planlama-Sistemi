@@ -1,4 +1,13 @@
 import fs from "node:fs/promises";
+import {
+  Client,
+  AndFilter,
+  OrFilter,
+  NotFilter,
+  EqualityFilter,
+  SubstringFilter,
+  ExtensibleFilter,
+} from "ldapts";
 import { directoryUserSchema } from "../shared/directory-identity.ts";
 import { fail } from "./auth.mjs";
 
@@ -65,13 +74,6 @@ export function activeDirectoryConfig(env = {}) {
     caFile: env.AD_CA_FILE || "",
   };
 }
-// RFC 4515 values, not complete filter expressions. Escape UTF-8 bytes to avoid
-// interpolation, wildcard expansion, NUL and invalid surrogate ambiguity.
-export function escapeLdapValue(value) {
-  return [...Buffer.from(value, "utf8")]
-    .map((byte) => "\\" + byte.toString(16).padStart(2, "0"))
-    .join("");
-}
 const attributes = [
   "objectGUID",
   "sAMAccountName",
@@ -131,17 +133,31 @@ export class ActiveDirectory {
     this.#now = now;
   }
   #filter(term) {
-    const group = this.#config.groupDN
-      ? "(memberOf:1.2.840.113556.1.4.1941:=" +
-        escapeLdapValue(this.#config.groupDN) +
-        ")"
-      : "";
-    return (
-      "(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2))" +
-      group +
-      term +
-      ")"
-    );
+    // Use typed filters: string parsing can corrupt binary GUID / UTF-8 values.
+    // All caller input remains a value; it never becomes LDAP filter syntax.
+    return new AndFilter({
+      filters: [
+        new EqualityFilter({ attribute: "objectCategory", value: "person" }),
+        new EqualityFilter({ attribute: "objectClass", value: "user" }),
+        new NotFilter({
+          filter: new ExtensibleFilter({
+            matchType: "userAccountControl",
+            rule: "1.2.840.113556.1.4.803",
+            value: "2",
+          }),
+        }),
+        ...(this.#config.groupDN
+          ? [
+              new ExtensibleFilter({
+                matchType: "memberOf",
+                rule: "1.2.840.113556.1.4.1941",
+                value: this.#config.groupDN,
+              }),
+            ]
+          : []),
+        ...(term ? [term] : []),
+      ],
+    });
   }
   async #connection(run) {
     if (this.#active >= 4) throw unavailable();
@@ -175,16 +191,13 @@ export class ActiveDirectory {
     });
   }
   async listUsers(query = "") {
-    const escaped = escapeLdapValue(query);
     const term = query
-      ? "(|(sAMAccountName=*" +
-        escaped +
-        "*)(displayName=*" +
-        escaped +
-        "*)(mail=*" +
-        escaped +
-        "*))"
-      : "";
+      ? new OrFilter({
+          filters: ["sAMAccountName", "displayName", "mail"].map(
+            (attribute) => new SubstringFilter({ attribute, any: [query] }),
+          ),
+        })
+      : null;
     return this.#connection(async (client) => {
       // One bounded page only. The UI searches again instead of downloading the directory.
       for await (const result of client.searchPaginated(this.#config.baseDN, {
@@ -211,21 +224,24 @@ export class ActiveDirectory {
   async #byId(id) {
     if (!/^[a-f0-9]{32}$/.test(id || "")) return null;
     return this.#lookup(
-      "(objectGUID=" +
-        [...Buffer.from(id, "hex")]
-          .map((b) => "\\" + b.toString(16).padStart(2, "0"))
-          .join("") +
-        ")",
+      new EqualityFilter({
+        attribute: "objectGUID",
+        value: Buffer.from(id, "hex"),
+      }),
     );
   }
+
   async getUser(id) {
     const entry = await this.#byId(id);
     return entry ? publicProfile(entry) : null;
   }
   async findByLogin(username) {
-    const escaped = escapeLdapValue(username);
     const entry = await this.#lookup(
-      "(|(sAMAccountName=" + escaped + ")(userPrincipalName=" + escaped + "))",
+      new OrFilter({
+        filters: ["sAMAccountName", "userPrincipalName"].map(
+          (attribute) => new EqualityFilter({ attribute, value: username }),
+        ),
+      }),
     );
     return entry ? publicProfile(entry) : null;
   }
@@ -269,7 +285,6 @@ export class ActiveDirectory {
 export async function createActiveDirectory(env = {}) {
   const config = activeDirectoryConfig(env);
   if (!config) return disabledDirectory;
-  const { Client } = await import("ldapts");
   const tlsOptions = { minVersion: "TLSv1.2", rejectUnauthorized: true };
   if (config.caFile) {
     if ((await fs.stat(config.caFile)).size > 1048576)
