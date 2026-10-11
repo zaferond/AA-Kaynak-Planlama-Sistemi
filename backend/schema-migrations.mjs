@@ -509,6 +509,13 @@ export async function prepareSchema(c, { provider, auto }) {
     await c.upsert("risk_systems", initialRiskSystems);
     await c.query("UPDATE kp_settings SET generation=generation+1 WHERE id=1");
   }
+  if (!versions.includes(32)) {
+    if (!auto)
+      throw Error(
+        "Active Directory kimlik eşleştirmesi için IT npm run db:migrate çalıştırmalı.",
+      );
+    await executeSqlMigration(c, provider, 32);
+  }
   assertMigrationHistory(
     (await c.query("SELECT version FROM kp_schema_migrations")).rows.map(
       (row) => Number(row.version),

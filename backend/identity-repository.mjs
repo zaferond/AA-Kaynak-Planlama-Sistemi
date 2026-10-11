@@ -6,6 +6,9 @@ const mapUser = (r) =>
     name: r.name,
     role: r.role,
     resourceId: r.resource_id || "",
+    authSource: r.auth_source || "local",
+    directoryId: r.directory_id || "",
+    email: r.email || "",
     active: !!r.active,
     leaders: [],
     password: { salt: r.password_salt, hash: r.password_hash },
@@ -24,10 +27,15 @@ export async function readUsers(c) {
   return users;
 }
 export async function findUser(c, filter) {
-  const col = filter.id !== undefined ? "id" : "username";
+  const col =
+    filter.id !== undefined
+      ? "id"
+      : filter.directoryId !== undefined
+        ? "directory_id"
+        : "username";
   const r = (
     await c.query(`SELECT * FROM kp_users WHERE [${col}]=@p0`, [
-      filter.id ?? filter.username,
+      filter.id ?? filter.directoryId ?? filter.username,
     ])
   ).rows[0];
   if (!r) return null;
@@ -48,6 +56,9 @@ export async function saveUser(c, u) {
       name: u.name,
       role: u.role,
       resource_id: u.resourceId || null,
+      auth_source: u.authSource || "local",
+      directory_id: u.directoryId || null,
+      email: u.email || "",
       active: u.active,
       password_salt: u.password.salt,
       password_hash: u.password.hash,

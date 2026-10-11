@@ -6,7 +6,8 @@ import path from "node:path";
 import http from "node:http";
 import { Store } from "../backend/store.mjs";
 import { createApp } from "../backend/app.mjs";
-import { hashPassword } from "../backend/auth.mjs";
+import { syntheticDirectory } from "./directory-fixture.mjs";
+import { hashPassword, verifyPassword } from "../backend/auth.mjs";
 import { activeTeamMembers } from "../shared/model.ts";
 import { applyLeaderChange, stageChanges } from "../backend/operations.mjs";
 import {
@@ -14,7 +15,7 @@ import {
   directoryRevision,
 } from "../shared/directory-policy.ts";
 
-async function setup(t) {
+async function setup(t, options = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-record-http-"));
   const env = {
     NODE_ENV: "test",
@@ -27,7 +28,7 @@ async function setup(t) {
   const server = http.createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = "http://127.0.0.1:" + server.address().port;
-  const app = createApp(store, { origin });
+  const app = createApp(store, { origin, ...options });
   server.on("request", app);
   t.after(async () => {
     app.locals.close();
@@ -1908,11 +1909,28 @@ test("project/resource cascades roll back after SQL deletion and retain child AB
     });
 });
 
-test("employee account provisioning and manager ownership preserve authorization boundaries", async (t) => {
-  const { store, admin, request, user, state, write } = await setup(t);
-  const teams = (await state()).data.teams;
-  const teamA = teams.find((x) => x.lead);
-  const teamB = teams.find((x) => x.lead && x.lead !== teamA.lead);
+test("AD provisioning and manager ownership preserve authorization boundaries", async (t) => {
+  const password = "Directory-account-test-only-345!";
+  const directory = syntheticDirectory(password);
+  const people = [
+    ["1", "new.manager"],
+    ["2", "new.employee"],
+    ["3", "race.one"],
+    ["4", "race.two"],
+    ["5", "long.employee"],
+  ].map(([id, username]) => ({
+    id: id.repeat(32),
+    username,
+    name: "Directory " + username,
+    email: username + "@example.test",
+  }));
+  people.forEach((u) => directory.add(u));
+  const { store, admin, request, user, state, write } = await setup(t, {
+    directory,
+  });
+  const teams = (await state()).data.teams,
+    teamA = teams.find((x) => x.lead),
+    teamB = teams.find((x) => x.lead && x.lead !== teamA.lead);
   const resource = (id, status = "Aktif Çalışan") => ({
     id,
     name: "Synthetic " + id,
@@ -1958,14 +1976,12 @@ test("employee account provisioning and manager ownership preserve authorization
     ).status,
     200,
   );
-  const password = "Employee-account-test-only-345!";
-  const create = (overrides = {}) => ({
-    username: "new.manager",
-    password,
+  const create = (patch = {}) => ({
+    directoryId: people[0].id,
     role: "manager",
     leaders: [teamA.lead],
     resourceId: "employee-a",
-    ...overrides,
+    ...patch,
   });
   let managerId, managerAuth;
   async function login(username) {
@@ -1977,21 +1993,36 @@ test("employee account provisioning and manager ownership preserve authorization
     };
   }
   await t.test(
-    "only admins can create accounts; validation rejects missing resources, adverts and invalid scope",
+    "only admins list/provision AD users; manual identity fields and invalid scope are rejected",
     async () => {
-      const ordinary = await user("provision-denied", "normal");
-      const manager = await user("provision-manager-denied", "manager", "", [
-        teamA.lead,
-      ]);
-      for (const auth of [{}, ordinary, manager])
+      const ordinary = await user("provision-denied", "normal"),
+        manager = await user("provision-manager-denied", "manager", "", [
+          teamA.lead,
+        ]);
+      for (const auth of [{}, ordinary, manager]) {
         assert.equal(
           (await request("/users/create", create(), auth)).status,
           auth.cookie ? 403 : 401,
         );
+        assert.equal(
+          (await request("/directory/users", undefined, auth)).status,
+          auth.cookie ? 403 : 401,
+        );
+      }
+      const listing = await request(
+        "/directory/users?q=new.manager",
+        undefined,
+        admin,
+      );
+      assert.equal(listing.status, 200);
+      assert.deepEqual(listing.json.users, [people[0]]);
       for (const patch of [
-        { password: "short" },
-        { username: "bad username" },
+        { password },
+        { username: "forged" },
+        { name: "forged" },
+        { email: "forged@example.test" },
         { role: "admin" },
+        { directoryId: "0".repeat(32) },
         { resourceId: "" },
         { resourceId: "missing" },
         { resourceId: "advert" },
@@ -2006,7 +2037,7 @@ test("employee account provisioning and manager ownership preserve authorization
     },
   );
   await t.test(
-    "new manager retains employee link and accesses own actual/calendar outside assigned leadership",
+    "AD manager keeps own actual/calendar access outside assigned leadership with directory identity",
     async () => {
       const result = await request("/users/create", create(), admin);
       assert.equal(result.status, 200);
@@ -2015,9 +2046,10 @@ test("employee account provisioning and manager ownership preserve authorization
       );
       managerId = account.id;
       assert.equal(account.resourceId, "employee-a");
-      assert.equal(account.name, "Synthetic employee-a");
-      assert.equal(account.role, "manager");
-      assert.equal(JSON.stringify(result.json).includes(password), false);
+      assert.equal(account.name, people[0].name);
+      assert.equal(account.email, people[0].email);
+      assert.equal(account.authSource, "ldap");
+      assert.equal(account.directoryId, people[0].id);
       managerAuth = await login("new.manager");
       assert.equal(
         (
@@ -2082,7 +2114,7 @@ test("employee account provisioning and manager ownership preserve authorization
     },
   );
   await t.test(
-    "duplicate usernames and employee links fail atomically, including concurrent creation",
+    "duplicate AD identities, local username collisions and concurrent employee linkage are atomic",
     async () => {
       assert.equal(
         (
@@ -2098,17 +2130,34 @@ test("employee account provisioning and manager ownership preserve authorization
         (
           await request(
             "/users/create",
-            create({ username: "second.account" }),
+            create({ directoryId: people[1].id }),
             admin,
           )
         ).status,
         409,
       );
+      directory.add({
+        id: "6".repeat(32),
+        username: "record.admin",
+        name: "Directory collision",
+        email: "collision@example.test",
+      });
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({ directoryId: "6".repeat(32), resourceId: "employee-b" }),
+            admin,
+          )
+        ).status,
+        409,
+      );
+      assert.equal((await store.findUser({ id: "admin" })).authSource, "local");
       const results = await Promise.all(
-        ["race.one", "race.two"].map((username) =>
+        [people[2].id, people[3].id].map((directoryId) =>
           request(
             "/users/create",
-            create({ username, resourceId: "employee-c" }),
+            create({ directoryId, resourceId: "employee-c" }),
             admin,
           ),
         ),
@@ -2122,15 +2171,15 @@ test("employee account provisioning and manager ownership preserve authorization
     },
   );
   await t.test(
-    "manager/normal transitions keep linkage, reject stale edits and invalidate existing sessions",
+    "role changes preserve AD identity and employee link, reject stale edits and revoke sessions",
     async () => {
-      const old = (await state()).data.revisions["user:" + managerId];
+      const revision = (await state()).data.revisions["user:" + managerId];
       const edit = {
         id: managerId,
         role: "normal",
         leaders: [],
         resourceId: "employee-a",
-        revision: old,
+        revision,
       };
       assert.equal((await request("/users", edit, admin)).status, 200);
       assert.equal(
@@ -2141,25 +2190,26 @@ test("employee account provisioning and manager ownership preserve authorization
         (await request("/users", { ...edit, role: "manager" }, admin)).status,
         409,
       );
-      managerAuth = await login("new.manager");
       const result = await request(
         "/users",
-        { ...edit, role: "manager", revision: old + 1 },
+        { ...edit, role: "manager", revision: revision + 1 },
         admin,
       );
       assert.equal(result.status, 200);
       assert.equal(
-        result.json.data.users.find((u) => u.id === managerId).resourceId,
-        "employee-a",
+        result.json.data.users.find((u) => u.id === managerId).directoryId,
+        people[0].id,
       );
       managerAuth = await login("new.manager");
-      const view = (await request("/data", undefined, managerAuth)).json.data;
-      assert.equal(view.actualAllocations["employee-a|p|2026-09"], 0.25);
-      assert.equal(view.actualAllocations["employee-b|p|2026-09"], undefined);
+      assert.equal(
+        (await request("/data", undefined, managerAuth)).json.data
+          .actualAllocations["employee-a|p|2026-09"],
+        0.25,
+      );
     },
   );
   await t.test(
-    "long employee names use an explicit account display name without modifying the employee",
+    "a directory display name does not overwrite the employee's name",
     async () => {
       const person = { ...resource("long-name"), name: "E".repeat(200) };
       assert.equal(
@@ -2171,21 +2221,7 @@ test("employee account provisioning and manager ownership preserve authorization
         (
           await request(
             "/users/create",
-            create({ username: "long.employee", resourceId: person.id }),
-            admin,
-          )
-        ).status,
-        400,
-      );
-      assert.equal(
-        (
-          await request(
-            "/users/create",
-            create({
-              username: "long.employee",
-              resourceId: person.id,
-              name: "Short display name",
-            }),
+            create({ directoryId: people[4].id, resourceId: person.id }),
             admin,
           )
         ).status,
@@ -2193,7 +2229,7 @@ test("employee account provisioning and manager ownership preserve authorization
       );
       assert.equal(
         (await store.findUser({ username: "long.employee" })).name,
-        "Short display name",
+        people[4].name,
       );
       assert.equal(
         (await state()).data.resources.find((r) => r.id === person.id).name,
@@ -2202,14 +2238,14 @@ test("employee account provisioning and manager ownership preserve authorization
     },
   );
   await t.test(
-    "a normal employee account can log in; credentials never appear in snapshots, backups or audit",
+    "normal AD accounts authenticate only through AD; passwords never reach snapshots, backups or audit",
     async () => {
       assert.equal(
         (
           await request(
             "/users/create",
             create({
-              username: "new.employee",
+              directoryId: people[1].id,
               role: "normal",
               resourceId: "employee-b",
               leaders: [],
@@ -2219,15 +2255,12 @@ test("employee account provisioning and manager ownership preserve authorization
         ).status,
         200,
       );
-      const auth = await login("new.employee");
-      const view = (await request("/data", undefined, auth)).json.data;
+      const auth = await login("new.employee"),
+        view = (await request("/data", undefined, auth)).json.data;
       assert.equal(view.users, undefined);
       assert.equal(view.actualAllocations["employee-a|p|2026-09"], undefined);
-      assert.equal(
-        (await request("/users/create", create(), auth)).status,
-        403,
-      );
       const stored = await store.findUser({ username: "new.employee" });
+      assert.equal(await verifyPassword(password, stored.password), false);
       for (const url of ["/data", "/backup", "/audit?limit=100"]) {
         const text = JSON.stringify(
           (await request(url, undefined, admin)).json,
@@ -2239,6 +2272,93 @@ test("employee account provisioning and manager ownership preserve authorization
         ])
           assert.equal(text.includes(secret), false);
       }
+      assert.equal(
+        (
+          await request("/auth/login", {
+            username: "new.employee",
+            password: "wrong",
+          })
+        ).status,
+        401,
+      );
+      assert.equal(
+        (
+          await request("/auth/login", {
+            username: "new.employee",
+            password: "",
+          })
+        ).status,
+        401,
+      );
+      directory.disable(people[1].id);
+      assert.equal((await request("/data", undefined, auth)).status, 401);
+      assert.equal(
+        (await request("/auth/login", { username: "new.employee", password }))
+          .status,
+        401,
+      );
+    },
+  );
+  await t.test(
+    "AD renames synchronize profile by immutable identity and revoke prior sessions",
+    async () => {
+      directory.update(people[0].id, {
+        username: "renamed.manager",
+        name: "Updated Directory Name",
+        email: "renamed@example.test",
+      });
+      const auth = await login("renamed.manager");
+      const stored = await store.findUser({ id: managerId });
+      assert.equal(stored.email, "renamed@example.test");
+      assert.equal(stored.resourceId, "employee-a");
+      assert.equal(stored.authSource, "ldap");
+      assert.equal(
+        (await request("/data", undefined, managerAuth)).status,
+        401,
+      );
+      assert.equal(
+        (await request("/auth/login", { username: "new.manager", password }))
+          .status,
+        401,
+      );
+      assert.equal((await request("/data", undefined, auth)).status, 200);
+      managerAuth = auth;
+    },
+  );
+  const awaitHash = await hashPassword(password);
+  await t.test(
+    "directory failure never enables local password fallback or accepts a fabricated identity",
+    async () => {
+      const existing = await store.findUser({ id: managerId });
+      await store.transaction((c) =>
+        store.saveUser({ ...existing, password: awaitHash }, c),
+      );
+      directory.setUnavailable(true);
+      assert.equal(
+        (
+          await request("/auth/login", {
+            username: "renamed.manager",
+            password,
+          })
+        ).status,
+        503,
+      );
+      assert.equal(
+        (await request("/data", undefined, managerAuth)).status,
+        503,
+      );
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({ directoryId: "7".repeat(32), resourceId: "employee-b" }),
+            admin,
+          )
+        ).status,
+        503,
+      );
+      assert.equal((await request("/data", undefined, admin)).status, 200);
+      directory.setUnavailable(false);
     },
   );
 });

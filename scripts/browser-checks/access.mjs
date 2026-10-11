@@ -246,53 +246,42 @@ export async function checkAccess(f) {
         await page.reload();
         await openAccess(page);
         await page
-          .getByRole("button", { name: "Çalışana Yetki Tanımla", exact: true })
-          .click();
-        const form = page.locator(".access-permission-form");
-        await form
-          .getByLabel("Hesap Açılacak Çalışan", { exact: false })
-          .selectOption("r-new-account");
-        await form
-          .getByLabel("Kullanıcı Adı", { exact: false })
-          .fill("qa.new-manager");
-        await form.getByLabel("İlk Şifre", { exact: false }).fill(f.password);
-        await form
-          .getByLabel("Şifre Tekrarı", { exact: true })
-          .fill("Different-password-123!");
-        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
-        assert.equal(
-          await form
-            .getByLabel("Hesap Açılacak Çalışan", { exact: false })
-            .inputValue(),
-          "r-new-account",
-        );
-        await form
           .getByRole("button", {
-            name: "Hesap Oluştur ve Yetkilendir",
+            name: "AD Kullanıcısına Yetki Tanımla",
             exact: true,
           })
           .click();
+        const form = page.locator(".access-permission-form");
         await form
-          .getByRole("alert")
-          .filter({ hasText: "Şifreler eşleşmiyor" })
-          .waitFor();
-        assert.equal(
-          await f.store.findUser({ username: "qa.new-manager" }),
-          null,
-        );
+          .getByLabel("Hesap Açılacak Çalışan", { exact: true })
+          .selectOption("f".repeat(32));
+        for (const [label, value] of [
+          ["Ad Soyad", "Directory New Account"],
+          ["Kullanıcı Adı", "qa.new-manager"],
+          ["E-posta", "new.manager@example.test"],
+        ]) {
+          const input = form.getByLabel(label, { exact: true });
+          assert.equal(await input.inputValue(), value);
+          assert.equal(await input.getAttribute("readonly"), "");
+        }
+        assert.equal(await form.locator('input[type="password"]').count(), 0);
         await form
-          .getByLabel("Şifre Tekrarı", { exact: true })
-          .fill(f.password);
-        await f.capture(page, "access-create-employee");
+          .getByLabel("Uygulamadaki Çalışan Kaydı", { exact: true })
+          .selectOption("r-new-account");
+        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
+        await f.capture(page, "access-create-directory-employee");
         await form
           .getByRole("button", {
-            name: "Hesap Oluştur ve Yetkilendir",
+            name: "Yetki Tanımla ve Eşleştir",
             exact: true,
           })
           .click();
         await form.waitFor({ state: "hidden" });
         const saved = await f.store.findUser({ username: "qa.new-manager" });
         assert.equal(saved.role, "manager");
+        assert.equal(saved.authSource, "ldap");
+        assert.equal(saved.directoryId, "f".repeat(32));
+        assert.equal(saved.email, "new.manager@example.test");
         assert.equal(saved.resourceId, "r-new-account");
         const edit = await editAccount(page, "new-manager");
         assert.equal(
@@ -319,6 +308,74 @@ export async function checkAccess(f) {
           .first()
           .waitFor();
         await manager.context.close();
+      },
+    );
+    await f.check(
+      "access: directory disabled state prevents manual provisioning and refresh recovers",
+      async () => {
+        await page.reload();
+        await openAccess(page);
+        await page.route(
+          "**/api/directory/users?*",
+          (route) =>
+            route.fulfill({
+              status: 200,
+              contentType: "application/json",
+              body: JSON.stringify({
+                configured: false,
+                users: [],
+                hasMore: false,
+              }),
+            }),
+          { times: 1 },
+        );
+        await page
+          .getByRole("button", {
+            name: "AD Kullanıcısına Yetki Tanımla",
+            exact: true,
+          })
+          .click();
+        const form = page.locator(".access-permission-form");
+        await form
+          .getByRole("status")
+          .filter({ hasText: "bağlantısı henüz tanımlanmadı" })
+          .waitFor();
+        assert.equal(
+          await form
+            .getByLabel("Hesap Açılacak Çalışan", { exact: true })
+            .isDisabled(),
+          true,
+        );
+        assert.equal(
+          await form
+            .getByRole("button", {
+              name: "Yetki Tanımla ve Eşleştir",
+              exact: true,
+            })
+            .isDisabled(),
+          true,
+        );
+        assert.equal(await form.locator('input[type="password"]').count(), 0);
+        await form
+          .getByRole("button", { name: "Ara / Yenile", exact: true })
+          .click();
+        await form
+          .getByLabel("Hesap Açılacak Çalışan", { exact: true })
+          .waitFor({ state: "visible" });
+        await f.wait(
+          async () =>
+            !(await form
+              .getByLabel("Hesap Açılacak Çalışan", { exact: true })
+              .isDisabled()),
+          "directory retry",
+        );
+        assert.notEqual(
+          await form
+            .locator('option[value="' + "f".repeat(32) + '"]')
+            .getAttribute("disabled"),
+          null,
+        );
+        await form.getByRole("button", { name: "Vazgeç", exact: true }).click();
       },
     );
     await f.check(

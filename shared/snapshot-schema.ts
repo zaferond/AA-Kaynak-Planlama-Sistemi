@@ -128,15 +128,45 @@ const credentialSchema = z.object({
   wrappedKey: z.string(),
   version: z.string().min(1),
 });
-const accountSchema = z.object({
-  id: z.string().min(1),
-  username: z.string().regex(/^[a-z0-9._@+-]{3,100}$/),
-  name: z.string().trim().min(1).max(150),
-  role: z.enum(["admin", "manager", "normal"]),
-  leaders: z.array(z.string()),
-  active: z.boolean(),
-  credential: credentialSchema.optional(),
-});
+const accountSchema = z
+  .object({
+    id: z.string().min(1),
+    username: z.string().min(1).max(100),
+    authSource: z.enum(["local", "ldap"]).optional(),
+    directoryId: z
+      .string()
+      .regex(/^[a-f0-9]{32}$/)
+      .optional(),
+    email: z.string().max(320).optional(),
+    name: z.string().trim().min(1).max(150),
+    role: z.enum(["admin", "manager", "normal"]),
+    leaders: z.array(z.string()),
+    active: z.boolean(),
+    credential: credentialSchema.optional(),
+  })
+  .superRefine((account, ctx) => {
+    if (
+      account.authSource !== "ldap" &&
+      !/^[a-z0-9._@+-]{3,100}$/.test(account.username)
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["username"],
+        message: "Geçersiz kullanıcı adı.",
+      });
+    if (account.authSource !== "ldap" && account.directoryId)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["directoryId"],
+        message: "Yerel hesap AD kimliği içeremez.",
+      });
+    if (account.authSource === "ldap" && !account.directoryId)
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["directoryId"],
+        message: "AD kimliği gerekli.",
+      });
+  });
 // Validate entries before rebuilding the dictionary. z.record intentionally
 // drops __proto__, which is also a permitted leadership name in existing data.
 const leaderManagersSchema = z

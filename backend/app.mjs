@@ -23,6 +23,8 @@ import {
   updatePermissions,
   createEmployeeAccount,
 } from "./user-commands.mjs";
+import { disabledDirectory } from "./active-directory.mjs";
+import { authenticateDirectoryAccount } from "./directory-auth.mjs";
 import { changeAndView } from "./change-service.mjs";
 import { sendDataSnapshot } from "./data-response.mjs";
 import { applicationAddress } from "./http-config.mjs";
@@ -40,6 +42,7 @@ export function createApp(
   {
     origin = "http://localhost:3000",
     trustedProxies = [],
+    directory = disabledDirectory,
     mutationLimits,
     mutationGate = new MutationAdmission(mutationLimits),
     attemptLimiter = createAttemptLimiter(store),
@@ -130,7 +133,7 @@ export function createApp(
     async (req, res) => {
       const body = z
         .object({
-          username: z.string().trim().toLowerCase().min(3).max(100),
+          username: z.string().trim().toLowerCase().min(1).max(100),
           password: z.string().max(256),
           remember: z.boolean().default(false),
         })
@@ -141,17 +144,38 @@ export function createApp(
         username,
         ATTEMPT_LIMITS.account,
       );
-      const u = await store.findUser({ username });
-      if (
+      let u = await store.findUser({ username });
+      if (u?.authSource === "ldap" || (!u && directory.configured)) {
+        u = await authenticateDirectoryAccount(
+          store,
+          directory,
+          username,
+          body.password,
+          (id) =>
+            attemptLimiter.reserve(
+              "directory-account",
+              id,
+              ATTEMPT_LIMITS.account,
+            ),
+        );
+        if (!u) {
+          await verifyPassword(body.password, await dummy);
+          fail(401, "Kullanıcı adı veya şifre hatalı ya da hesap pasif.");
+        }
+      } else if (
         !(await verifyPassword(body.password, u?.password || (await dummy))) ||
         !u?.active
-      )
+      ) {
         fail(401, "Kullanıcı adı veya şifre hatalı ya da hesap pasif.");
+      }
       await req.releaseIpAttempt();
       await releaseName();
       const raw = token(),
         csrf = token(),
-        age = (body.remember ? 30 * 24 : 12) * 3600000;
+        age =
+          u.authSource === "ldap"
+            ? 12 * 3600000
+            : (body.remember ? 30 * 24 : 12) * 3600000;
       await store.createSession({
         _id: digest(raw),
         userId: u._id,
@@ -175,6 +199,7 @@ export function createApp(
     const u = s && (await store.findUser({ id: s.userId }));
     if (!u?.active || u.version !== s.userVersion)
       fail(401, "Oturum sona erdi. Yeniden giriş yapın.");
+    if (u.authSource === "ldap") await directory.ensureActive(u.directoryId);
     req.user = u;
     req.session = s;
     req.sessionIdentity = sessionIdentity(s._id);
@@ -336,6 +361,17 @@ export function createApp(
       res.json(view);
     }),
   );
+  app.get("/api/directory/users", async (req, res) => {
+    admin(req.user);
+    const { q } = z
+      .object({ q: z.string().trim().max(100).default("") })
+      .strict()
+      .parse(req.query);
+    if (!directory.configured)
+      return res.json({ configured: false, users: [], hasMore: false });
+    await attemptLimiter.reserve("directory-search", req.user._id, 120);
+    res.json({ configured: true, ...(await directory.listUsers(q)) });
+  });
   app.post(
     "/api/users/create",
     admission.handler(async (req, res) => {
@@ -346,12 +382,26 @@ export function createApp(
         ATTEMPT_LIMITS.userEdit,
       );
       const input = accountInput.parse(req.body);
-      const password = await hashPassword(input.password);
+      const person = await directory.getUser(input.directoryId);
+      if (!person)
+        fail(
+          400,
+          "AD kullanıcısı bulunamadı, pasif veya izin verilen kapsam dışında.",
+        );
+      const password = await hashPassword(token());
       res.json(
         await store.mutate(
           req.user,
           (d, u, session) =>
-            createEmployeeAccount(store, d, u, session, input, password),
+            createEmployeeAccount(
+              store,
+              d,
+              u,
+              session,
+              input,
+              person,
+              password,
+            ),
           { auditUsers: true, returnView: true },
         ),
       );

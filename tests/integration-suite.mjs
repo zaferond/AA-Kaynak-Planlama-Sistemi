@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import http from "node:http";
 
+import { syntheticDirectory } from "./directory-fixture.mjs";
 import { createApp } from "../backend/app.mjs";
 import { hashPassword } from "../backend/auth.mjs";
 import {
@@ -26,7 +27,14 @@ export async function integrationSuite(store) {
     server = http.createServer();
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
     const origin = "http://127.0.0.1:" + server.address().port;
-    app = createApp(store, { origin });
+    const directory = syntheticDirectory(pass);
+    directory.add({
+      id: "e".repeat(32),
+      username: "test.new-manager",
+      name: "Directory manager",
+      email: "manager@example.test",
+    });
+    app = createApp(store, { origin, directory });
     server.on("request", app);
     let cookie = "",
       csrf = "";
@@ -630,8 +638,7 @@ export async function integrationSuite(store) {
     // Same account creation path runs on SQL.js and native MSSQL fixtures.
     const employeeId = (await get()).data.resources[0].id;
     const created = await request("/users/create", {
-      username: "test.new-manager",
-      password: pass,
+      directoryId: "e".repeat(32),
       role: "manager",
       leaders: [other.lead],
       resourceId: employeeId,
@@ -640,6 +647,9 @@ export async function integrationSuite(store) {
       (u) => u.username === "test.new-manager",
     );
     assert.equal(createdAccount.resourceId, employeeId);
+    assert.equal(createdAccount.authSource, "ldap");
+    assert.equal(createdAccount.directoryId, "e".repeat(32));
+    assert.equal(createdAccount.email, "manager@example.test");
     const createdLogin = await request("/auth/login", {
       username: "test.new-manager",
       password: pass,
@@ -664,8 +674,7 @@ export async function integrationSuite(store) {
     await request(
       "/users/create",
       {
-        username: "test.duplicate-link",
-        password: pass,
+        directoryId: "e".repeat(32),
         role: "normal",
         leaders: [],
         resourceId: employeeId,

@@ -28,6 +28,8 @@ try {
 }
 const store = new Store();
 try {
+  const { createActiveDirectory } = await import("./active-directory.mjs");
+  const directory = await createActiveDirectory(env);
   await store.connect();
   console.log("Veritabanı modu:", store.provider);
   console.log(
@@ -54,6 +56,7 @@ try {
     origin,
     trustedProxies,
     mutationLimits,
+    directory,
   });
   const server = app.listen(port, host, () =>
     console.log(

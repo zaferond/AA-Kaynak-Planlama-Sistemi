@@ -334,15 +334,18 @@ export async function saveUser(input: UserInput): Promise<Data> {
   return (await api("/users", input)).data;
 }
 export type CreateUserInput = {
-  name: string;
-  username: string;
-  password: string;
+  directoryId: string;
   role: "manager" | "normal";
   leaders: string[];
   resourceId: string;
 };
 export async function createUser(input: CreateUserInput): Promise<Data> {
   return (await api("/users/create", input)).data;
+}
+export async function directoryUsers(
+  query = "",
+): Promise<import("../../shared/directory-identity").DirectoryUsers> {
+  return api("/directory/users?q=" + encodeURIComponent(query));
 }
 export async function importResources(
   rows: ImportRow[],

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ROOT_ADMIN_ID, isEmployeeResource } from "../shared/access.ts";
+import { directoryUserSchema } from "../shared/directory-identity.ts";
 import { admin, fail, token } from "./auth.mjs";
 
 export const permissionInput = z
@@ -13,13 +14,7 @@ export const permissionInput = z
   .strict();
 export const accountInput = z
   .object({
-    name: z.string().trim().min(1).max(150).optional(),
-    username: z
-      .string()
-      .trim()
-      .toLowerCase()
-      .regex(/^[a-z0-9._@+-]{3,100}$/),
-    password: z.string().min(10).max(256),
+    directoryId: z.string().regex(/^[a-f0-9]{32}$/),
     role: z.enum(["manager", "normal"]),
     leaders: z.array(z.string()).max(100),
     resourceId: z.string().min(1).max(120),
@@ -75,25 +70,35 @@ export async function createEmployeeAccount(
   u,
   session,
   input,
+  directoryUser,
   password,
 ) {
   admin(u);
-  if (await store.findUser({ username: input.username }, session))
-    fail(409, "Bu kullanıcı adı zaten kullanılıyor.");
+  const person = directoryUserSchema.parse(directoryUser);
+  if (person.id !== input.directoryId) fail(400, "AD kimliği eşleşmiyor.");
+  if (await store.findUser({ directoryId: person.id }, session))
+    fail(409, "Bu Active Directory kullanıcısına zaten yetki tanımlanmış.");
+  if (await store.findUser({ username: person.username }, session))
+    fail(
+      409,
+      "Bu kullanıcı adı zaten kullanılıyor. Mevcut hesabı otomatik olarak AD hesabına dönüştürme işlemi yapılmadı.",
+    );
   const id = "user-" + token();
-  const { resource, resourceId } = await checkScope(d, session, input, id);
-  const name = input.name || resource.name;
-  if (name.length > 150)
-    fail(400, "Hesapta gösterilecek ad en fazla 150 karakter olmalıdır.");
+  const { resourceId } = await checkScope(d, session, input, id);
   await store.saveUser(
     {
       _id: id,
-      username: input.username,
-      name,
+      username: person.username,
+      name: person.name,
+      email: person.email,
+      authSource: "ldap",
+      directoryId: person.id,
       role: input.role,
       leaders: input.leaders,
       resourceId,
       active: true,
+      // A random, undisclosed placeholder preserves the existing backup schema.
+      // LDAP accounts NEVER use this record for authentication.
       password,
       revision: 1,
       version: 1,

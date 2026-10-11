@@ -60,6 +60,9 @@ export const publicUser = (u) => ({
   name: u.name,
   role: u.role,
   resourceId: u.resourceId || "",
+  ...(u.authSource === "ldap"
+    ? { authSource: "ldap", directoryId: u.directoryId, email: u.email || "" }
+    : {}),
   leaders: u.leaders,
   active: u.active,
 });

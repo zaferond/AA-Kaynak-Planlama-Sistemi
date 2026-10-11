@@ -14,6 +14,9 @@ export type Account = {
   name: string;
   role: Role;
   resourceId?: string;
+  authSource?: "local" | "ldap";
+  directoryId?: string;
+  email?: string;
   leaders: string[];
   active: boolean;
   credential?: Credential;

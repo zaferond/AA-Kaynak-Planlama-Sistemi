@@ -8,6 +8,7 @@ import { chromium } from "playwright";
 import { Store } from "../../backend/store.mjs";
 import { createApp } from "../../backend/app.mjs";
 import { hashPassword } from "../../backend/auth.mjs";
+import { syntheticDirectory } from "../../tests/directory-fixture.mjs";
 import { applyChanges } from "../../backend/operations.mjs";
 
 export async function fixture({ mutationLimits } = {}) {
@@ -130,7 +131,14 @@ export async function fixture({ mutationLimits } = {}) {
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const origin = "http://127.0.0.1:" + server.address().port;
-    app = createApp(store, { origin, mutationLimits });
+    const directory = syntheticDirectory(password);
+    directory.add({
+      id: "f".repeat(32),
+      username: "qa.new-manager",
+      name: "Directory New Account",
+      email: "new.manager@example.test",
+    });
+    app = createApp(store, { origin, mutationLimits, directory });
     server.on("request", app);
     const options = { headless: true };
     if (process.env.UI_BROWSER_EXECUTABLE)

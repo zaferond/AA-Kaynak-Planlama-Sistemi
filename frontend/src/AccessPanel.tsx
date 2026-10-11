@@ -6,12 +6,9 @@ import { fold } from "./model";
 import type { Account, Role } from "./access";
 import { ROOT_ADMIN_ID, isEmployeeResource } from "./access";
 import { saveUser, createUser, type UserInput } from "./storage";
-type PermissionForm = UserInput & {
-  username?: string;
-  name?: string;
-  password?: string;
-  confirmation?: string;
-};
+import { useDirectoryUsers } from "./features/useDirectoryUsers";
+import type { DirectoryUser } from "../../shared/directory-identity";
+type PermissionForm = UserInput & { directoryUser?: DirectoryUser };
 const roleLabel: Record<Role, string> = {
   admin: "Admin",
   manager: "Yönetici",
@@ -27,39 +24,40 @@ export default function AccessPanel({
   const [form, setForm] = useState<PermissionForm | null>(null),
     [query, setQuery] = useState(""),
     [leaderQuery, setLeaderQuery] = useState(""),
+    [directoryQuery, setDirectoryQuery] = useState(""),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false);
   const [showAudit, setShowAudit] = useState(false);
   const selected = data.users?.find((user) => user.id === form?.id);
   const users = (data.users || []).filter((user) =>
-    fold(user.username + " " + user.name).includes(fold(query)),
+    fold(user.username + " " + user.name + " " + (user.email || "")).includes(
+      fold(query),
+    ),
   );
   const people = data.resources
     .filter(isEmployeeResource)
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
   const creating = !!form && !form.id;
+  const directory = useDirectoryUsers(creating);
   const linkedUsers = new Map(
     (data.users || [])
       .filter((u) => u.resourceId)
       .map((u) => [u.resourceId, u]),
   );
   const availablePeople = people.filter((p) => !linkedUsers.has(p.id));
-  const selectedPerson = people.find((p) => p.id === form?.resourceId);
+
   function startAccount() {
     setError("");
     setNotice("");
     setLeaderQuery("");
+    setDirectoryQuery("");
     setForm({
       id: "",
       role: "normal",
       leaders: [],
       resourceId: "",
       revision: 0,
-      name: "",
-      username: "",
-      password: "",
-      confirmation: "",
     });
   }
   useEffect(() => {
@@ -85,17 +83,15 @@ export default function AccessPanel({
     event.preventDefault();
     if (!form || busy) return;
     setError("");
-    if (creating && form.password !== form.confirmation) {
-      setError("Şifreler eşleşmiyor.");
+    if (creating && !form.directoryUser) {
+      setError("Active Directory kullanıcısı seçin.");
       return;
     }
     setBusy(true);
     try {
       const updated = creating
         ? await createUser({
-            username: form.username || "",
-            name: form.name || "",
-            password: form.password || "",
+            directoryId: form.directoryUser!.id,
             role: form.role === "manager" ? "manager" : "normal",
             leaders: form.leaders,
             resourceId: form.resourceId,
@@ -111,7 +107,7 @@ export default function AccessPanel({
       setForm(null);
       setNotice(
         creating
-          ? "Çalışanın hesabı oluşturuldu ve yetkileri tanımlandı."
+          ? "Active Directory kullanıcısı yetkilendirildi ve çalışan kaydı eşleştirildi."
           : "Yetkiler kaydedildi. Kullanıcının açık oturumları yenilendi.",
       );
     } catch (cause) {
@@ -126,16 +122,16 @@ export default function AccessPanel({
         <div>
           <h2>Yetkilendirme</h2>
           <p>
-            Çalışanlara hesap açın; kullanıcıların rol, liderlik ve çalışan
-            eşleştirmelerini yönetin.
+            Active Directory kullanıcılarına rol ve liderlik yetkisi tanımlayın;
+            çalışan kayıtlarını eşleştirin.
           </p>
         </div>
         <button
           className="button primary"
-          disabled={busy || !availablePeople.length}
+          disabled={busy}
           onClick={startAccount}
         >
-          Çalışana Yetki Tanımla
+          AD Kullanıcısına Yetki Tanımla
         </button>
         <button className="button" onClick={() => setShowAudit(true)}>
           Değişiklik Geçmişi
@@ -201,7 +197,13 @@ export default function AccessPanel({
                   >
                     <td>
                       <strong>{user.name}</strong>
-                      <small>{user.username}</small>
+                      <small>
+                        {user.username}
+                        {user.authSource === "ldap"
+                          ? " · Active Directory"
+                          : " · Yerel Hesap"}
+                      </small>
+                      {user.email && <small>{user.email}</small>}
                     </td>
                     <td>
                       <span className={"access-role-badge role-" + user.role}>
@@ -256,11 +258,13 @@ export default function AccessPanel({
                   {creating ? "HESAP VE YETKİ TANIMLAMA" : "YETKİ DÜZENLEME"}
                 </span>
                 <h3>
-                  {selected?.name || selectedPerson?.name || "Çalışan seçin"}
+                  {selected?.name ||
+                    form.directoryUser?.name ||
+                    "AD kullanıcısı seçin"}
                 </h3>
                 <p>
                   {creating
-                    ? "Mevcut çalışan kaydı için yeni kullanıcı hesabı"
+                    ? "Kurumsal kullanıcı için uygulama erişimi"
                     : selected?.username}
                 </p>
               </div>
@@ -270,27 +274,127 @@ export default function AccessPanel({
             </div>
             {creating && (
               <>
+                <div className="access-directory-search">
+                  <label className="access-field">
+                    Active Directory Kullanıcısı Ara
+                    <input
+                      maxLength={100}
+                      disabled={busy || directory.busy}
+                      value={directoryQuery}
+                      onChange={(event) =>
+                        setDirectoryQuery(event.target.value)
+                      }
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button"
+                    disabled={busy || directory.busy}
+                    onClick={() => {
+                      setForm({ ...form, directoryUser: undefined });
+                      void directory.search(directoryQuery);
+                    }}
+                  >
+                    Ara / Yenile
+                  </button>
+                </div>
+                {directory.busy && (
+                  <p className="access-admin-note" role="status">
+                    AD kullanıcıları yükleniyor…
+                  </p>
+                )}
+                {directory.error && (
+                  <p className="negative" role="alert">
+                    {directory.error}
+                  </p>
+                )}
+                {!directory.busy &&
+                  !directory.error &&
+                  !directory.configured && (
+                    <p className="access-admin-note" role="status">
+                      Active Directory bağlantısı henüz tanımlanmadı. Bağlantı
+                      etkinleştirildiğinde kurumsal kullanıcılar burada
+                      listelenecek.
+                    </p>
+                  )}
+                {directory.configured &&
+                  !directory.busy &&
+                  !directory.users.length && (
+                    <p className="access-admin-note" role="status">
+                      Aramanıza uygun aktif AD kullanıcısı bulunamadı.
+                    </p>
+                  )}
                 <label className="access-field">
                   Hesap Açılacak Çalışan
                   <select
+                    aria-label="Hesap Açılacak Çalışan"
+                    required
+                    disabled={busy || directory.busy || !directory.configured}
+                    value={form.directoryUser?.id || ""}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        directoryUser: directory.users.find(
+                          (u) => u.id === event.target.value,
+                        ),
+                      })
+                    }
+                  >
+                    <option value="">Active Directory kullanıcısı seçin</option>
+                    {directory.users.map((person) => {
+                      const assigned = data.users?.some(
+                        (u) => u.directoryId === person.id,
+                      );
+                      return (
+                        <option
+                          key={person.id}
+                          value={person.id}
+                          disabled={assigned}
+                        >
+                          {person.name} · {person.username}
+                          {assigned ? " · Yetki tanımlı" : ""}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <small>
+                    {directory.hasMore
+                      ? "İlk 50 sonuç gösteriliyor. Kullanıcı adı, ad veya e-posta ile aramayı daraltın."
+                      : "Bu liste yalnızca Active Directory'den alınır."}
+                  </small>
+                </label>
+                <label className="access-field">
+                  Ad Soyad
+                  <input readOnly value={form.directoryUser?.name || ""} />
+                </label>
+                <label className="access-field">
+                  Kullanıcı Adı
+                  <input
+                    readOnly
+                    autoComplete="off"
+                    value={form.directoryUser?.username || ""}
+                  />
+                </label>
+                <label className="access-field">
+                  E-posta
+                  <input readOnly value={form.directoryUser?.email || ""} />
+                </label>
+                <p className="access-admin-note">
+                  Kullanıcı bilgileri AD tarafından yönetilir. Şifre burada
+                  girilmez veya saklanmaz; giriş sırasında AD'ye doğrulatılır.
+                </p>
+                <label className="access-field">
+                  Uygulamadaki Çalışan Kaydı
+                  <select
+                    aria-label="Uygulamadaki Çalışan Kaydı"
                     required
                     disabled={busy}
                     value={form.resourceId}
                     onChange={(event) =>
-                      setForm({
-                        ...form,
-                        resourceId: event.target.value,
-                        ...(creating
-                          ? {
-                              name:
-                                people.find((p) => p.id === event.target.value)
-                                  ?.name || "",
-                            }
-                          : {}),
-                      })
+                      setForm({ ...form, resourceId: event.target.value })
                     }
                   >
-                    <option value="">Çalışan seçin</option>
+                    <option value="">Çalışan kaydı seçin</option>
                     {availablePeople.map((person) => (
                       <option key={person.id} value={person.id}>
                         {person.name}
@@ -298,76 +402,17 @@ export default function AccessPanel({
                     ))}
                   </select>
                   <small>
-                    Hesabı olan çalışanların yetkilerini kullanıcı listesinden
-                    düzenleyebilirsiniz.
+                    AD kullanıcısının kendi gerçekleşen dağılımı, izin ve eğitim
+                    kayıtları bu çalışanla ilişkilendirilir.
                   </small>
-                </label>
-                <label className="access-field">
-                  Hesap Görünen Adı
-                  <input
-                    required
-                    disabled={busy}
-                    maxLength={150}
-                    value={form.name || ""}
-                    onChange={(event) =>
-                      setForm({ ...form, name: event.target.value })
-                    }
-                  />
-                  <small>
-                    Hesapta gösterilecek ad; çalışan kaydındaki adı değiştirmez.
-                    En fazla 150 karakter.
-                  </small>
-                </label>
-                <label className="access-field">
-                  Kullanıcı Adı
-                  <input
-                    required
-                    disabled={busy}
-                    autoComplete="off"
-                    minLength={3}
-                    maxLength={100}
-                    pattern="[a-zA-Z0-9._@+\-]{3,100}"
-                    value={form.username || ""}
-                    onChange={(event) =>
-                      setForm({ ...form, username: event.target.value })
-                    }
-                  />
-                  <small>
-                    3–100 karakter; harf, rakam ve . _ @ + - kullanılabilir.
-                  </small>
-                </label>
-                <label className="access-field">
-                  İlk Şifre
-                  <input
-                    required
-                    disabled={busy}
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={10}
-                    maxLength={256}
-                    value={form.password || ""}
-                    onChange={(event) =>
-                      setForm({ ...form, password: event.target.value })
-                    }
-                  />
-                  <small>10–256 karakter.</small>
-                </label>
-                <label className="access-field">
-                  Şifre Tekrarı
-                  <input
-                    required
-                    disabled={busy}
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={10}
-                    maxLength={256}
-                    value={form.confirmation || ""}
-                    onChange={(event) =>
-                      setForm({ ...form, confirmation: event.target.value })
-                    }
-                  />
                 </label>
               </>
+            )}
+            {!creating && selected?.authSource === "ldap" && (
+              <p className="access-admin-note">
+                Active Directory · {selected.email || "AD kaydında e-posta yok"}
+                . Kullanıcı bilgileri kurumsal dizinden alınır.
+              </p>
             )}
             <label className="access-field">
               Rol
@@ -440,13 +485,6 @@ export default function AccessPanel({
                     setForm({
                       ...form,
                       resourceId: event.target.value,
-                      ...(creating
-                        ? {
-                            name:
-                              people.find((p) => p.id === event.target.value)
-                                ?.name || "",
-                          }
-                        : {}),
                     })
                   }
                 >
@@ -486,11 +524,21 @@ export default function AccessPanel({
               </p>
             )}
             <div className="access-form-actions">
-              <button className="button primary" disabled={busy}>
+              <button
+                className="button primary"
+                disabled={
+                  busy ||
+                  (creating &&
+                    (directory.busy ||
+                      !directory.configured ||
+                      !form.directoryUser ||
+                      !form.resourceId))
+                }
+              >
                 {busy
                   ? "Kaydediliyor…"
                   : creating
-                    ? "Hesap Oluştur ve Yetkilendir"
+                    ? "Yetki Tanımla ve Eşleştir"
                     : "Kaydet"}
               </button>
               <button
