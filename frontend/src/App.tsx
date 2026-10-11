@@ -707,7 +707,7 @@ export default function Portal() {
                       }
                       canEditCalendar={!!isAdmin}
                       ownResourceId={
-                        user?.role === "normal" ? user.resourceId : undefined
+                        user?.role !== "admin" ? user?.resourceId : undefined
                       }
                       onSaved={(next) => {
                         setData(next);

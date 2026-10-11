@@ -1,4 +1,3 @@
-import { ROOT_ADMIN_ID } from "../shared/access.ts";
 import express from "express";
 import { z } from "zod";
 import path from "node:path";
@@ -18,6 +17,12 @@ import {
   importRows,
   restore,
 } from "./operations.mjs";
+import {
+  permissionInput,
+  accountInput,
+  updatePermissions,
+  createEmployeeAccount,
+} from "./user-commands.mjs";
 import { changeAndView } from "./change-service.mjs";
 import { sendDataSnapshot } from "./data-response.mjs";
 import { applicationAddress } from "./http-config.mjs";
@@ -310,15 +315,6 @@ export function createApp(
       );
     }),
   );
-  const permissionInput = z
-    .object({
-      id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
-      role: z.enum(["admin", "manager", "normal"]),
-      leaders: z.array(z.string()).max(100),
-      resourceId: z.string().max(120).default(""),
-      revision: z.number().int().nonnegative(),
-    })
-    .strict();
   app.post(
     "/api/users",
     admission.handler(async (req, res) => {
@@ -329,60 +325,36 @@ export function createApp(
         ATTEMPT_LIMITS.userEdit,
       );
       const input = permissionInput.parse(req.body);
-      if (input.id === ROOT_ADMIN_ID)
-        fail(403, "Ana yönetici yetkileri değiştirilemez.");
       const view = await store.mutate(
         req.user,
-        async (d, u, session) => {
-          admin(u);
-          const old = await store.findUser({ id: input.id }, session);
-          if (!old)
-            fail(
-              404,
-              "Kullanıcı bulunamadı. Hesaplar kimlik dizininden sağlanır.",
-            );
-          if (old.revision !== input.revision)
-            fail(
-              409,
-              "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.",
-            );
-          if (input.leaders.some((leader) => !d.leaders.includes(leader)))
-            fail(400, "Geçersiz liderlik seçimi.");
-          const resourceId = input.role === "normal" ? input.resourceId : "";
-          if (
-            resourceId &&
-            !d.resources.some((resource) => resource.id === resourceId)
-          )
-            fail(400, "Çalışan kaydı bulunamadı.");
-          if (resourceId) {
-            const linked = (
-              await session.query(
-                "SELECT id FROM kp_users WHERE resource_id=@p0 AND id<>@p1",
-                [resourceId, input.id],
-              )
-            ).rows;
-            if (linked.length)
-              fail(409, "Bu çalışan kaydı başka bir kullanıcıya bağlı.");
-          }
-          await store.saveUser(
-            {
-              ...old,
-              role: input.role,
-              leaders: input.role === "admin" ? [] : input.leaders,
-              resourceId,
-              revision: old.revision + 1,
-              version: old.version + 1,
-            },
-            session,
-          );
-          await store.revokeUser(input.id, session);
-        },
+        (d, u, session) => updatePermissions(store, d, u, session, input),
         { auditUsers: true, returnView: input.id !== req.user._id },
       );
       // Editing your own permissions invalidates your session. Commit the change
       // first, then return the existing reauthentication response without a snapshot.
       if (input.id === req.user._id) fail(401, "Oturum yenilenmeli.");
       res.json(view);
+    }),
+  );
+  app.post(
+    "/api/users/create",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      await attemptLimiter.reserve(
+        "user-edit",
+        req.user._id,
+        ATTEMPT_LIMITS.userEdit,
+      );
+      const input = accountInput.parse(req.body);
+      const password = await hashPassword(input.password);
+      res.json(
+        await store.mutate(
+          req.user,
+          (d, u, session) =>
+            createEmployeeAccount(store, d, u, session, input, password),
+          { auditUsers: true, returnView: true },
+        ),
+      );
     }),
   );
   app.use("/api", (_req, res) =>

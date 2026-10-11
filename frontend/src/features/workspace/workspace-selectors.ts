@@ -48,7 +48,7 @@ export function selectWorkspaceScope(
             m,
             currentMonth,
             actualTeamIds,
-            user?.role === "normal" ? user.resourceId : undefined,
+            user?.role !== "admin" ? user?.resourceId : undefined,
           );
         }),
       )

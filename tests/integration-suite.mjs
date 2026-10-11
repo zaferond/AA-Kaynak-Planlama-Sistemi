@@ -627,6 +627,51 @@ export async function integrationSuite(store) {
       400,
     );
     assert.equal((await get()).data.resources.length, 1);
+    // Same account creation path runs on SQL.js and native MSSQL fixtures.
+    const employeeId = (await get()).data.resources[0].id;
+    const created = await request("/users/create", {
+      username: "test.new-manager",
+      password: pass,
+      role: "manager",
+      leaders: [other.lead],
+      resourceId: employeeId,
+    });
+    const createdAccount = created.json.data.users.find(
+      (u) => u.username === "test.new-manager",
+    );
+    assert.equal(createdAccount.resourceId, employeeId);
+    const createdLogin = await request("/auth/login", {
+      username: "test.new-manager",
+      password: pass,
+    });
+    const createdAuth = {
+      cookie: createdLogin.response.headers.get("set-cookie").split(";")[0],
+      csrf: createdLogin.json.csrf,
+    };
+    assert.equal(
+      (await get(createdAuth)).data.resources.find((r) => r.id === employeeId)
+        .name,
+      "Yeni",
+    );
+    await request("/users", {
+      id: createdAccount.id,
+      role: "manager",
+      leaders: [],
+      resourceId: employeeId,
+      revision: created.json.data.revisions["user:" + createdAccount.id],
+    });
+    await request("/data", undefined, 401, createdAuth);
+    await request(
+      "/users/create",
+      {
+        username: "test.duplicate-link",
+        password: pass,
+        role: "normal",
+        leaders: [],
+        resourceId: employeeId,
+      },
+      409,
+    );
     const audit = (await request("/audit?limit=2")).json;
     assert.equal(audit.entries.length, 2);
     assert(audit.total >= 2);

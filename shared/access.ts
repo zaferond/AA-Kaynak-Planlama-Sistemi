@@ -1,4 +1,4 @@
-import type { Data } from "./model.ts";
+import type { Data, Resource } from "./model.ts";
 import { actualTeamTotalIndex, createActualTeamIndex } from "./model.ts";
 import { filterOwnRecords } from "./records.ts";
 export type Role = "admin" | "manager" | "normal";
@@ -18,6 +18,9 @@ export type Account = {
   active: boolean;
   credential?: Credential;
 };
+export function isEmployeeResource(resource: Resource) {
+  return resource.versions.some((version) => !version.status.includes("İlan"));
+}
 export const ROOT_ADMIN_ID = "root-admin";
 export type Principal = Omit<Account, "credential">;
 export function publicAccount(a: Account): Principal {
@@ -56,7 +59,7 @@ export function canSeePlanningRevision(
 }
 
 // Candidate owners for personal actual data. A manager's historical team/month
-// check still runs below; this owner list is a superset, never a new permission.
+// check still runs below; a linked manager also retains their own employee records.
 export function actualReadOwnerScope(
   d: Pick<Data, "teams" | "leaders" | "resources">,
   u: Principal,
@@ -64,21 +67,24 @@ export function actualReadOwnerScope(
 ): string[] | undefined {
   if (u.role === "admin") return undefined;
   if (u.role === "normal") return u.resourceId ? [u.resourceId] : [];
-  if (!u.leaders.length) return [];
   return d.resources
-    .filter((r) => r.versions.some((v) => teamIds.has(v.team)))
+    .filter(
+      (r) =>
+        r.id === u.resourceId ||
+        (u.leaders.length > 0 && r.versions.some((v) => teamIds.has(v.team))),
+    )
     .map((r) => r.id);
 }
 export function scopeData(d: Data, u: Principal): Data {
   if (u.role === "admin") return d;
   const { leaderNames, teams, ids } = visibleTeamScope(d, u);
-  const ownId = u.role === "normal" ? u.resourceId || "" : "";
+  const ownId = u.resourceId || "";
   const managerCanSeePeople = u.role === "manager" && u.leaders.length > 0;
   const assignments = createActualTeamIndex(d.resources);
   const actualOwners = new Set(actualReadOwnerScope(d, u, ids));
   const canSeeResourceMonth = (resourceId: string, month: string) => {
     if (!actualOwners.has(resourceId)) return false;
-    if (u.role === "normal") return true;
+    if (resourceId === ownId) return true;
     if (!month) return false;
     const team = assignments.get(resourceId, month);
     return team !== undefined && ids.has(team);

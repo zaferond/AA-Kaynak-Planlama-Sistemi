@@ -94,7 +94,7 @@ export function createWorkspaceExports({
           months,
           currentMonth,
           isAdmin || isManager ? personIds : [user?.resourceId || ""],
-          user?.role === "normal" ? user.resourceId : undefined,
+          user?.role !== "admin" ? user?.resourceId : undefined,
         );
     } catch (e) {
       setError((e as Error).message);

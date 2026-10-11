@@ -4,8 +4,14 @@ import { ShieldCheck, UserRound, Users, Search } from "lucide-react";
 import type { Data } from "./model";
 import { fold } from "./model";
 import type { Account, Role } from "./access";
-import { ROOT_ADMIN_ID } from "./access";
-import { saveUser, type UserInput } from "./storage";
+import { ROOT_ADMIN_ID, isEmployeeResource } from "./access";
+import { saveUser, createUser, type UserInput } from "./storage";
+type PermissionForm = UserInput & {
+  username?: string;
+  name?: string;
+  password?: string;
+  confirmation?: string;
+};
 const roleLabel: Record<Role, string> = {
   admin: "Admin",
   manager: "Yönetici",
@@ -18,7 +24,7 @@ export default function AccessPanel({
   data: Data;
   onSaved: (d: Data) => void;
 }) {
-  const [form, setForm] = useState<UserInput | null>(null),
+  const [form, setForm] = useState<PermissionForm | null>(null),
     [query, setQuery] = useState(""),
     [leaderQuery, setLeaderQuery] = useState(""),
     [error, setError] = useState(""),
@@ -30,10 +36,32 @@ export default function AccessPanel({
     fold(user.username + " " + user.name).includes(fold(query)),
   );
   const people = data.resources
-    .filter((resource) =>
-      resource.versions.some((version) => !version.status.includes("İlan")),
-    )
+    .filter(isEmployeeResource)
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
+  const creating = !!form && !form.id;
+  const linkedUsers = new Map(
+    (data.users || [])
+      .filter((u) => u.resourceId)
+      .map((u) => [u.resourceId, u]),
+  );
+  const availablePeople = people.filter((p) => !linkedUsers.has(p.id));
+  const selectedPerson = people.find((p) => p.id === form?.resourceId);
+  function startAccount() {
+    setError("");
+    setNotice("");
+    setLeaderQuery("");
+    setForm({
+      id: "",
+      role: "normal",
+      leaders: [],
+      resourceId: "",
+      revision: 0,
+      name: "",
+      username: "",
+      password: "",
+      confirmation: "",
+    });
+  }
   useEffect(() => {
     if (form && window.innerWidth <= 1000)
       document
@@ -56,13 +84,36 @@ export default function AccessPanel({
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!form || busy) return;
-    setBusy(true);
     setError("");
+    if (creating && form.password !== form.confirmation) {
+      setError("Şifreler eşleşmiyor.");
+      return;
+    }
+    setBusy(true);
     try {
-      const updated = await saveUser(form);
+      const updated = creating
+        ? await createUser({
+            username: form.username || "",
+            name: form.name || "",
+            password: form.password || "",
+            role: form.role === "manager" ? "manager" : "normal",
+            leaders: form.leaders,
+            resourceId: form.resourceId,
+          })
+        : await saveUser({
+            id: form.id,
+            role: form.role,
+            leaders: form.leaders,
+            resourceId: form.resourceId,
+            revision: form.revision,
+          });
       onSaved(updated);
       setForm(null);
-      setNotice("Yetkiler kaydedildi. Kullanıcının açık oturumları yenilendi.");
+      setNotice(
+        creating
+          ? "Çalışanın hesabı oluşturuldu ve yetkileri tanımlandı."
+          : "Yetkiler kaydedildi. Kullanıcının açık oturumları yenilendi.",
+      );
     } catch (cause) {
       setError((cause as Error).message);
     } finally {
@@ -75,9 +126,17 @@ export default function AccessPanel({
         <div>
           <h2>Yetkilendirme</h2>
           <p>
-            Mevcut kullanıcılara rol, liderlik ve çalışan kaydı erişimi atayın.
+            Çalışanlara hesap açın; kullanıcıların rol, liderlik ve çalışan
+            eşleştirmelerini yönetin.
           </p>
         </div>
+        <button
+          className="button primary"
+          disabled={busy || !availablePeople.length}
+          onClick={startAccount}
+        >
+          Çalışana Yetki Tanımla
+        </button>
         <button className="button" onClick={() => setShowAudit(true)}>
           Değişiklik Geçmişi
         </button>
@@ -155,7 +214,7 @@ export default function AccessPanel({
                         : user.leaders.length
                           ? user.leaders.length + " liderlik"
                           : "Tüm liderlikler · Plan salt okunur"}
-                      {user.role === "normal" && (
+                      {user.role !== "admin" && (
                         <small>
                           {user.resourceId
                             ? data.resources.find(
@@ -189,21 +248,131 @@ export default function AccessPanel({
             )}
           </div>
         </div>
-        {form && selected && (
+        {form && (selected || creating) && (
           <form className="access-permission-form" onSubmit={submit}>
             <div className="access-form-heading">
               <div>
-                <span>YETKİ DÜZENLEME</span>
-                <h3>{selected.name}</h3>
-                <p>{selected.username}</p>
+                <span>
+                  {creating ? "HESAP VE YETKİ TANIMLAMA" : "YETKİ DÜZENLEME"}
+                </span>
+                <h3>
+                  {selected?.name || selectedPerson?.name || "Çalışan seçin"}
+                </h3>
+                <p>
+                  {creating
+                    ? "Mevcut çalışan kaydı için yeni kullanıcı hesabı"
+                    : selected?.username}
+                </p>
               </div>
               <span className="access-role-badge">
-                {selected.active ? "Aktif" : "Pasif"}
+                {creating ? "Yeni Hesap" : selected?.active ? "Aktif" : "Pasif"}
               </span>
             </div>
+            {creating && (
+              <>
+                <label className="access-field">
+                  Hesap Açılacak Çalışan
+                  <select
+                    required
+                    disabled={busy}
+                    value={form.resourceId}
+                    onChange={(event) =>
+                      setForm({
+                        ...form,
+                        resourceId: event.target.value,
+                        ...(creating
+                          ? {
+                              name:
+                                people.find((p) => p.id === event.target.value)
+                                  ?.name || "",
+                            }
+                          : {}),
+                      })
+                    }
+                  >
+                    <option value="">Çalışan seçin</option>
+                    {availablePeople.map((person) => (
+                      <option key={person.id} value={person.id}>
+                        {person.name}
+                      </option>
+                    ))}
+                  </select>
+                  <small>
+                    Hesabı olan çalışanların yetkilerini kullanıcı listesinden
+                    düzenleyebilirsiniz.
+                  </small>
+                </label>
+                <label className="access-field">
+                  Hesap Görünen Adı
+                  <input
+                    required
+                    disabled={busy}
+                    maxLength={150}
+                    value={form.name || ""}
+                    onChange={(event) =>
+                      setForm({ ...form, name: event.target.value })
+                    }
+                  />
+                  <small>
+                    Hesapta gösterilecek ad; çalışan kaydındaki adı değiştirmez.
+                    En fazla 150 karakter.
+                  </small>
+                </label>
+                <label className="access-field">
+                  Kullanıcı Adı
+                  <input
+                    required
+                    disabled={busy}
+                    autoComplete="off"
+                    minLength={3}
+                    maxLength={100}
+                    pattern="[a-zA-Z0-9._@+\-]{3,100}"
+                    value={form.username || ""}
+                    onChange={(event) =>
+                      setForm({ ...form, username: event.target.value })
+                    }
+                  />
+                  <small>
+                    3–100 karakter; harf, rakam ve . _ @ + - kullanılabilir.
+                  </small>
+                </label>
+                <label className="access-field">
+                  İlk Şifre
+                  <input
+                    required
+                    disabled={busy}
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={10}
+                    maxLength={256}
+                    value={form.password || ""}
+                    onChange={(event) =>
+                      setForm({ ...form, password: event.target.value })
+                    }
+                  />
+                  <small>10–256 karakter.</small>
+                </label>
+                <label className="access-field">
+                  Şifre Tekrarı
+                  <input
+                    required
+                    disabled={busy}
+                    type="password"
+                    autoComplete="new-password"
+                    minLength={10}
+                    maxLength={256}
+                    value={form.confirmation || ""}
+                    onChange={(event) =>
+                      setForm({ ...form, confirmation: event.target.value })
+                    }
+                  />
+                </label>
+              </>
+            )}
             <label className="access-field">
               Rol
               <select
+                aria-label="Rol"
                 value={form.role}
                 disabled={busy}
                 onChange={(event) =>
@@ -211,13 +380,13 @@ export default function AccessPanel({
                     ...form,
                     role: event.target.value as Role,
                     resourceId:
-                      event.target.value === "normal" ? form.resourceId : "",
+                      event.target.value === "admin" ? "" : form.resourceId,
                   })
                 }
               >
                 <option value="normal">Normal Kullanıcı</option>
                 <option value="manager">Yönetici</option>
-                <option value="admin">Admin</option>
+                {!creating && <option value="admin">Admin</option>}
               </select>
             </label>
             {form.role !== "admin" && (
@@ -261,26 +430,48 @@ export default function AccessPanel({
                 </div>
               </fieldset>
             )}
-            {form.role === "normal" && (
+            {!creating && form.role !== "admin" && (
               <label className="access-field">
                 Çalışan Kaydı
                 <select
                   value={form.resourceId}
                   disabled={busy}
                   onChange={(event) =>
-                    setForm({ ...form, resourceId: event.target.value })
+                    setForm({
+                      ...form,
+                      resourceId: event.target.value,
+                      ...(creating
+                        ? {
+                            name:
+                              people.find((p) => p.id === event.target.value)
+                                ?.name || "",
+                          }
+                        : {}),
+                    })
                   }
                 >
                   <option value="">Eşleştirilmedi</option>
                   {people.map((person) => (
-                    <option key={person.id} value={person.id}>
+                    <option
+                      key={person.id}
+                      value={person.id}
+                      disabled={
+                        !!linkedUsers.get(person.id) &&
+                        linkedUsers.get(person.id)?.id !== form.id
+                      }
+                    >
                       {person.name}
+                      {linkedUsers.get(person.id) &&
+                      linkedUsers.get(person.id)?.id !== form.id
+                        ? " · Başka hesaba bağlı"
+                        : ""}
                     </option>
                   ))}
                 </select>
                 <small>
-                  Gerçekleşen kaynak dağılımı yalnızca eşleştirilen çalışan için
-                  düzenlenebilir.
+                  {form.role === "manager"
+                    ? "Yönetici kendi gerçekleşen dağılımını, izin ve eğitim kayıtlarını da yönetebilir. Liderlik yetkileri korunur."
+                    : "Gerçekleşen kaynak dağılımı yalnızca eşleştirilen çalışan için düzenlenebilir."}
                 </small>
               </label>
             )}
@@ -296,7 +487,11 @@ export default function AccessPanel({
             )}
             <div className="access-form-actions">
               <button className="button primary" disabled={busy}>
-                {busy ? "Kaydediliyor…" : "Kaydet"}
+                {busy
+                  ? "Kaydediliyor…"
+                  : creating
+                    ? "Hesap Oluştur ve Yetkilendir"
+                    : "Kaydet"}
               </button>
               <button
                 type="button"

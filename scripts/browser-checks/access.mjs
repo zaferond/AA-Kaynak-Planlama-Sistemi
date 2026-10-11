@@ -108,7 +108,7 @@ export async function checkAccess(f) {
         );
         assert.equal(
           (await f.store.findUser({ id: "employee" })).resourceId,
-          "",
+          "r-own",
         );
         await employee.page.reload();
         await employee.page
@@ -212,6 +212,113 @@ export async function checkAccess(f) {
           0,
         );
         await c.context.close();
+      },
+    );
+    await f.check(
+      "access: admins provision existing employees and managers retain their own calendar identity",
+      async () => {
+        await f.store.mutate(f.actor, (data, user) =>
+          applyChanges(data, user, [
+            {
+              kind: "resource",
+              id: "r-new-account",
+              revision: 0,
+              value: {
+                id: "r-new-account",
+                name: "Browser New Account",
+                note: "",
+                versions: [
+                  {
+                    effective: "2026-01",
+                    start: "2026-01-01",
+                    end: "",
+                    team: f.teamA.id,
+                    lead: f.teamA.lead,
+                    status: "Aktif Çalışan",
+                    included: true,
+                    amount: 1,
+                  },
+                ],
+              },
+            },
+          ]),
+        );
+        await page.reload();
+        await openAccess(page);
+        await page
+          .getByRole("button", { name: "Çalışana Yetki Tanımla", exact: true })
+          .click();
+        const form = page.locator(".access-permission-form");
+        await form
+          .getByLabel("Hesap Açılacak Çalışan", { exact: false })
+          .selectOption("r-new-account");
+        await form
+          .getByLabel("Kullanıcı Adı", { exact: false })
+          .fill("qa.new-manager");
+        await form.getByLabel("İlk Şifre", { exact: false }).fill(f.password);
+        await form
+          .getByLabel("Şifre Tekrarı", { exact: true })
+          .fill("Different-password-123!");
+        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
+        assert.equal(
+          await form
+            .getByLabel("Hesap Açılacak Çalışan", { exact: false })
+            .inputValue(),
+          "r-new-account",
+        );
+        await form
+          .getByRole("button", {
+            name: "Hesap Oluştur ve Yetkilendir",
+            exact: true,
+          })
+          .click();
+        await form
+          .getByRole("alert")
+          .filter({ hasText: "Şifreler eşleşmiyor" })
+          .waitFor();
+        assert.equal(
+          await f.store.findUser({ username: "qa.new-manager" }),
+          null,
+        );
+        await form
+          .getByLabel("Şifre Tekrarı", { exact: true })
+          .fill(f.password);
+        await f.capture(page, "access-create-employee");
+        await form
+          .getByRole("button", {
+            name: "Hesap Oluştur ve Yetkilendir",
+            exact: true,
+          })
+          .click();
+        await form.waitFor({ state: "hidden" });
+        const saved = await f.store.findUser({ username: "qa.new-manager" });
+        assert.equal(saved.role, "manager");
+        assert.equal(saved.resourceId, "r-new-account");
+        const edit = await editAccount(page, "new-manager");
+        assert.equal(
+          await edit.getByLabel("Çalışan Kaydı", { exact: false }).inputValue(),
+          "r-new-account",
+        );
+        await edit.getByLabel("Rol", { exact: true }).selectOption("normal");
+        assert.equal(
+          await edit.getByLabel("Çalışan Kaydı", { exact: false }).inputValue(),
+          "r-new-account",
+        );
+        await edit.getByRole("button", { name: "Vazgeç", exact: true }).click();
+        const manager = await f.client("new-manager");
+        await manager.page
+          .getByRole("tab", {
+            name: "AA Gerçekleşen Kaynak Dağılımı",
+            exact: true,
+          })
+          .click();
+        await f.capture(manager.page, "access-manager-own-actual");
+        await manager.page
+          .locator(".person-allocation tbody tr")
+          .filter({ hasText: "Browser New Account" })
+          .first()
+          .waitFor();
+        await manager.context.close();
       },
     );
     await f.check(

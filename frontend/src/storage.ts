@@ -333,6 +333,17 @@ export type UserInput = {
 export async function saveUser(input: UserInput): Promise<Data> {
   return (await api("/users", input)).data;
 }
+export type CreateUserInput = {
+  name: string;
+  username: string;
+  password: string;
+  role: "manager" | "normal";
+  leaders: string[];
+  resourceId: string;
+};
+export async function createUser(input: CreateUserInput): Promise<Data> {
+  return (await api("/users/create", input)).data;
+}
 export async function importResources(
   rows: ImportRow[],
 ): Promise<{ data: Data; imported: number; skipped: number }> {

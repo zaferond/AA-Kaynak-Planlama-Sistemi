@@ -1907,3 +1907,338 @@ test("project/resource cascades roll back after SQL deletion and retain child AB
       }
     });
 });
+
+test("employee account provisioning and manager ownership preserve authorization boundaries", async (t) => {
+  const { store, admin, request, user, state, write } = await setup(t);
+  const teams = (await state()).data.teams;
+  const teamA = teams.find((x) => x.lead);
+  const teamB = teams.find((x) => x.lead && x.lead !== teamA.lead);
+  const resource = (id, status = "Aktif Çalışan") => ({
+    id,
+    name: "Synthetic " + id,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: teamB.id,
+        lead: teamB.lead,
+        status,
+        included: true,
+        amount: 1,
+      },
+    ],
+  });
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "p",
+          value: {
+            id: "p",
+            name: "Synthetic project",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        ...["employee-a", "employee-b", "employee-c"].map((id) => ({
+          kind: "resource",
+          id,
+          value: resource(id),
+        })),
+        {
+          kind: "resource",
+          id: "advert",
+          value: resource("advert", "Aktif İlan"),
+        },
+      ])
+    ).status,
+    200,
+  );
+  const password = "Employee-account-test-only-345!";
+  const create = (overrides = {}) => ({
+    username: "new.manager",
+    password,
+    role: "manager",
+    leaders: [teamA.lead],
+    resourceId: "employee-a",
+    ...overrides,
+  });
+  let managerId, managerAuth;
+  async function login(username) {
+    const result = await request("/auth/login", { username, password });
+    assert.equal(result.status, 200);
+    return {
+      cookie: result.response.headers.get("set-cookie").split(";")[0],
+      csrf: result.json.csrf,
+    };
+  }
+  await t.test(
+    "only admins can create accounts; validation rejects missing resources, adverts and invalid scope",
+    async () => {
+      const ordinary = await user("provision-denied", "normal");
+      const manager = await user("provision-manager-denied", "manager", "", [
+        teamA.lead,
+      ]);
+      for (const auth of [{}, ordinary, manager])
+        assert.equal(
+          (await request("/users/create", create(), auth)).status,
+          auth.cookie ? 403 : 401,
+        );
+      for (const patch of [
+        { password: "short" },
+        { username: "bad username" },
+        { role: "admin" },
+        { resourceId: "" },
+        { resourceId: "missing" },
+        { resourceId: "advert" },
+        { leaders: ["missing"] },
+        { unexpected: true },
+      ])
+        assert.equal(
+          (await request("/users/create", create(patch), admin)).status,
+          400,
+        );
+      assert.equal(await store.findUser({ username: "new.manager" }), null);
+    },
+  );
+  await t.test(
+    "new manager retains employee link and accesses own actual/calendar outside assigned leadership",
+    async () => {
+      const result = await request("/users/create", create(), admin);
+      assert.equal(result.status, 200);
+      const account = result.json.data.users.find(
+        (u) => u.username === "new.manager",
+      );
+      managerId = account.id;
+      assert.equal(account.resourceId, "employee-a");
+      assert.equal(account.name, "Synthetic employee-a");
+      assert.equal(account.role, "manager");
+      assert.equal(JSON.stringify(result.json).includes(password), false);
+      managerAuth = await login("new.manager");
+      assert.equal(
+        (
+          await write(
+            [
+              { kind: "actual", id: "employee-a|p|2026-09", value: 0.25 },
+              {
+                kind: "personDay",
+                id: "employee-a|2026-09-02|leave",
+                value: { type: "leave", hours: 2, label: "Synthetic leave" },
+              },
+            ],
+            managerAuth,
+          )
+        ).status,
+        200,
+      );
+      const view = (await request("/data", undefined, managerAuth)).json.data;
+      assert.equal(view.actualAllocations["employee-a|p|2026-09"], 0.25);
+      assert.equal(view.personCalendar["employee-a|2026-09-02|leave"].hours, 2);
+      assert.equal(
+        view.resources.find((r) => r.id === "employee-a").name,
+        "Synthetic employee-a",
+      );
+      assert.equal(
+        view.resources.some((r) => r.id === "employee-b"),
+        false,
+      );
+      assert.equal(
+        (
+          await write(
+            [{ kind: "actual", id: "employee-b|p|2026-09", value: 0.1 }],
+            managerAuth,
+          )
+        ).status,
+        403,
+      );
+      assert.equal(
+        (
+          await write(
+            [
+              {
+                kind: "personDay",
+                id: "employee-b|2026-09-02|leave",
+                value: { type: "leave", hours: 2 },
+              },
+            ],
+            managerAuth,
+          )
+        ).status,
+        403,
+      );
+      assert.equal(
+        (
+          await write(
+            [{ kind: "allocation", id: teamB.id + "|p|2026-09", value: 1 }],
+            managerAuth,
+          )
+        ).status,
+        403,
+      );
+    },
+  );
+  await t.test(
+    "duplicate usernames and employee links fail atomically, including concurrent creation",
+    async () => {
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({ resourceId: "employee-b" }),
+            admin,
+          )
+        ).status,
+        409,
+      );
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({ username: "second.account" }),
+            admin,
+          )
+        ).status,
+        409,
+      );
+      const results = await Promise.all(
+        ["race.one", "race.two"].map((username) =>
+          request(
+            "/users/create",
+            create({ username, resourceId: "employee-c" }),
+            admin,
+          ),
+        ),
+      );
+      assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+      assert.equal(
+        (await state()).data.users.filter((u) => u.resourceId === "employee-c")
+          .length,
+        1,
+      );
+    },
+  );
+  await t.test(
+    "manager/normal transitions keep linkage, reject stale edits and invalidate existing sessions",
+    async () => {
+      const old = (await state()).data.revisions["user:" + managerId];
+      const edit = {
+        id: managerId,
+        role: "normal",
+        leaders: [],
+        resourceId: "employee-a",
+        revision: old,
+      };
+      assert.equal((await request("/users", edit, admin)).status, 200);
+      assert.equal(
+        (await request("/data", undefined, managerAuth)).status,
+        401,
+      );
+      assert.equal(
+        (await request("/users", { ...edit, role: "manager" }, admin)).status,
+        409,
+      );
+      managerAuth = await login("new.manager");
+      const result = await request(
+        "/users",
+        { ...edit, role: "manager", revision: old + 1 },
+        admin,
+      );
+      assert.equal(result.status, 200);
+      assert.equal(
+        result.json.data.users.find((u) => u.id === managerId).resourceId,
+        "employee-a",
+      );
+      managerAuth = await login("new.manager");
+      const view = (await request("/data", undefined, managerAuth)).json.data;
+      assert.equal(view.actualAllocations["employee-a|p|2026-09"], 0.25);
+      assert.equal(view.actualAllocations["employee-b|p|2026-09"], undefined);
+    },
+  );
+  await t.test(
+    "long employee names use an explicit account display name without modifying the employee",
+    async () => {
+      const person = { ...resource("long-name"), name: "E".repeat(200) };
+      assert.equal(
+        (await write([{ kind: "resource", id: person.id, value: person }]))
+          .status,
+        200,
+      );
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({ username: "long.employee", resourceId: person.id }),
+            admin,
+          )
+        ).status,
+        400,
+      );
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({
+              username: "long.employee",
+              resourceId: person.id,
+              name: "Short display name",
+            }),
+            admin,
+          )
+        ).status,
+        200,
+      );
+      assert.equal(
+        (await store.findUser({ username: "long.employee" })).name,
+        "Short display name",
+      );
+      assert.equal(
+        (await state()).data.resources.find((r) => r.id === person.id).name,
+        person.name,
+      );
+    },
+  );
+  await t.test(
+    "a normal employee account can log in; credentials never appear in snapshots, backups or audit",
+    async () => {
+      assert.equal(
+        (
+          await request(
+            "/users/create",
+            create({
+              username: "new.employee",
+              role: "normal",
+              resourceId: "employee-b",
+              leaders: [],
+            }),
+            admin,
+          )
+        ).status,
+        200,
+      );
+      const auth = await login("new.employee");
+      const view = (await request("/data", undefined, auth)).json.data;
+      assert.equal(view.users, undefined);
+      assert.equal(view.actualAllocations["employee-a|p|2026-09"], undefined);
+      assert.equal(
+        (await request("/users/create", create(), auth)).status,
+        403,
+      );
+      const stored = await store.findUser({ username: "new.employee" });
+      for (const url of ["/data", "/backup", "/audit?limit=100"]) {
+        const text = JSON.stringify(
+          (await request(url, undefined, admin)).json,
+        );
+        for (const secret of [
+          password,
+          stored.password.salt,
+          stored.password.hash,
+        ])
+          assert.equal(text.includes(secret), false);
+      }
+    },
+  );
+});

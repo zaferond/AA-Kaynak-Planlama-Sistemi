@@ -13,7 +13,11 @@ import { scopeData } from "../shared/access.ts";
 import { buildCapacityIndex, projectTotalIndex } from "../shared/metrics.ts";
 import { MAX_FILTER_START } from "../shared/planning-dates.ts";
 const defaults = { start: "2026-01", count: 12 };
-const principal = (role, leaders = ["A"], resourceId = "own") => ({
+const principal = (
+  role,
+  leaders = ["A"],
+  resourceId = role === "normal" ? "own" : "",
+) => ({
   id: role,
   username: role,
   name: role,
@@ -323,4 +327,24 @@ test("all filtered rows remain reachable without pagination in both grouping dir
   assert.equal(empty.effectivePlanPage, 0);
   assert.equal(empty.effectiveProjectPage, 0);
   assert.deepEqual(empty.visiblePlanRows, []);
+});
+
+test("a manager's linked employee stays available alongside authorized employees after transfer", () => {
+  const full = fixture(),
+    user = principal("manager", ["A"], "own");
+  const data = scopeData(full, user);
+  const scope = selectWorkspaceScope(
+    data,
+    user,
+    filters({ months: ["2026-02"] }),
+  );
+  assert.deepEqual(
+    scope.availablePeople.map((p) => p.id),
+    ["own"],
+  );
+  assert.deepEqual(scope.ids, ["a"]);
+  assert.equal(
+    scope.availablePeople.some((p) => p.id === "other"),
+    false,
+  );
 });

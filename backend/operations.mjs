@@ -123,7 +123,7 @@ function stageParsedChanges(d, u, changes) {
       !!assignment &&
       allowedTeam(d, publicUser(u), assignment.team);
     const ownActual =
-      u.role === "normal" &&
+      (u.role === "normal" || u.role === "manager") &&
       !!u.resourceId &&
       targetId === u.resourceId &&
       actualKind;

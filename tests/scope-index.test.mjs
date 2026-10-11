@@ -84,7 +84,11 @@ const fixture = () => ({
     "calendar:shared": 14,
   },
 });
-const principal = (role, leaders = ["A"], resourceId = "r") => ({
+const principal = (
+  role,
+  leaders = ["A"],
+  resourceId = role === "normal" ? "r" : "",
+) => ({
   id: role,
   username: role,
   name: role,
@@ -354,4 +358,26 @@ test("personal read owner candidates preserve own transfers and historical manag
     "r",
     "s",
   ]);
+});
+
+test("linked managers retain their own historical records without gaining another leadership's employees", () => {
+  const data = fixture();
+  const ownManager = principal("manager", [], "r");
+  assert.deepEqual(actualReadOwnerScope(data, ownManager), ["r"]);
+  const view = scopeData(data, ownManager);
+  assert.deepEqual(
+    view.actualAllocations,
+    scopeData(data, principal("normal")).actualAllocations,
+  );
+  assert.equal(view.resources.find((r) => r.id === "r").name, "Owner");
+  assert.equal(view.resources.find((r) => r.id === "s").name, "");
+  assert.equal(view.actualAllocations["s|p|2026-01"], undefined);
+  assert.equal(view.personCalendar["r|2026-07-02|leave"].hours, 3);
+  assert.equal(
+    view.revisions["actual:r|p|2026-07"],
+    data.revisions["actual:r|p|2026-07"],
+  );
+  const assigned = scopeData(data, principal("manager", ["A"], "r"));
+  assert.equal(assigned.actualAllocations["s|p|2026-01"], 0.25);
+  assert.equal(assigned.actualAllocations["r|p|2026-07"], 0.5);
 });
