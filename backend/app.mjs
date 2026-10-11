@@ -26,11 +26,17 @@ import {
   clientAddressKey,
   ATTEMPT_LIMITS,
 } from "./rate-limits.mjs";
+import {
+  MutationAdmission,
+  mutationAdmissionMiddleware,
+} from "./mutation-admission.mjs";
 export function createApp(
   store,
   {
     origin = "http://localhost:3000",
     trustedProxies = [],
+    mutationLimits,
+    mutationGate = new MutationAdmission(mutationLimits),
     attemptLimiter = createAttemptLimiter(store),
   } = {},
 ) {
@@ -86,6 +92,7 @@ export function createApp(
   );
   cleanup.unref();
   app.locals.close = () => {
+    mutationGate.close();
     clearInterval(timer);
     clearInterval(cleanup);
   };
@@ -156,7 +163,7 @@ export function createApp(
       res.json({ user: publicUser(u), csrf, sessionIdentity: identity });
     },
   );
-  app.use("/api", async (req, res, next) => {
+  const authenticate = async (req, res) => {
     const raw = cookie(req);
     if (!raw) fail(401, "Giriş yapın.");
     const s = await store.session(digest(raw));
@@ -172,8 +179,13 @@ export function createApp(
       req.headers["x-csrf-token"] !== s.csrf
     )
       fail(403, "Oturum doğrulaması başarısız.");
+  };
+  app.use("/api", async (req, res, next) => {
+    await authenticate(req, res);
     next();
   });
+  const admission = mutationAdmissionMiddleware(mutationGate, authenticate);
+  app.use("/api", admission.middleware);
   // Large imports/backups keep their existing allowance, after authentication.
   const normalJson = express.json({ limit: "2mb" });
   const bulkJson = express.json({ limit: "20mb" });
@@ -209,37 +221,55 @@ export function createApp(
       sessionIdentity: req.sessionIdentity,
     });
   });
-  app.post("/api/changes", async (req, res) => {
-    res.json(await changeAndView(store, req.user, req.body.changes, req.body));
-  });
-  app.post("/api/leaders/change", async (req, res) => {
-    admin(req.user);
-    res.json(
-      await store.mutate(
+  app.post(
+    "/api/changes",
+    admission.handler(async (req, res) => {
+      res.json(
+        await changeAndView(store, req.user, req.body.changes, req.body),
+      );
+    }),
+  );
+  app.post(
+    "/api/leaders/change",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      res.json(
+        await store.mutate(
+          req.user,
+          (d, u, c, generation) =>
+            applyLeaderChange(d, u, req.body, c, generation),
+          { auditUsers: true, returnView: true },
+        ),
+      );
+    }),
+  );
+  app.post(
+    "/api/allocations/reset",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      res.json(
+        await store.mutate(
+          req.user,
+          (d, u) => reset(d, u, req.body.revisions),
+          {
+            returnView: true,
+          },
+        ),
+      );
+    }),
+  );
+  app.post(
+    "/api/resources/import",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      const { view, result } = await store.mutate(
         req.user,
-        (d, u, c, generation) =>
-          applyLeaderChange(d, u, req.body, c, generation),
-        { auditUsers: true, returnView: true },
-      ),
-    );
-  });
-  app.post("/api/allocations/reset", async (req, res) => {
-    admin(req.user);
-    res.json(
-      await store.mutate(req.user, (d, u) => reset(d, u, req.body.revisions), {
-        returnView: true,
-      }),
-    );
-  });
-  app.post("/api/resources/import", async (req, res) => {
-    admin(req.user);
-    const { view, result } = await store.mutate(
-      req.user,
-      (d, u) => importRows(d, u, req.body.rows),
-      { returnView: true, returnResult: true },
-    );
-    res.json({ ...view, ...result });
-  });
+        (d, u) => importRows(d, u, req.body.rows),
+        { returnView: true, returnResult: true },
+      );
+      res.json({ ...view, ...result });
+    }),
+  );
   app.get("/api/audit", async (req, res) => {
     admin(req.user);
     const page = z
@@ -263,20 +293,23 @@ export function createApp(
       data,
     });
   });
-  app.post("/api/restore", async (req, res) => {
-    admin(req.user);
-    res.json(
-      await store.mutate(
-        req.user,
-        (d, u, _s, generation) => {
-          if (req.body.generation !== generation)
-            fail(409, "Veriler değişti. Yenileyip yedeği tekrar yükleyin.");
-          return restore(d, u, req.body.data);
-        },
-        { returnView: true },
-      ),
-    );
-  });
+  app.post(
+    "/api/restore",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      res.json(
+        await store.mutate(
+          req.user,
+          (d, u, _s, generation) => {
+            if (req.body.generation !== generation)
+              fail(409, "Veriler değişti. Yenileyip yedeği tekrar yükleyin.");
+            return restore(d, u, req.body.data);
+          },
+          { returnView: true },
+        ),
+      );
+    }),
+  );
   const permissionInput = z
     .object({
       id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
@@ -286,69 +319,72 @@ export function createApp(
       revision: z.number().int().nonnegative(),
     })
     .strict();
-  app.post("/api/users", async (req, res) => {
-    admin(req.user);
-    await attemptLimiter.reserve(
-      "user-edit",
-      req.user._id,
-      ATTEMPT_LIMITS.userEdit,
-    );
-    const input = permissionInput.parse(req.body);
-    if (input.id === ROOT_ADMIN_ID)
-      fail(403, "Ana yönetici yetkileri değiştirilemez.");
-    const view = await store.mutate(
-      req.user,
-      async (d, u, session) => {
-        admin(u);
-        const old = await store.findUser({ id: input.id }, session);
-        if (!old)
-          fail(
-            404,
-            "Kullanıcı bulunamadı. Hesaplar kimlik dizininden sağlanır.",
+  app.post(
+    "/api/users",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      await attemptLimiter.reserve(
+        "user-edit",
+        req.user._id,
+        ATTEMPT_LIMITS.userEdit,
+      );
+      const input = permissionInput.parse(req.body);
+      if (input.id === ROOT_ADMIN_ID)
+        fail(403, "Ana yönetici yetkileri değiştirilemez.");
+      const view = await store.mutate(
+        req.user,
+        async (d, u, session) => {
+          admin(u);
+          const old = await store.findUser({ id: input.id }, session);
+          if (!old)
+            fail(
+              404,
+              "Kullanıcı bulunamadı. Hesaplar kimlik dizininden sağlanır.",
+            );
+          if (old.revision !== input.revision)
+            fail(
+              409,
+              "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.",
+            );
+          if (input.leaders.some((leader) => !d.leaders.includes(leader)))
+            fail(400, "Geçersiz liderlik seçimi.");
+          const resourceId = input.role === "normal" ? input.resourceId : "";
+          if (
+            resourceId &&
+            !d.resources.some((resource) => resource.id === resourceId)
+          )
+            fail(400, "Çalışan kaydı bulunamadı.");
+          if (resourceId) {
+            const linked = (
+              await session.query(
+                "SELECT id FROM kp_users WHERE resource_id=@p0 AND id<>@p1",
+                [resourceId, input.id],
+              )
+            ).rows;
+            if (linked.length)
+              fail(409, "Bu çalışan kaydı başka bir kullanıcıya bağlı.");
+          }
+          await store.saveUser(
+            {
+              ...old,
+              role: input.role,
+              leaders: input.role === "admin" ? [] : input.leaders,
+              resourceId,
+              revision: old.revision + 1,
+              version: old.version + 1,
+            },
+            session,
           );
-        if (old.revision !== input.revision)
-          fail(
-            409,
-            "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.",
-          );
-        if (input.leaders.some((leader) => !d.leaders.includes(leader)))
-          fail(400, "Geçersiz liderlik seçimi.");
-        const resourceId = input.role === "normal" ? input.resourceId : "";
-        if (
-          resourceId &&
-          !d.resources.some((resource) => resource.id === resourceId)
-        )
-          fail(400, "Çalışan kaydı bulunamadı.");
-        if (resourceId) {
-          const linked = (
-            await session.query(
-              "SELECT id FROM kp_users WHERE resource_id=@p0 AND id<>@p1",
-              [resourceId, input.id],
-            )
-          ).rows;
-          if (linked.length)
-            fail(409, "Bu çalışan kaydı başka bir kullanıcıya bağlı.");
-        }
-        await store.saveUser(
-          {
-            ...old,
-            role: input.role,
-            leaders: input.role === "admin" ? [] : input.leaders,
-            resourceId,
-            revision: old.revision + 1,
-            version: old.version + 1,
-          },
-          session,
-        );
-        await store.revokeUser(input.id, session);
-      },
-      { auditUsers: true, returnView: input.id !== req.user._id },
-    );
-    // Editing your own permissions invalidates your session. Commit the change
-    // first, then return the existing reauthentication response without a snapshot.
-    if (input.id === req.user._id) fail(401, "Oturum yenilenmeli.");
-    res.json(view);
-  });
+          await store.revokeUser(input.id, session);
+        },
+        { auditUsers: true, returnView: input.id !== req.user._id },
+      );
+      // Editing your own permissions invalidates your session. Commit the change
+      // first, then return the existing reauthentication response without a snapshot.
+      if (input.id === req.user._id) fail(401, "Oturum yenilenmeli.");
+      res.json(view);
+    }),
+  );
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "API bulunamadı." }),
   );
@@ -370,6 +406,9 @@ export function createApp(
     }),
   );
   app.use((err, req, res, _next) => {
+    admission.releaseUnstarted(req);
+    if (res.destroyed) return;
+    if (res.headersSent) return res.destroy();
     const status =
       err.status ||
       (err instanceof z.ZodError

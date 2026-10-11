@@ -10,7 +10,7 @@ import { createApp } from "../../backend/app.mjs";
 import { hashPassword } from "../../backend/auth.mjs";
 import { applyChanges } from "../../backend/operations.mjs";
 
-export async function fixture() {
+export async function fixture({ mutationLimits } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "aa-browser-checks-"));
   // Deliberately never read .env, DB_* or an application database/URL argument.
   const store = new Store({
@@ -130,7 +130,7 @@ export async function fixture() {
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
     const origin = "http://127.0.0.1:" + server.address().port;
-    app = createApp(store, { origin });
+    app = createApp(store, { origin, mutationLimits });
     server.on("request", app);
     const options = { headless: true };
     if (process.env.UI_BROWSER_EXECUTABLE)

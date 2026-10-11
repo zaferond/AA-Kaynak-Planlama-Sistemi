@@ -33,7 +33,12 @@ export async function concurrencySuite(store, t) {
   const server = http.createServer();
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const origin = "http://127.0.0.1:" + server.address().port;
-  const app = createApp(store, { origin });
+  // This suite verifies all 24 accepted writes and revision conflicts. The
+  // default admission overload/rejection contract has its own HTTP suite.
+  const app = createApp(store, {
+    origin,
+    mutationLimits: { pendingLimit: 32, waitMs: 10000 },
+  });
   server.on("request", app);
   async function request(url, body, auth = {}) {
     const response = await fetch(origin + "/api" + url, {
@@ -173,14 +178,16 @@ export async function concurrencySuite(store, t) {
           edits.map(async (edit, i) => {
             const start = performance.now();
             const result = await write([edit], i);
-            assert.equal(result.status, 200, JSON.stringify(result.json));
             return {
               edit,
+              status: result.status,
               view: result.json,
               elapsed: performance.now() - start,
             };
           }),
         );
+        for (const { status, view } of responses)
+          assert.equal(status, 200, JSON.stringify(view));
         assert.deepEqual(
           responses.map(({ view }) => view.generation).sort((a, b) => a - b),
           edits.map((_, i) => before.generation + i + 1),

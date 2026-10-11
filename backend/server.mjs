@@ -5,9 +5,11 @@ import { createApp } from "./app.mjs";
 import { hashPassword } from "./auth.mjs";
 import { fileURLToPath } from "node:url";
 import { verifyDeployment } from "../scripts/deployment-manifest.mjs";
+import { mutationAdmissionConfig } from "./mutation-admission.mjs";
 const env = process.env;
 // Validate public HTTP settings before opening or bootstrapping any database.
 const { origin, port, host, trustedProxies } = httpConfig(env);
+const mutationLimits = mutationAdmissionConfig(env);
 // Reject mixed/stale packages before constructing or opening the database.
 try {
   const verification = await verifyDeployment(
@@ -51,6 +53,7 @@ try {
   const app = createApp(store, {
     origin,
     trustedProxies,
+    mutationLimits,
   });
   const server = app.listen(port, host, () =>
     console.log(

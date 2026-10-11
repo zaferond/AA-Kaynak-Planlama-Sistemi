@@ -21,3 +21,20 @@ Commit'e bağlı Ubuntu/Windows kalite sonuçları ve kalıcı native MSSQL sonu
 `npm run check:domain`, `shared/` altındaki kaynakların bağımlılık sınırlarını sözdizimi ağacıyla denetler. Root `npm ci` bu araç için TypeScript geliştirme bağımlılığını kurar; frontend kurulumu bu komut için gerekmez. İhlal varsa domain smoke testi yüklenmeden işlem durur. Kapsam ve sınırlar [5 Ekim düzeltme kaydında](MIMARI-GUVENLIK-DUZELTMELER-2026-10-05.md).
 
 Risk Sistem / Alt Sistem kataloğu, yönetim yetkileri, şema 31 ve doğrulamalar [özellik kaydında](RISK-SISTEM-KATALOGU-2026-10-05.md) açıklanır.
+
+## Yazma yoğunluğu sınırı
+
+Her uygulama instance'ı için oturum/CSRF doğrulamasından sonra, JSON gövdesi okunmadan önce yazma kabulü uygulanır. Varsayılanlar: 2 aktif istek, 8 FIFO bekleyen istek, kuyrukta 5 saniye. Kuyruk dolarsa veya bekleme dolarsa işlem başlamadan HTTP 503 ve `Retry-After: 1` döner; kullanıcı düzenlemesini koruyup kendisi tekrar kaydeder. Başlamış yazma otomatik tekrar gönderilmez. GET/HEAD, giriş ve çıkış bu iş kuyruğuna girmez; okumalar SQL kilitleri nedeniyle yine bekleyebilir.
+
+İsteğe bağlı ortam ayarları (mevcut `.env` dosyası otomatik değiştirilmez):
+
+| Ayar | Varsayılan | Aralık |
+|---|---:|---:|
+| `MUTATION_ACTIVE_LIMIT` | 2 | 1–8 |
+| `MUTATION_PENDING_LIMIT` | 8 | 0–32 |
+| `MUTATION_WAIT_MS` | 5000 | 100–10000 ms |
+| `MUTATION_BODY_MS` | 60000 | 1000–120000 ms |
+
+Son ayar kabul edilen isteğin handler başlamadan gövdesini tamamlaması için toplam süredir. Süre aşılırsa bağlantı kapatılır; veritabanı mutasyonu başlamaz. İstemci yanıt alamadığı için güvenli şekilde sonucu belirsiz kabul eder ve sunucu kontrolü ister. Bu süre transaction zaman aşımı değildir; başlamış işlem client bağlantısı kopsa da tamamlanana kadar kabul yuvasını tutar. Yavaş ağdaki büyük restore/import yüklemelerinde bu sınır ayrıca değerlendirilmelidir.
+
+Kuyruk sonrası ve gövde alındıktan sonra oturum yeniden doğrulanır; Store içindeki güncel yetki, revision ve transaction kontrolleri korunur. SQL global kilidi kaldırılmaz. Sınırlar süreç/instance başınadır; çoklu servislerin toplam kotası, proxy bağlantı/bant genişliği sınırı veya üretim kapasite garantisi değildir. Doğrudan Store/CLI bakım işlemleri HTTP kuyruğu dışında kalır. Yeni iş mutasyonu endpoint'leri `admission.handler(...)` ile sarmalanmalıdır; böylece bağlantı kopması transaction sürerken yuva açamaz.

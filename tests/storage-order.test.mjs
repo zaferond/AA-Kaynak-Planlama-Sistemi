@@ -678,3 +678,33 @@ test("session change cancels hung requests immediately and invalidates old recov
   assert.equal(storage.currentUser().id, "new");
   assert.equal(pending[0].options.signal.aborted, true);
 });
+
+test("known admission 503 preserves cache and command revision, does not fence or resend, and permits an explicit retry", async (t) => {
+  const { storage, pending, reply } = await setup(t);
+  const read = storage.readLocal();
+  reply("/data", { generation: 1, data: { marker: "original" } });
+  await read;
+  const changes = [
+    { kind: "allocation", id: "t|p|2026-01", value: 0.5, revision: 2 },
+  ];
+  const failed = assert.rejects(
+    storage.writeBatch(changes),
+    (e) => e.status === 503 && !storage.isUncertainWrite(e),
+  );
+  await setImmediate();
+  reply(
+    "/changes",
+    { error: "Sunucu şu anda yoğun. Değişiklikleriniz kaydedilmedi." },
+    503,
+  );
+  await failed;
+  await setImmediate();
+  assert.equal(pending.length, 0);
+  assert.equal(changes[0].revision, 2);
+  const retried = storage.writeBatch(changes);
+  await setImmediate();
+  assert.equal(pending.length, 1);
+  assert.equal(JSON.parse(pending[0].options.body).changes[0].revision, 2);
+  reply("/changes", { generation: 2, data: { marker: "saved" } });
+  assert.deepEqual(await retried, { marker: "saved" });
+});

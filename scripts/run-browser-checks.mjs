@@ -31,8 +31,11 @@ import { checkMilestoneParentDates } from "./browser-checks/milestone-parent-dat
 import { checkWorkspaceNavigation } from "./browser-checks/workspace-navigation.mjs";
 import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 
+import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
+
 const f = await fixture();
 try {
+  await checkMutationAdmission(f);
   await checkTransportRecovery(f);
   await checkMilestoneParentDates(f);
   await checkTableStyles(f);

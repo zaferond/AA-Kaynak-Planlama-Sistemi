@@ -127,7 +127,12 @@ test("server rejects HTTP configuration before constructing the database store",
     "site/index.html": "synthetic site",
   }))
     await fs.writeFile(path.join(dir, name), value);
-  for (const name of ["server.mjs", "http-config.mjs", "trusted-proxies.mjs"])
+  for (const name of [
+    "server.mjs",
+    "http-config.mjs",
+    "trusted-proxies.mjs",
+    "mutation-admission.mjs",
+  ])
     await fs.copyFile(
       new URL("../backend/" + name, import.meta.url),
       path.join(dir, "backend", name),
@@ -188,6 +193,8 @@ test("server rejects HTTP configuration before constructing the database store",
     [{ APP_ORIGIN: "http://synthetic.invalid" }, /HTTPS/],
     [{ PORT: "65536" }, /PORT/],
     [{ TRUST_PROXY: "true" }, /TRUST_PROXY/],
+    [{ MUTATION_ACTIVE_LIMIT: "synthetic-private-marker" }, /MUTATION/],
+    [{ MUTATION_PENDING_LIMIT: "33" }, /kabul/],
   ]) {
     const stderr = await run(settings);
     assert.match(stderr, message);
