@@ -61,7 +61,16 @@ try {
   await checkMilestoneOverlap(f);
   await checkTimelineLayers(f);
   await checkResourceReports(f);
-  await checkActivityReport(f);
+  // Activity's fixed capacity expectations require its own empty calendar;
+  // the preceding calendar checks intentionally retain shared holidays.
+  const activity = await fixture();
+  try {
+    await checkActivityReport(activity);
+  } finally {
+    f.checks.push(...activity.checks);
+    f.errors.push(...activity.errors);
+    await activity.close();
+  }
   await checkViewportScroll(f);
   assert.deepEqual(f.errors, []);
   await f.report("passed");

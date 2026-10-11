@@ -110,9 +110,16 @@ export async function checkViewportScroll(f) {
     await page.mouse.wheel(0, 3000);
     await checkHeaders(table);
     assert(Math.abs((await page.evaluate(() => scrollY)) - scroll) <= 2);
+    // wheel() returns before Chromium's compositor finishes the gesture. Let
+    // that downward gesture end before resetting the DOM scroll position and
+    // testing a separate upward gesture; otherwise its pending delta can race.
+    await page.waitForTimeout(300);
     await table.evaluate((el) => {
       el.scrollTop = 0;
     });
+    // The virtual rows and compositor must paint the reset before hit testing
+    // the next wheel event; a DOM scrollTop read alone is not a paint barrier.
+    await checkHeaders(table);
     const left = await table.evaluate((el) => el.scrollLeft);
     await table.hover();
     await page.mouse.wheel(0, -600);
@@ -120,6 +127,8 @@ export async function checkViewportScroll(f) {
       async () => (await page.evaluate(() => scrollY)) < scroll - 20,
       "upward wheel at table top continues on the page",
     );
+    // Also finish the upward gesture before the next programmatic page reset.
+    await page.waitForTimeout(300);
     assert.equal(await table.evaluate((el) => el.scrollTop), 0);
     assert.equal(await table.evaluate((el) => el.scrollLeft), left);
     await page.evaluate(() => window.scrollTo(0, 1e8));
