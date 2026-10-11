@@ -5,6 +5,7 @@ import {
   personMonthHours,
   DEFAULT_MONTHLY_HOURS,
 } from "../shared/actual-units.ts";
+import { referencePersonMonthHours } from "./person-month-reference.mjs";
 import { stageChanges } from "../backend/operations.mjs";
 import { validate } from "../shared/server-domain.ts";
 
@@ -211,4 +212,165 @@ test("final batch uses changed calendar and hours together, while empty scope ne
       { kind: "allocation", id: "t|p|2026-02", revision: 0, value: 0.5 },
     ]),
   );
+});
+
+test("shared month plans match the frozen calculation in all 2400 supported months", () => {
+  const resources = ["r", "s", "__proto__", "Türkçe|person"];
+  const data = { workCalendar: {}, personCalendar: {}, actualWorkedHours: {} };
+  const months = [];
+  for (let year = 2000; year <= 2199; year++)
+    for (let m = 1; m <= 12; m++) {
+      const month = year + "-" + String(m).padStart(2, "0");
+      months.push(month);
+      for (const day of ["01", "02", "03"])
+        data.workCalendar[month + "-" + day] = {
+          type: "company",
+          label: "",
+          fraction: day === "02" ? 0.5 : 1,
+        };
+      data.personCalendar["r|" + month + "-02"] = {
+        type: "leave",
+        label: "",
+        hours: 1.5,
+      };
+      data.personCalendar["r|" + month + "-02|leave"] = {
+        type: "leave",
+        label: "",
+        hours: 2,
+      };
+      data.personCalendar["r|" + month + "-02|training"] = {
+        type: "training",
+        label: "",
+        hours: 3.25,
+      };
+      data.personCalendar["s|" + month + "-05|training"] = {
+        type: "training",
+        label: "",
+        hours: 9,
+      };
+      data.personCalendar["s|" + month + "-05|leave"] = {
+        type: "leave",
+        label: "",
+        hours: 9,
+      };
+      data.actualWorkedHours["s|" + month] = 0;
+      data.actualWorkedHours["__proto__|" + month] = 230;
+      data.actualWorkedHours["Türkçe|person|" + month] = 1000;
+    }
+  const index = createPersonMonthHoursIndex(data),
+    before = structuredClone(data);
+  for (const month of months)
+    for (const resource of resources) {
+      const args = [
+        month,
+        resource,
+        data.actualWorkedHours[resource + "|" + month],
+        data.workCalendar,
+        data.personCalendar,
+      ];
+      const expected = referencePersonMonthHours(...args);
+      assert.deepEqual(personMonthHours(...args), expected);
+      assert.deepEqual(index.get(resource, month), expected);
+    }
+  assert.deepEqual(data, before);
+});
+
+test("common calendar reads are lazy and shared by month across employees", () => {
+  let reads = 0;
+  const calendar = new Proxy(
+    { "2026-01-01": { type: "company", label: "", fraction: 0.5 } },
+    {
+      get(target, key) {
+        reads++;
+        return target[key];
+      },
+    },
+  );
+  const data = { workCalendar: calendar },
+    index = createPersonMonthHoursIndex(data);
+  assert.equal(reads, 0);
+  const months = ["2026-01", "2026-02"];
+  for (const month of months)
+    for (let person = 0; person < 80; person++) index.get("r" + person, month);
+  const optimizedReads = reads;
+  reads = 0;
+  for (const month of months)
+    referencePersonMonthHours(month, "r", undefined, calendar);
+  assert.equal(
+    optimizedReads,
+    reads,
+    "one weekday/holiday lookup per requested month, independent of employee count",
+  );
+  assert.equal(optimizedReads, 42);
+  reads = 0;
+  for (const month of months)
+    for (let person = 0; person < 80; person++)
+      referencePersonMonthHours(month, "r" + person, undefined, calendar);
+  assert.equal(reads, optimizedReads * 80);
+  reads = 0;
+  index.get("r0", "2026-01");
+  assert.equal(reads, 0);
+});
+
+test("new snapshot indexes observe changed shared holidays, manual hours and personal entries", () => {
+  const data = fixture();
+  data.actualWorkedHours["r|2026-01"] = 230;
+  const index = createPersonMonthHoursIndex(data),
+    old = index.get("r", "2026-01");
+  data.workCalendar["2026-01-05"] = {
+    type: "company",
+    fraction: 1,
+    label: "Changed",
+  };
+  data.personCalendar["r|2026-01-06|leave"] = {
+    type: "leave",
+    hours: 3,
+    label: "New",
+  };
+  data.actualWorkedHours["r|2026-01"] = 180;
+  const fresh = createPersonMonthHoursIndex(data);
+  for (const resource of ["r", "s"])
+    assert.deepEqual(
+      fresh.get(resource, "2026-01"),
+      referencePersonMonthHours(
+        "2026-01",
+        resource,
+        data.actualWorkedHours[resource + "|2026-01"],
+        data.workCalendar,
+        data.personCalendar,
+      ),
+    );
+  assert.equal(index.get("r", "2026-01"), old);
+  assert.notEqual(fresh.get("r", "2026-01").effectiveHours, old.effectiveHours);
+});
+
+test("full validation keeps percent-hour consistency for different employees sharing calendar months", () => {
+  const data = fixture();
+  for (const resource of data.resources)
+    for (const month of ["2026-01", "2026-02"]) {
+      data.actualWorkedHours[resource.id + "|" + month] =
+        resource.id === "s" ? 0 : 230;
+      const hours = referencePersonMonthHours(
+        month,
+        resource.id,
+        data.actualWorkedHours[resource.id + "|" + month],
+        data.workCalendar,
+        data.personCalendar,
+      ).effectiveHours;
+      for (const project of data.projects) {
+        const key = resource.id + "|" + project.id + "|" + month;
+        data.actualPercentEntries[key] = 25;
+        data.actualAllocations[key] = ((25 / 100) * hours) / 180;
+      }
+    }
+  assert.doesNotThrow(() => validate(data));
+  const invalid = structuredClone(data);
+  invalid.actualAllocations["s|q|2026-02"] = 0.01;
+  assert.throws(
+    () => validate(invalid),
+    /Yüzde dağılımı çalışılan saatlerle eşleşmiyor/,
+  );
+  const before = structuredClone(invalid);
+  assert.throws(() => validate(invalid));
+  assert.deepEqual(invalid, before);
 });

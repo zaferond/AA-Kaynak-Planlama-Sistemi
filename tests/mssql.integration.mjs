@@ -1,4 +1,6 @@
 import test from "node:test";
+import { createPersonMonthHoursIndex } from "../shared/actual-units.ts";
+import { referencePersonMonthHours } from "./person-month-reference.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -103,6 +105,33 @@ test(
         const before = await stores[0].transaction(
           (c) => stores[0].read(c),
           true,
+        );
+        await checked.test(
+          "native persisted calendar/hour snapshot matches the frozen person-month calculation",
+          () => {
+            const d = before.data,
+              index = createPersonMonthHoursIndex(d);
+            assert(d.resources.length > 0);
+            const months = new Set([
+              "2026-01",
+              "2026-02",
+              ...Object.keys(d.actualPercentEntries).map(
+                (key) => key.split("|")[2],
+              ),
+            ]);
+            for (const resource of d.resources)
+              for (const month of months)
+                assert.deepEqual(
+                  index.get(resource.id, month),
+                  referencePersonMonthHours(
+                    month,
+                    resource.id,
+                    d.actualWorkedHours[resource.id + "|" + month],
+                    d.workCalendar,
+                    d.personCalendar,
+                  ),
+                );
+          },
         );
         await stores[1].close();
         await stores[1].connect();

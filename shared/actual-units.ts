@@ -89,15 +89,47 @@ export function personCalendarHoursInMonth(
   calendar: WorkCalendar = {},
   personal: PersonCalendar = {},
 ): { baseHours: number; leaveHours: number; trainingHours: number } {
+  return personalMonthTotals(month, resourceId, calendar, personal);
+}
+
+type CalendarMonthDay = Readonly<{ date: string; available: number }>;
+
+function calendarMonthDays(
+  month: string,
+  calendar: WorkCalendar,
+): CalendarMonthDay[] {
   const year = Number(month.slice(0, 4)),
     monthIndex = Number(month.slice(5, 7)) - 1;
   const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+  return Array.from({ length: lastDay }, (_, index) => {
+    const date = month + "-" + String(index + 1).padStart(2, "0");
+    return { date, available: workingHoursOnDate(date, calendar) };
+  });
+}
+
+function personalMonthTotals(
+  month: string,
+  resourceId: string,
+  calendar: WorkCalendar,
+  personal: PersonCalendar,
+  days?: readonly CalendarMonthDay[],
+) {
+  const lastDay =
+    days?.length ??
+    new Date(
+      Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0),
+    ).getUTCDate();
   let baseHours = 0,
     leaveHours = 0,
     trainingHours = 0;
   for (let day = 1; day <= lastDay; day++) {
-    const date = month + "-" + String(day).padStart(2, "0");
-    const available = workingHoursOnDate(date, calendar);
+    const planned = days?.[day - 1];
+    const date = planned
+      ? planned.date
+      : month + "-" + String(day).padStart(2, "0");
+    const available = planned
+      ? planned.available
+      : workingHoursOnDate(date, calendar);
     baseHours += available;
     const entries = personalDayEntries(resourceId, date, personal);
     const leave = Math.min(
@@ -179,11 +211,20 @@ export function personMonthHours(
     calendar,
     personal,
   );
+  return hoursFromTotals(
+    totals,
+    manual,
+    workdaysInMonth(month) * HOURS_PER_WORKDAY,
+  );
+}
+
+function hoursFromTotals(
+  totals: ReturnType<typeof personalMonthTotals>,
+  manual: number | undefined,
+  workdayHours: number,
+) {
   const autoHours = totals.baseHours - totals.leaveHours;
-  const nonWorkingHours =
-    workdaysInMonth(month) * HOURS_PER_WORKDAY -
-    totals.baseHours +
-    totals.leaveHours;
+  const nonWorkingHours = workdayHours - totals.baseHours + totals.leaveHours;
   return {
     ...totals,
     autoHours,
@@ -209,17 +250,40 @@ export function createPersonMonthHoursIndex(data: PersonMonthData) {
     string,
     Readonly<ReturnType<typeof personMonthHours>>
   >();
+  // Common dates/holidays belong to the stable snapshot, not to an employee.
+  // Build lazily, once per requested month; personal totals remain independent.
+  const months = new Map<
+    string,
+    { days: CalendarMonthDay[]; workdayHours: number }
+  >();
   return {
     get(resourceId: string, month: string) {
       const key = resourceId + "|" + month;
       let result = cache.get(key);
       if (result === undefined) {
-        result = personMonthHours(
-          month,
-          resourceId,
-          data.actualWorkedHours?.[key],
-          data.workCalendar,
-          data.personCalendar,
+        // Preserve the existing manual-hour lookup before calculating totals.
+        const manual = data.actualWorkedHours?.[key];
+        let plan = months.get(month);
+        if (plan === undefined) {
+          plan = {
+            days: calendarMonthDays(
+              month,
+              data.workCalendar === undefined ? {} : data.workCalendar,
+            ),
+            workdayHours: workdaysInMonth(month) * HOURS_PER_WORKDAY,
+          };
+          months.set(month, plan);
+        }
+        result = hoursFromTotals(
+          personalMonthTotals(
+            month,
+            resourceId,
+            data.workCalendar === undefined ? {} : data.workCalendar,
+            data.personCalendar === undefined ? {} : data.personCalendar,
+            plan.days,
+          ),
+          manual,
+          plan.workdayHours,
         );
         cache.set(key, result);
       }
