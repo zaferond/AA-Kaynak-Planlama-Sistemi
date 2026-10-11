@@ -5,7 +5,12 @@ import { fail } from "./auth.mjs";
 import { DIRECTORY_REVISION_KEY } from "../shared/directory-policy.ts";
 
 // SQL persistence only; Store.mutate owns validation, revisions, audit and commit.
-export async function persistPlanningSnapshot(before, next, c) {
+export async function persistPlanningSnapshot(
+  before,
+  next,
+  c,
+  { settings } = {},
+) {
   const removedLeaders = new Set(
     (before.leaders || []).filter((name) => !next.leaders?.includes(name)),
   );
@@ -21,7 +26,7 @@ export async function persistPlanningSnapshot(before, next, c) {
           ". Önce Yetki Kontrol Ekranı'ndaki liderlik eşleştirmelerini güncelleyin.",
       );
   }
-  const changed = dataChanges(before, next);
+  const changed = dataChanges(before, next, { settings });
   await c.upsert(
     "leaders",
     changed.leader

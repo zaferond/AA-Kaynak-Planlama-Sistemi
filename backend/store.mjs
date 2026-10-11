@@ -172,7 +172,7 @@ export class Store {
     return validate(data, options);
   }
   prepareMutationSettings(before, valid) {
-    return prepareMutationSettings(before, valid);
+    return prepareMutationSettings(before, valid, { validatedCalendars: true });
   }
   async prepareMutationView({
     before,
@@ -244,7 +244,10 @@ export class Store {
       // participate too; unrelated risk/project/allocation writes do not.
       if (directoryCatalogChanged(before, valid))
         valid.revisions[DIRECTORY_REVISION_KEY] = directoryRevision(before) + 1;
-      const changeSet = await this.persist(before, valid, c);
+      // Prepare pure settings/equality after full validation and before diffing.
+      // The validated pair stays stable throughout persistence and projection.
+      const settings = this.prepareMutationSettings(before, valid);
+      const changeSet = await this.persist(before, valid, c, { settings });
       const afterUsers = auditUsers ? await this.users(c) : [];
       await c.upsert(
         "audit_events",
@@ -254,7 +257,6 @@ export class Store {
           changeSet,
         }),
       );
-      const settings = this.prepareMutationSettings(before, valid);
       const { assignments, values } = settings;
       await c.query(
         "UPDATE kp_settings SET " + assignments.join(",") + " WHERE id=1",
@@ -279,7 +281,7 @@ export class Store {
       return result;
     });
   }
-  async persist(before, next, c) {
-    return persistPlanningSnapshot(before, next, c);
+  async persist(before, next, c, options) {
+    return persistPlanningSnapshot(before, next, c, options);
   }
 }

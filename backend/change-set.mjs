@@ -27,7 +27,7 @@ export function recordChanges(before = {}, after = {}) {
 
 // Full validated snapshots, not the submitted command list: normalization and
 // cascading changes must also reach persistence and auditing. No global cache.
-export function dataChanges(before, after) {
+export function dataChanges(before, after, { settings } = {}) {
   const changed = {};
   for (const [kind, collection] of Object.entries(entityCollections)) {
     const isMap = kind === "allocation" || kind === "actual";
@@ -42,7 +42,13 @@ export function dataChanges(before, after) {
     ["calendar", "workCalendar"],
     ["personDay", "personCalendar"],
   ])
-    changed[kind] = recordChanges(before[collection], after[collection]);
+    // Settings only grants equality for these two JSON-backed calendars and
+    // this exact, stable, fully validated pair. Every other record is diffed.
+    changed[kind] =
+      (collection === "workCalendar" || collection === "personCalendar") &&
+      settings?.calendarUnchanged?.(before, after, collection) === true
+        ? []
+        : recordChanges(before[collection], after[collection]);
 
   const leaders = (data) =>
     Object.fromEntries(
