@@ -13,8 +13,19 @@ export async function readRecordMap(
   convert = identity,
   parameters = [],
 ) {
-  const records = {},
-    valueIndex = columns.length - 1;
+  const collector = recordCollector(columns.length - 1, recordKey, convert);
+  if (typeof c.scan === "function") {
+    const result = await c.scan(sql, parameters, collector.consume);
+    return collector.finish(result?.rowCount);
+  }
+  const { rows } = await c.query(sql, parameters);
+  for (const row of rows)
+    collector.consume(columns.map((column) => row[column]));
+  return collector.finish(rows.length);
+}
+
+function recordCollector(valueIndex, recordKey, convert) {
+  const records = {};
   let consumedRows = 0;
   const consume = (values) => {
     const key = recordKey(values),
@@ -29,15 +40,14 @@ export async function readRecordMap(
     else records[key] = value;
     consumedRows++;
   };
-  if (typeof c.scan === "function") {
-    const result = await c.scan(sql, parameters, consume);
-    if (result?.rowCount !== consumedRows)
-      throw Error("SQL satır okuması tamamlanamadı.");
-  } else {
-    const { rows } = await c.query(sql, parameters);
-    for (const row of rows) consume(columns.map((column) => row[column]));
-  }
-  return records;
+  return {
+    consume,
+    finish(rowCount) {
+      if (rowCount !== consumedRows)
+        throw Error("SQL satır okuması tamamlanamadı.");
+      return records;
+    },
+  };
 }
 
 // SQLite can return the complete composite key as one text value, reducing
@@ -49,6 +59,13 @@ export async function readCompositeMap(
   valueColumn,
   ownerIds,
 ) {
+  return readRecordMap(
+    c,
+    ...compositeRead(provider, name, valueColumn, ownerIds),
+  );
+}
+
+function compositeRead(provider, name, valueColumn, ownerIds) {
   const spec = tableSpec(name),
     keys = spec.key;
   if (
@@ -87,18 +104,16 @@ export async function readCompositeMap(
     // Filtered index seeks group by owner. Preserve the existing table-scan
     // insertion order for JSON, compression and downstream accumulation.
     const order = where ? " ORDER BY rowid" : "";
-    return readRecordMap(
-      c,
+    return [
       `SELECT ${key} AS [record_key],${ident(valueColumn)} FROM ${table(name)}${where}${order}`,
       ["record_key", valueColumn],
       firstValue,
       identity,
       parameters,
-    );
+    ];
   }
   const columns = [...keys, valueColumn];
-  return readRecordMap(
-    c,
+  return [
     `SELECT ${columns.map(ident).join(",")} FROM ${table(name)}${where}`,
     columns,
     (values) =>
@@ -107,13 +122,17 @@ export async function readCompositeMap(
         : values[0] + "|" + values[1] + "|" + values[2],
     identity,
     parameters,
-  );
+  ];
 }
 
 // Only remove planned revision rows that scopeData cannot expose. Keep every
 // special @ namespace (including deleted risks/calendar/person/actual records),
 // and leave the final resource-month visibility check to scopeData.
 export async function readRevisionMap(c, provider, planningTeams) {
+  return readRecordMap(c, ...revisionRead(provider, planningTeams));
+}
+
+function revisionRead(provider, planningTeams) {
   if (!["sqljs", "mssql"].includes(provider))
     throw Error("Invalid revision read provider");
   let where = "",
@@ -141,14 +160,13 @@ export async function readRevisionMap(c, provider, planningTeams) {
     }
   }
   const order = where && provider === "sqljs" ? " ORDER BY rowid" : "";
-  return readRecordMap(
-    c,
+  return [
     "SELECT kind,record_id,revision FROM kp_revisions" + where + order,
     ["kind", "record_id", "revision"],
     revisionRecordKey,
     Number,
     parameters,
-  );
+  ];
 }
 
 export function revisionRecordKey(values) {
@@ -169,4 +187,36 @@ export function revisionRecordKey(values) {
             : kind === "allocation" && id.startsWith("@person:")
               ? "personDay:" + id.slice(8)
               : kind + ":" + id;
+}
+
+// Full snapshots only. All five maps remain complete and retain SELECT order;
+// only the number of native requests changes. No cross-transaction cache.
+export async function readNumericSnapshot(c, provider) {
+  if (provider !== "mssql" || typeof c.scanMany !== "function")
+    throw Error("Native numeric snapshot batch is unavailable.");
+  const maps = [
+    ["allocations", "allocations", "amount"],
+    ["actualAllocations", "actual_allocations", "amount"],
+    ["actualWorkedHours", "actual_worked_hours", "hours"],
+    ["actualPercentEntries", "actual_percent_entries", "percent"],
+  ];
+  const specs = [
+    ...maps.map(([, name, column]) => compositeRead(provider, name, column)),
+    revisionRead(provider),
+  ];
+  const collectors = specs.map(([, columns, key, convert]) =>
+    recordCollector(columns.length - 1, key, convert),
+  );
+  const results = await c.scanMany(
+    specs.map(([sql]) => sql),
+    collectors.map((collector) => collector.consume),
+  );
+  if (!Array.isArray(results) || results.length !== specs.length)
+    throw Error("SQL numeric snapshot batch was incomplete.");
+  return Object.fromEntries(
+    [...maps.map(([key]) => key), "revisions"].map((key, index) => [
+      key,
+      collectors[index].finish(results[index]?.rowCount),
+    ]),
+  );
 }

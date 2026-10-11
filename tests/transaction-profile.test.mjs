@@ -408,3 +408,35 @@ test("profile counts native scans once without replacing their consumer or retai
   }
   assert.equal(store.db.scanRequest, original);
 });
+
+test("profile counts a streamed numeric batch as one request and retains no row values", async () => {
+  const store = new SyntheticStore(),
+    owner = {},
+    callbacks = [() => {}, () => {}];
+  const queries = [
+    "SELECT amount FROM kp_allocations",
+    "SELECT revision FROM kp_revisions",
+  ];
+  const counts = [{ rowCount: 12 }, { rowCount: 20 }];
+  const original = (store.db.scanManyRequest = async (tx, sql, consumers) => {
+    assert.equal(tx, owner);
+    assert.equal(sql, queries);
+    assert.equal(consumers, callbacks);
+    return counts;
+  });
+  const probe = transactionProbe([store]);
+  try {
+    const { value, observation } = await probe.measure("write-allocation", () =>
+      store.db.scanManyRequest(owner, queries, callbacks),
+    );
+    assert.equal(value, counts);
+    assert.equal(observation.sqlCalls, 1);
+    assert.equal(observation.scanCalls, 0);
+    assert.equal(observation.numericBatchCalls, 1);
+    assert.equal(observation.numericBatchStatements, 2);
+    assert.deepEqual(observation.sqlRows, { allocations: 12, revisions: 20 });
+  } finally {
+    probe.restore();
+  }
+  assert.equal(store.db.scanManyRequest, original);
+});

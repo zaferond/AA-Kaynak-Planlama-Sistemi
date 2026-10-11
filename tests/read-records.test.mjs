@@ -7,6 +7,7 @@ import { Store } from "../backend/store.mjs";
 import {
   readRecordMap,
   readCompositeMap,
+  readNumericSnapshot,
   revisionRecordKey,
 } from "../backend/read-records.mjs";
 import { applyChanges } from "../backend/operations.mjs";
@@ -255,6 +256,24 @@ test("Store snapshots match ordinary SQL rows for all numeric maps, calendar met
     try {
       store.provider = "mssql";
       assert.deepEqual(await store.read({ query: c.query }), streamed);
+      let batches = 0;
+      const batch = {
+        ...c,
+        scanMany: async (queries, consumers) => {
+          batches++;
+          assert.equal(queries.length, 5);
+          const results = [];
+          for (let i = 0; i < queries.length; i++)
+            results.push(await c.scan(queries[i], [], consumers[i]));
+          return results;
+        },
+      };
+      const batched = await store.read(batch);
+      assert.equal(batches, 1);
+      assert.deepEqual(batched, streamed);
+      assert.equal(JSON.stringify(batched), JSON.stringify(streamed));
+      await store.read(batch, user);
+      assert.equal(batches, 1, "authenticated view must keep its scoped reads");
     } finally {
       store.provider = provider;
     }
@@ -349,4 +368,29 @@ test("composite map SQL uses validated identifiers and keeps MSSQL column decodi
     ["sqljs", "resources", "id"],
   ])
     await assert.rejects(readCompositeMap(unused, provider, name, valueColumn));
+});
+
+test("numeric snapshot rejects incomplete row counts and never falls back to a partial map", async () => {
+  for (const results of [
+    [],
+    Array(5).fill({ rowCount: 1 }),
+    Array(5).fill({ rowCount: 0 }),
+  ]) {
+    await assert.rejects(
+      readNumericSnapshot(
+        {
+          scanMany: async (queries, consumers) => {
+            assert.equal(queries.length, 5);
+            consumers[0](["t", "p", "2026-01", 0]);
+            return results;
+          },
+        },
+        "mssql",
+      ),
+    );
+  }
+  await assert.rejects(
+    readNumericSnapshot({ scanMany: async () => [] }, "sqljs"),
+  );
+  await assert.rejects(readNumericSnapshot({}, "mssql"));
 });

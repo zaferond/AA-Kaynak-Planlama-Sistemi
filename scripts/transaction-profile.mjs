@@ -151,6 +151,40 @@ export function transactionProbe(
           },
       );
 
+    if (typeof store.db.scanManyRequest === "function")
+      wrap(
+        store.db,
+        "scanManyRequest",
+        (original) =>
+          async function (...args) {
+            const observation = context.getStore(),
+              start = clock();
+            const result = await original.apply(this, args);
+            if (observation) {
+              const queries = args[1];
+              if (
+                !Array.isArray(result) ||
+                result.length !== queries.length ||
+                result.some(
+                  (r) => !Number.isInteger(r?.rowCount) || r.rowCount < 0,
+                )
+              )
+                throw Error("Missing native numeric batch timing result.");
+              observation.sqlMs += clock() - start;
+              observation.sqlCalls++;
+              observation.numericBatchCalls++;
+              observation.numericBatchStatements += queries.length;
+              queries.forEach((query, index) => {
+                const table = /\bkp_([a-z_]+)/i.exec(query)?.[1] || "other";
+                observation.sqlRows[table] =
+                  (observation.sqlRows[table] || 0) + result[index].rowCount;
+              });
+              captureMemory();
+            }
+            return result;
+          },
+      );
+
     for (const name of ["read", "persist", "projectView"])
       wrap(
         store,
@@ -382,6 +416,8 @@ export function transactionProbe(
         sqlMs: 0,
         sqlCalls: 0,
         scanCalls: 0,
+        numericBatchCalls: 0,
+        numericBatchStatements: 0,
         metadataBatchCalls: 0,
         metadataBatchStatements: 0,
         sqlRows: {},

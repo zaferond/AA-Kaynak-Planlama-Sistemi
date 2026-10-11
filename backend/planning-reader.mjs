@@ -1,4 +1,8 @@
-import { readCompositeMap, readRevisionMap } from "./read-records.mjs";
+import {
+  readCompositeMap,
+  readRevisionMap,
+  readNumericSnapshot,
+} from "./read-records.mjs";
 import { snapshotMetadataReader } from "./snapshot-metadata.mjs";
 import { visibleTeamScope, actualReadOwnerScope } from "./domain/index.mjs";
 
@@ -124,6 +128,10 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
           : ""),
       amount: r.amount,
     });
+  if (provider === "mssql" && !viewUser && typeof c.scanMany === "function") {
+    Object.assign(d, await readNumericSnapshot(c, provider));
+    return { data: d, generation: Number(s.generation) };
+  }
   // Legacy IDs containing a composite separator retain complete-read semantics.
   const planningTeams =
     viewUser &&

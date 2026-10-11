@@ -824,10 +824,14 @@ export async function nativeMetadataBatchSuite(stores, t) {
   });
   const before = await first.transaction(async (c) => {
     calls = [];
-    const ordinary = await first.read({ ...c, queryMany: undefined });
+    const ordinary = await first.read({
+      ...c,
+      queryMany: undefined,
+      scanMany: undefined,
+    });
     const ordinaryCalls = [...calls];
     calls = [];
-    const batched = await first.read(c);
+    const batched = await first.read({ ...c, scanMany: undefined });
     assert.deepEqual(batched, ordinary);
     assert.equal(JSON.stringify(batched), JSON.stringify(ordinary));
     assert.equal(ordinaryCalls.length, 15);
@@ -883,9 +887,28 @@ export async function nativeScanSuite(stores, t) {
     scannedRows[table] = result.rowCount;
     return result;
   });
+  const scanMany = first.db.scanManyRequest;
+  let batches = 0,
+    batchRows = {};
+  const batchMock = t.mock.method(
+    first.db,
+    "scanManyRequest",
+    async function (...args) {
+      const result = await scanMany.apply(this, args);
+      batches++;
+      args[1].forEach((query, index) => {
+        batchRows[/\bkp_([a-z_]+)/.exec(query)[1]] = result[index].rowCount;
+      });
+      return result;
+    },
+  );
   const before = await first.transaction(async (c) => {
-    const buffered = await first.read({ ...c, scan: undefined });
-    const streamed = await first.read(c);
+    const buffered = await first.read({
+      ...c,
+      scan: undefined,
+      scanMany: undefined,
+    });
+    const streamed = await first.read({ ...c, scanMany: undefined });
     assert.deepEqual(streamed, buffered);
     assert.equal(JSON.stringify(streamed), JSON.stringify(buffered));
     assert.equal(scans, 5);
@@ -897,9 +920,20 @@ export async function nativeScanSuite(stores, t) {
         .length,
       revisions: Object.keys(buffered.data.revisions).length,
     });
-    return streamed;
+    const batched = await first.read(c);
+    assert.deepEqual(batched, buffered);
+    assert.equal(JSON.stringify(batched), JSON.stringify(buffered));
+    assert.equal(batches, 1);
+    assert.deepEqual(batchRows, scannedRows);
+    assert.equal(
+      scans,
+      5,
+      "batch must use one separate request, not five scans",
+    );
+    return batched;
   }, true);
   mock.mock.restore();
+  batchMock.mock.restore();
   await first.transaction(async (c) => {
     const params = [
       "Türkçe 😀 '",
@@ -966,21 +1000,72 @@ export async function nativeScanSuite(stores, t) {
     ),
     (e) => e.number === 245,
   );
+  let firstRows = 0,
+    middleRows = 0,
+    lastRows = 0;
+  await assert.rejects(
+    first.transaction(
+      (c) =>
+        c.scanMany(
+          [
+            "SELECT 1 AS first_value",
+            "SELECT TOP (10000) a.object_id FROM sys.all_objects a CROSS JOIN sys.all_objects b",
+            "SELECT 3 AS last_value",
+          ],
+          [
+            () => firstRows++,
+            () => {
+              middleRows++;
+              throw failure;
+            },
+            () => lastRows++,
+          ],
+        ),
+      true,
+    ),
+    (e) => e === failure,
+  );
+  assert.equal(firstRows, 1);
+  assert.equal(middleRows, 1);
+  assert.equal(lastRows, 0);
+  await assert.rejects(
+    first.transaction(
+      (c) =>
+        c.scanMany(
+          [
+            "SELECT 1 AS first_value",
+            "SELECT CONVERT(int,N'not-an-integer') AS invalid",
+            "SELECT 3 AS last_value",
+          ],
+          [() => {}, () => {}, () => {}],
+        ),
+      true,
+    ),
+    (e) => e.number === 245,
+  );
+  assert.equal(
+    await first.transaction(
+      async (c) => (await c.query("SELECT 1 AS ok")).rows[0].ok,
+      true,
+    ),
+    1,
+  );
   const admin = (await first.users()).find((u) => u.role === "admin");
   const audit = (await first.auditLog(admin)).total;
   let ranCommand = false;
   const broken = t.mock.method(
     first.db,
-    "scanRequest",
-    function (owner, text, values, consume) {
-      return scan.call(
+    "scanManyRequest",
+    function (owner, queries, consumers) {
+      return scanMany.call(
         this,
         owner,
-        text.includes("kp_allocations")
-          ? "SELECT CONVERT(int,N'not-an-integer') AS invalid"
-          : text,
-        values,
-        consume,
+        queries.map((text) =>
+          text.includes("kp_allocations")
+            ? "SELECT CONVERT(int,N'not-an-integer') AS invalid"
+            : text,
+        ),
+        consumers,
       );
     },
   );

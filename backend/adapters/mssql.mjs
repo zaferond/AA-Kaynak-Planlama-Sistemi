@@ -99,6 +99,28 @@ export class MssqlAdapter {
       typeof consume !== "function"
     )
       throw Error("Invalid snapshot scan.");
+    const results = await this.streamRecordsets(owner, text, values, [consume]);
+    return results[0];
+  }
+  async scanManyRequest(owner, queries, consumers) {
+    if (
+      !Array.isArray(queries) ||
+      !queries.length ||
+      queries.length > 16 ||
+      !Array.isArray(consumers) ||
+      consumers.length !== queries.length ||
+      !Array.from(queries).every(
+        (query) =>
+          typeof query === "string" &&
+          /^SELECT\s/i.test(query) &&
+          !/[;\0]/.test(query),
+      ) ||
+      !Array.from(consumers).every((consume) => typeof consume === "function")
+    )
+      throw Error("Invalid snapshot scan batch.");
+    return this.streamRecordsets(owner, queries.join(";\n"), [], consumers);
+  }
+  async streamRecordsets(owner, text, values, consumers) {
     const request = parameterizedRequest(owner, values);
     request.stream = true;
     request.arrayRowMode = true;
@@ -107,7 +129,7 @@ export class MssqlAdapter {
       completed = false,
       columns = 0,
       recordsets = 0,
-      rowCount = 0;
+      rowCounts = consumers.map(() => 0);
     const fail = (error, cancel = false) => {
       if (failed) return;
       failed = true;
@@ -122,17 +144,26 @@ export class MssqlAdapter {
     const onError = (error) => fail(error);
     const onRecordset = (metadata) => {
       recordsets++;
-      if (recordsets !== 1 || !Array.isArray(metadata) || !metadata.length)
+      if (
+        recordsets > consumers.length ||
+        !Array.isArray(metadata) ||
+        !metadata.length
+      )
         fail(Error("SQL snapshot scan returned invalid columns."), true);
       else columns = metadata.length;
     };
     const onRow = (row) => {
       if (failed) return;
       try {
-        if (recordsets !== 1 || !Array.isArray(row) || row.length !== columns)
+        if (
+          recordsets < 1 ||
+          recordsets > consumers.length ||
+          !Array.isArray(row) ||
+          row.length !== columns
+        )
           throw Error("SQL snapshot scan returned an invalid row.");
-        consume(row);
-        rowCount++;
+        consumers[recordsets - 1](row);
+        rowCounts[recordsets - 1]++;
       } catch (error) {
         fail(error, true);
       }
@@ -149,7 +180,7 @@ export class MssqlAdapter {
       const result = await request.query(text);
       if (
         !completed ||
-        recordsets !== 1 ||
+        recordsets !== consumers.length ||
         result?.recordset != null ||
         result?.recordsets != null
       )
@@ -163,7 +194,7 @@ export class MssqlAdapter {
       request.off("done", onDone);
     }
     if (failed) throw failure;
-    return { rowCount };
+    return rowCounts.map((rowCount) => ({ rowCount }));
   }
   async readMany(owner, queries) {
     // Bounded read-only statements from the owned snapshot catalog. A malformed
@@ -224,6 +255,8 @@ export class MssqlAdapter {
         query: (q, v) => this.request(tx, q, v),
         queryMany: (queries) => this.readMany(tx, queries),
         scan: (q, v, consume) => this.scanRequest(tx, q, v, consume),
+        scanMany: (queries, consumers) =>
+          this.scanManyRequest(tx, queries, consumers),
         batch: (q) => new sql.Request(tx).batch(q),
         upsert: (t, r) => this.upsert(tx, t, r),
         remove: (t, r) => this.remove(tx, t, r),
