@@ -440,3 +440,137 @@ test("profile counts a streamed numeric batch as one request and retains no row 
   }
   assert.equal(store.db.scanManyRequest, original);
 });
+
+test("snapshot metrics separate metadata, numeric and unknown reads without counting auth, preflight or projection", async () => {
+  const store = new SyntheticStore();
+  let now = 0;
+  const privateRow = { privateMarker: "synthetic private content" };
+  store.db.request = async (_owner, sql, _values, all) => {
+    now += all ? 7 : 3;
+    return all
+      ? { rows: [privateRow], recordsets: [[privateRow], []], rowCount: 1 }
+      : { rows: [privateRow], rowCount: 1 };
+  };
+  store.db.scanManyRequest = async () => {
+    now += 11;
+    return [{ rowCount: 20 }, { rowCount: 30 }];
+  };
+  store.db.scanRequest = async () => {
+    now += 5;
+    return { rowCount: 4 };
+  };
+  store.read = async () => {
+    await store.db.request(
+      {},
+      "SELECT * FROM kp_settings;\nSELECT * FROM kp_leaders",
+      [],
+      true,
+    );
+    await store.db.scanManyRequest(
+      {},
+      [
+        "SELECT amount FROM kp_allocations",
+        "SELECT revision FROM kp_revisions",
+      ],
+      [() => {}, () => {}],
+    );
+    await store.db.scanRequest(
+      {},
+      "SELECT hours FROM kp_actual_worked_hours",
+      [],
+      () => {},
+    );
+    await store.db.request({}, "SELECT * FROM kp_future_metadata");
+    return privateRow;
+  };
+  const probe = transactionProbe([store], { clock: () => now });
+  try {
+    const { value, observation } = await probe.measure(
+      "snapshot-breakdown",
+      async () => {
+        await store.db.request({}, "SELECT * FROM kp_users");
+        await store.db.request({}, "SELECT * FROM kp_teams WHERE id=@p0", [
+          "synthetic private parameter",
+        ]);
+        const result = await store.read();
+        await store.db.request({}, "SELECT * FROM kp_users");
+        return result;
+      },
+    );
+    assert.equal(value, privateRow);
+    assert.equal(observation.readMs, 26);
+    assert.equal(observation.snapshotMetadataMs, 7);
+    assert.equal(observation.snapshotNumericMs, 16);
+    assert.equal(observation.snapshotOtherSqlMs, 3);
+    assert.equal(observation.snapshotSqlCalls, 4);
+    assert.equal(observation.snapshotBufferedRows, 2);
+    assert.equal(observation.snapshotStreamedRows, 54);
+    assert.equal(observation.sqlCalls, 7);
+    assert.equal(observation.sqlMs, 35);
+    assert(!JSON.stringify(observation).includes("synthetic private"));
+    assert(!JSON.stringify(observation).includes("privateMarker"));
+  } finally {
+    probe.restore();
+  }
+});
+
+test("concurrent snapshot scopes and transaction-local rereads retain independent row counts", async () => {
+  const a = new SyntheticStore(),
+    b = new SyntheticStore(),
+    gate = deferred(),
+    entered = deferred();
+  a.read = async () => {
+    await a.db.request({}, "SELECT * FROM kp_projects");
+    entered.resolve();
+    await gate.promise;
+    return a.db.request({}, "SELECT * FROM kp_allocations");
+  };
+  b.read = async () => b.db.request({}, "SELECT * FROM kp_resources");
+  const probe = transactionProbe([a, b]);
+  const first = probe.measure("one", () => a.read());
+  try {
+    await entered.promise;
+    const second = await probe.measure("two", async () => {
+      await b.read();
+      await b.db.request({}, "SELECT * FROM kp_resources");
+      await b.read();
+    });
+    gate.resolve();
+    const one = await first;
+    assert.equal(one.observation.snapshotSqlCalls, 2);
+    assert.equal(one.observation.snapshotBufferedRows, 4);
+    assert.equal(one.observation.readCalls, 1);
+    assert.equal(second.observation.snapshotSqlCalls, 2);
+    assert.equal(second.observation.snapshotBufferedRows, 4);
+    assert.equal(second.observation.readCalls, 2);
+    assert.equal(second.observation.sqlCalls, 3);
+  } finally {
+    gate.resolve();
+    await first;
+    probe.restore();
+  }
+});
+
+test("failed snapshot reads preserve the original error and close attribution before later SQL", async () => {
+  const store = new SyntheticStore(),
+    error = new Error("synthetic snapshot failure");
+  store.read = async () => {
+    await store.db.request({}, "SELECT * FROM kp_settings");
+    throw error;
+  };
+  const original = store.read;
+  const probe = transactionProbe([store]);
+  try {
+    const { observation } = await probe.measure("caught-error", async () => {
+      await assert.rejects(store.read(), (e) => e === error);
+      await store.db.request({}, "SELECT * FROM kp_settings");
+    });
+    assert.equal(observation.readCalls, 1);
+    assert.equal(observation.snapshotSqlCalls, 1);
+    assert.equal(observation.snapshotBufferedRows, 2);
+    assert.equal(observation.sqlCalls, 2);
+  } finally {
+    probe.restore();
+  }
+  assert.equal(store.read, original);
+});

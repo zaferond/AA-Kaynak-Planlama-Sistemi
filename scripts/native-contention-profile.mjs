@@ -55,6 +55,12 @@ function summarizeGroups(observations) {
         "lockAcquireServerMs",
         "lockAcquireRoundtripMs",
         "readMs",
+        "snapshotMetadataMs",
+        "snapshotNumericMs",
+        "snapshotOtherSqlMs",
+        "snapshotSqlCalls",
+        "snapshotBufferedRows",
+        "snapshotStreamedRows",
         "copySnapshotMs",
         "commandAndValidationAndDiffPrepMs",
         "planningDeltaProjectionMs",
@@ -286,6 +292,10 @@ export async function nativeContentionProfile(
             assert.equal(observation.scanCalls, edit ? 0 : 5);
             assert.equal(observation.numericBatchCalls, edit ? 1 : 0);
             assert.equal(observation.numericBatchStatements, edit ? 5 : 0);
+            assert.equal(observation.snapshotSqlCalls, edit ? 2 : 15);
+            assert.equal(observation.snapshotOtherSqlMs, 0);
+            assert(observation.snapshotBufferedRows > 0);
+            assert(observation.snapshotStreamedRows > 0);
             return {
               ...observation,
               queueMs,
@@ -384,6 +394,10 @@ export async function nativeContentionProfile(
       assert.equal(observation.scanCalls, 0);
       assert.equal(observation.numericBatchCalls, 1);
       assert.equal(observation.numericBatchStatements, 5);
+      assert.equal(observation.snapshotSqlCalls, 2);
+      assert.equal(observation.snapshotOtherSqlMs, 0);
+      assert(observation.snapshotBufferedRows > 0);
+      assert(observation.snapshotStreamedRows > 0);
       assert.equal(observation.planningDraftCopies, 1);
       assert.equal(observation.fullSnapshotCopies, 0);
       assert.equal(observation.projectViewCalls, 0);
@@ -452,7 +466,7 @@ export async function nativeContentionProfile(
       elapsedMs:
         "Store operation until returned view/delta. JSON encode measured separately; assertions are excluded.",
       stages:
-        "Read/persist/project durations include their SQL calls and overlap sqlMs; do not sum all metrics. CommandAndValidationAndDiffPrep covers the copy-to-persist gap, including command execution, schema validation and preparation; it does not isolate schema validation. Owned planning callbacks keep their identity during profiling.",
+        "Read/persist/project durations include their SQL calls and overlap sqlMs; do not sum all metrics. Snapshot metadata/numeric/other SQL timings include only successful adapter requests within Store.read, including driver decoding, stream consumers and network waits; they do not isolate SQL Server time or CPU. Snapshot row counters distinguish buffered versus streamed rows, not allocated bytes or physical IO. Auth/preflight/audit/user projection are excluded from snapshot counters. CommandAndValidationAndDiffPrep covers the copy-to-persist gap, including command execution, schema validation and preparation; it does not isolate schema validation. Owned planning callbacks keep their identity during profiling.",
       memoryBytes:
         "Whole Node process samples during each case and stage boundaries. Includes retained fixture/base, instrumentation and response data; no per-request allocation or guaranteed CPU-bound peak.",
     },

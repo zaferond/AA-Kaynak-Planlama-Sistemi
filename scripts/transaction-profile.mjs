@@ -82,6 +82,26 @@ export function memorySampler({
 }
 
 const lockSqlPrefix = "DECLARE @r int; EXEC @r=sys.sp_getapplock";
+const numericReadTables = new Set([
+  "allocations",
+  "actual_allocations",
+  "actual_worked_hours",
+  "actual_percent_entries",
+  "revisions",
+]);
+const metadataReadTables = new Set([
+  "settings",
+  "leaders",
+  "risk_systems",
+  "teams",
+  "projects",
+  "project_risks",
+  "project_phases",
+  "project_milestones",
+  "resources",
+  "resource_versions",
+]);
+const readTable = (sql) => /\bkp_([a-z_]+)/i.exec(sql)?.[1] || "other";
 // Only a disposable native Store may be instrumented. The integration runner
 // additionally owns a verified-empty database lease for the entire profile.
 export function assertNativeProfileStores(stores) {
@@ -118,7 +138,24 @@ export function transactionProbe(
 ) {
   assertNativeProfileStores(stores);
   const context = new AsyncLocalStorage();
+  // Separate async scope: auth, preflight, audit and admin user projection must
+  // not be attributed to snapshot loading, even in concurrent Store operations.
+  const snapshotContext = new AsyncLocalStorage();
   const restores = [];
+  function recordSnapshotRequest(ms, queries, rowCounts, streamed) {
+    const observation = snapshotContext.getStore();
+    if (!observation) return;
+    const tables = queries.map(readTable);
+    const group = tables.every((name) => metadataReadTables.has(name))
+      ? "snapshotMetadataMs"
+      : tables.every((name) => numericReadTables.has(name))
+        ? "snapshotNumericMs"
+        : "snapshotOtherSqlMs";
+    observation[group] += ms;
+    observation.snapshotSqlCalls++;
+    observation[streamed ? "snapshotStreamedRows" : "snapshotBufferedRows"] +=
+      rowCounts.reduce((sum, count) => sum + count, 0);
+  }
   function wrap(target, name, factory) {
     const original = target[name];
     const own = Object.getOwnPropertyDescriptor(target, name);
@@ -139,12 +176,19 @@ export function transactionProbe(
               start = clock();
             const result = await original.apply(this, args);
             if (observation) {
-              observation.sqlMs += clock() - start;
+              const elapsed = clock() - start;
+              observation.sqlMs += elapsed;
               observation.sqlCalls++;
               observation.scanCalls++;
-              const table = /\bkp_([a-z_]+)/i.exec(args[1])?.[1] || "other";
+              const table = readTable(args[1]);
               observation.sqlRows[table] =
                 (observation.sqlRows[table] || 0) + result.rowCount;
+              recordSnapshotRequest(
+                elapsed,
+                [args[1]],
+                [result.rowCount],
+                true,
+              );
               captureMemory();
             }
             return result;
@@ -170,15 +214,22 @@ export function transactionProbe(
                 )
               )
                 throw Error("Missing native numeric batch timing result.");
-              observation.sqlMs += clock() - start;
+              const elapsed = clock() - start;
+              observation.sqlMs += elapsed;
               observation.sqlCalls++;
               observation.numericBatchCalls++;
               observation.numericBatchStatements += queries.length;
               queries.forEach((query, index) => {
-                const table = /\bkp_([a-z_]+)/i.exec(query)?.[1] || "other";
+                const table = readTable(query);
                 observation.sqlRows[table] =
                   (observation.sqlRows[table] || 0) + result[index].rowCount;
               });
+              recordSnapshotRequest(
+                elapsed,
+                queries,
+                result.map((part) => part.rowCount),
+                true,
+              );
               captureMemory();
             }
             return result;
@@ -212,7 +263,10 @@ export function transactionProbe(
               delete observation.commandEnd;
             }
             try {
-              return await original.apply(this, args);
+              const invoke = () => original.apply(this, args);
+              return await (name === "read" && observation
+                ? snapshotContext.run(observation, invoke)
+                : invoke());
             } finally {
               if (observation) {
                 observation[name + "Ms"] += clock() - start;
@@ -349,7 +403,8 @@ export function transactionProbe(
             values,
             ...options,
           );
-          observation.sqlMs += clock() - start;
+          const elapsed = clock() - start;
+          observation.sqlMs += elapsed;
           observation.sqlCalls++;
           if (lock) {
             const serverMs = result.rows[0]?.profileLockAcquireMs;
@@ -374,12 +429,17 @@ export function transactionProbe(
           }
           for (let i = 0; i < statements.length; i++) {
             if (/^\s*(SELECT|WITH)\b/i.test(statements[i])) {
-              const table =
-                /\bkp_([a-z_]+)/i.exec(statements[i])?.[1] || "other";
+              const table = readTable(statements[i]);
               observation.sqlRows[table] =
                 (observation.sqlRows[table] || 0) + parts[i].length;
             }
           }
+          recordSnapshotRequest(
+            elapsed,
+            statements,
+            parts.map((rows) => rows.length),
+            false,
+          );
           return result;
         },
     );
@@ -399,6 +459,12 @@ export function transactionProbe(
         lockCalls: 0,
         readMs: 0,
         readCalls: 0,
+        snapshotMetadataMs: 0,
+        snapshotNumericMs: 0,
+        snapshotOtherSqlMs: 0,
+        snapshotSqlCalls: 0,
+        snapshotBufferedRows: 0,
+        snapshotStreamedRows: 0,
         copySnapshotMs: 0,
         copySnapshotCalls: 0,
         commandMs: 0,
@@ -445,6 +511,7 @@ export function transactionProbe(
       restores.reverse().forEach((restore) => restore());
       restored = true;
       context.disable();
+      snapshotContext.disable();
     },
   };
 }
