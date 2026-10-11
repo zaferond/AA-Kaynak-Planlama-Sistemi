@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { DIRECTORY_REVISION_KEY } from "../shared/directory-policy.ts";
 import { hashPassword } from "../backend/auth.mjs";
 import { planningCommand, stageChanges } from "../backend/operations.mjs";
 import { seedBenchmarkStore } from "../scripts/benchmark-fixture.mjs";
@@ -389,6 +390,10 @@ export async function planningContractSuite(store, t) {
         resource = d.resources[0],
         departure = "2026-03-15";
       await store.transaction(async (c) => {
+        await c.query("UPDATE kp_teams SET name=@p0 WHERE id=@p1", [
+          "  Legacy team  ",
+          team.id,
+        ]);
         await c.query("UPDATE kp_projects SET name=@p0 WHERE id=@p1", [
           "  Legacy project  ",
           "bench-p0",
@@ -423,6 +428,15 @@ export async function planningContractSuite(store, t) {
       assert.equal(result.view.responseMode, undefined);
       const normalized = result.after.snapshot.data;
       assert.equal(normalized.projects[0].name, "Legacy project");
+      assert.equal(
+        normalized.teams.find((x) => x.id === team.id).name,
+        "Legacy team",
+      );
+      assert.equal(
+        normalized.revisions[DIRECTORY_REVISION_KEY],
+        (current.revisions[DIRECTORY_REVISION_KEY] || 0) + 1,
+      );
+
       assert.equal(
         normalized.risks[0].system,
         normalized.riskSystems.find((x) => x.id === risk.systemId).name,
