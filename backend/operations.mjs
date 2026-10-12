@@ -2,7 +2,12 @@ import { ownValue } from "../shared/records.ts";
 import { parseAllocationKey } from "../shared/allocation-key.ts";
 import { z } from "zod";
 import { fail, publicUser } from "./auth.mjs";
-import { allowedTeam, validate, actualVersionAt } from "./domain/index.mjs";
+import {
+  allowedTeam,
+  allowedPlanningTeam,
+  validate,
+  actualVersionAt,
+} from "./domain/index.mjs";
 import { orderedProjects } from "../shared/project-order.ts";
 import { stageRiskChange, stageRiskSystemChange } from "./risk-commands.mjs";
 import { stageTeamChange } from "./directory-commands.mjs";
@@ -109,7 +114,7 @@ function stageParsedChanges(d, u, changes) {
     const managerPlan =
       u.role === "manager" &&
       kind === "allocation" &&
-      allowedTeam(d, publicUser(u), targetId);
+      allowedPlanningTeam(d, publicUser(u), targetId);
     const actualKind = kind === "actual" || kind === "workedHours";
     const month = actualKind ? id.split("|")[kind === "actual" ? 2 : 1] : "";
     const resource = actualKind

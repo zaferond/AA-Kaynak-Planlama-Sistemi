@@ -1,3 +1,4 @@
+import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
 import { applyChanges } from "../../backend/operations.mjs";
 
@@ -51,10 +52,10 @@ export async function checkHeadcountForecast(f) {
   }
   async function openReport() {
     await page.goto(f.origin);
-    await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
     await page
-      .getByRole("button", { name: "Takım / Birim", exact: true })
+      .getByRole("tab", { name: "AA Kaynak Planlama Raporları", exact: true })
       .click();
+    await page.getByRole("button", { name: "Takım", exact: true }).click();
     const panel = page.locator('.pickerpanel[data-state="open"]');
     await panel
       .getByRole("button", { name: "Seçimleri Kaldır", exact: true })
@@ -90,11 +91,12 @@ export async function checkHeadcountForecast(f) {
     await f.check(
       "forecast: posting date labels change with status; date and inclusion defaults remain intact",
       async () => {
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
-        await page
-          .getByRole("button", { name: "Kaynak Ekle", exact: true })
+          .getByRole("button", {
+            name: "Kaynak Ekle / Yetki Tanımla",
+            exact: true,
+          })
           .click();
         for (const status of ["Aktif İlan", "Pasif İlan"]) {
           await chooseStatus(status);

@@ -167,7 +167,7 @@ test("scope filters preserve source order, unassigned leader groups and the name
   const all = selectWorkspaceScope(data, principal("admin"), filters());
   assert.deepEqual(
     all.leaderReportGroups.map((g) => g.name),
-    ["A", "B", "Liderlik eşleştirilmemiş"],
+    ["A", "B", "No leader"],
   );
   const selected = selectWorkspaceScope(
     data,
@@ -252,7 +252,7 @@ test("normal own-person visibility survives a team transfer while excluding othe
   );
 });
 
-test("URL filters cannot create teams or people missing from a manager's server-scoped snapshot", () => {
+test("managers can filter all planning teams without exposing anonymous personnel", () => {
   const user = principal("manager"),
     full = fixture();
   full.resources.push({
@@ -267,13 +267,16 @@ test("URL filters cannot create teams or people missing from a manager's server-
     user,
     filters({ teamIds: ["b"], leads: ["B"] }),
   );
-  assert.deepEqual(outside.teams, []);
+  assert.deepEqual(
+    outside.teams.map((t) => t.id),
+    ["b"],
+  );
   assert.deepEqual(outside.availablePeople, []);
   const allowed = selectWorkspaceScope(data, user, filters());
-  assert.deepEqual(allowed.ids, ["a"]);
+  assert.deepEqual(allowed.ids, ["unmatched", "a", "b"]);
   assert.deepEqual(
     allowed.availablePeople.map((p) => p.id),
-    ["local"],
+    ["own", "local"],
   );
 });
 
@@ -342,9 +345,97 @@ test("a manager's linked employee stays available alongside authorized employees
     scope.availablePeople.map((p) => p.id),
     ["own"],
   );
-  assert.deepEqual(scope.ids, ["a"]);
+  assert.deepEqual(scope.ids, ["unmatched", "a", "b"]);
   assert.equal(
     scope.availablePeople.some((p) => p.id === "other"),
     false,
+  );
+});
+
+test("remaining resource groups retain only root leaderships and each independent Product Owner unit with no double counting", () => {
+  const d = fixture();
+  d.leaders.push("Child", "Grandchild", "Standalone PO");
+  d.leaderParents = { Child: "A", Grandchild: "Child" };
+  d.teams.push(
+    {
+      id: "direct-a",
+      name: "A",
+      lead: "A",
+      kind: "leadership",
+      excelCapacity: 0,
+    },
+    {
+      id: "child-unit",
+      name: "Child",
+      lead: "Child",
+      kind: "leadership",
+      excelCapacity: 0,
+    },
+    { id: "child-team", name: "Child Team", lead: "Child", excelCapacity: 0 },
+    {
+      id: "grand-team",
+      name: "Grand Team",
+      lead: "Grandchild",
+      excelCapacity: 0,
+    },
+    {
+      id: "independent-po",
+      name: "Independent Product Ownership",
+      lead: "",
+      excelCapacity: 0,
+    },
+    { id: "same-name", name: "A", lead: "", excelCapacity: 0 },
+    {
+      id: "root-po-unit",
+      name: "Standalone PO",
+      lead: "Standalone PO",
+      kind: "leadership",
+      excelCapacity: 0,
+    },
+  );
+  const before = structuredClone(d);
+  const scope = selectWorkspaceScope(d, principal("admin"), filters());
+  const groups = scope.leaderReportGroups;
+  assert.deepEqual(groups.find((g) => g.leader === "A").ids, [
+    "a",
+    "direct-a",
+    "child-unit",
+    "child-team",
+    "grand-team",
+  ]);
+  assert(!groups.some((g) => ["Child", "Grandchild"].includes(g.name)));
+  for (const id of ["unmatched", "independent-po", "same-name"]) {
+    const group = groups.find((g) => g.unitId === id);
+    assert.deepEqual(group.ids, [id]);
+    assert.equal(group.name, d.teams.find((t) => t.id === id).name);
+  }
+  assert(
+    groups.some(
+      (g) => g.name === "Standalone PO" && g.leader === "Standalone PO",
+    ),
+  );
+  const allIds = groups.flatMap((g) => g.ids);
+  assert.equal(new Set(allIds).size, allIds.length);
+  assert.deepEqual([...allIds].sort(), scope.ids.toSorted());
+  const selected = selectWorkspaceScope(
+    d,
+    principal("admin"),
+    filters({ teamIds: ["child-team", "independent-po"] }),
+  );
+  assert.deepEqual(selected.leaderReportGroups, [
+    { name: "A", leader: "A", ids: ["child-team"] },
+    {
+      name: "Independent Product Ownership",
+      unitId: "independent-po",
+      ids: ["independent-po"],
+    },
+  ]);
+  assert.deepEqual(d, before);
+  const user = principal("manager");
+  const scoped = scopeData(d, user);
+  assert(
+    selectWorkspaceScope(scoped, user, filters()).leaderReportGroups.some(
+      (g) => g.unitId,
+    ),
   );
 });

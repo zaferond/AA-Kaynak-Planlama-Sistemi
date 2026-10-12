@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Check, ChevronDown, Search } from "lucide-react";
 import {
   Popover,
@@ -6,6 +6,28 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { fold } from "../model";
+export type PickerItem = { id: string; name: string; description?: string };
+function ItemLabel({
+  item,
+  descriptionId,
+}: {
+  item: PickerItem;
+  descriptionId?: string;
+}) {
+  return (
+    <span className="picker-item-label">
+      <span>{item.name}</span>
+      {item.description && (
+        <small id={descriptionId} className="picker-item-description">
+          {" "}
+          - {item.description}
+        </small>
+      )}
+    </span>
+  );
+}
+const itemText = (item: PickerItem) =>
+  item.name + (item.description ? " - " + item.description : "");
 export function Picker({
   label,
   value,
@@ -17,7 +39,7 @@ export function Picker({
   label: string;
   value: string[];
   onChange: (v: string[]) => void;
-  items: { id: string; name: string }[];
+  items: PickerItem[];
   single?: boolean;
   empty?: string;
 }) {
@@ -25,11 +47,16 @@ export function Picker({
     [query, setQuery] = useState(""),
     [modal, setModal] = useState(false);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const descriptionPrefix = useId();
+  const descriptionId = (item: PickerItem) =>
+    item.description
+      ? descriptionPrefix + "-" + encodeURIComponent(item.id)
+      : undefined;
   const closePicker = () => {
     setOpen(false);
     setQuery("");
   };
-  const shown = items.filter((i) => fold(i.name).includes(fold(query)));
+  const shown = items.filter((i) => fold(itemText(i)).includes(fold(query)));
   const selected = items.filter((i) => value.includes(i.id));
   return (
     <div
@@ -53,14 +80,18 @@ export function Picker({
             type="button"
             className="pickerbutton"
             aria-label={label}
-            title={selected.map((i) => i.name).join(", ")}
+            title={selected.map(itemText).join(", ")}
           >
             <span>
-              {value.length
-                ? selected.length === 1
-                  ? selected[0].name
-                  : value.length + " seçim"
-                : empty}
+              {value.length ? (
+                selected.length === 1 ? (
+                  <ItemLabel item={selected[0]} />
+                ) : (
+                  value.length + " seçim"
+                )
+              ) : (
+                empty
+              )}
             </span>
             <ChevronDown size={15} />
           </button>
@@ -109,19 +140,23 @@ export function Picker({
               single ? (
                 <button
                   key={i.id}
+                  aria-label={i.name}
+                  aria-describedby={descriptionId(i)}
                   className={"option " + (value.includes(i.id) ? "chosen" : "")}
                   onClick={() => {
                     onChange([i.id]);
                     closePicker();
                   }}
                 >
-                  {i.name}
+                  <ItemLabel item={i} descriptionId={descriptionId(i)} />
                   {value.includes(i.id) && <Check size={15} />}
                 </button>
               ) : (
                 <label key={i.id} className="option">
                   <input
                     type="checkbox"
+                    aria-label={i.name}
+                    aria-describedby={descriptionId(i)}
                     checked={value.includes(i.id)}
                     onChange={(e) =>
                       onChange(
@@ -131,7 +166,7 @@ export function Picker({
                       )
                     }
                   />
-                  {i.name}
+                  <ItemLabel item={i} descriptionId={descriptionId(i)} />
                 </label>
               ),
             )}
@@ -152,7 +187,7 @@ export function Single({
   label: string;
   value: string;
   onChange: (v: string) => void;
-  items: { id: string; name: string }[];
+  items: PickerItem[];
   empty?: string;
 }) {
   return (

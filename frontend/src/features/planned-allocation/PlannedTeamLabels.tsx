@@ -1,3 +1,5 @@
+import { planningUnitHierarchy } from "../../../../shared/leadership-planning";
+import type { Data } from "../../model";
 import { ownValue } from "../../../../shared/records";
 import type { Team } from "../../model";
 import MemberBadge from "../../components/MemberBadge";
@@ -52,5 +54,20 @@ export function PlannedTeamBadge({
       members={ownValue(currentTeamMembers, team.id) || []}
       currentMonth={currentMonth}
     />
+  );
+}
+
+export function PlannedUnitName({ data, team }: { data: Data; team: Team }) {
+  const { parent } = planningUnitHierarchy(data, team);
+  return (
+    <span
+      title={
+        parent && team.kind === "leadership"
+          ? "Üst liderlik: " + parent
+          : team.lead || "Liderlik eşleştirilmemiş"
+      }
+    >
+      {team.name}
+    </span>
   );
 }

@@ -1,3 +1,7 @@
+import {
+  assertResourceRole,
+  assertUniqueResourceResponsibilities,
+} from "./resource-roles.ts";
 import type { Data } from "./model.ts";
 import { invalidSnapshot as bad } from "./snapshot-validation-error.ts";
 import type { Version } from "./model.ts";
@@ -25,6 +29,7 @@ export function normalizeSnapshotResources(
       v.end = normalizeResourceDate(v.end, "end");
       if (v.team && !teamIds.has(v.team)) throw bad("Takım bulunamadı.");
       try {
+        assertResourceRole(d, v);
         assertResourceDates(
           v,
           unchangedLegacyPeriod(v, previous.get(r.id)?.get(v.effective)),
@@ -48,6 +53,7 @@ export function normalizeSnapshotResources(
             );
         }
   }
+  assertUniqueResourceResponsibilities(d, previous);
 }
 
 export function validateSnapshotProjects(d: Data) {

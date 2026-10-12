@@ -1,3 +1,8 @@
+import {
+  orderedPlanningUnits,
+  selectedLeadershipScope,
+} from "../../../../shared/leadership-planning.ts";
+import { topLevelReportGroups } from "../resource-report-groups.ts";
 import type { Data, Team, Project } from "../../model.ts";
 import type { Principal } from "../../access.ts";
 import { visibleActualInScope } from "../../../../shared/actual-visibility.ts";
@@ -17,40 +22,47 @@ export function selectWorkspaceScope(
   }: Pick<
     WorkspaceFilterValues,
     "leads" | "teamIds" | "projectIds" | "start"
-  > & { months: string[]; currentMonth: string },
+  > & {
+    months: string[];
+    currentMonth: string;
+  },
 ) {
   const allLeads = data?.leaders || [];
-  const availableTeams =
-    data?.teams.filter((t) => !leads.length || leads.includes(t.lead)) || [];
-  const teams = availableTeams.filter(
+  const selectedLeaders = selectedLeadershipScope(data || {}, leads, true);
+  const availableUnits =
+    data?.teams.filter((t) => !leads.length || selectedLeaders.has(t.lead)) ||
+    [];
+  const availableTeams = availableUnits.filter(
+    (team) => team.kind !== "leadership",
+  );
+  const filteredTeams = availableUnits.filter(
     (t) => !teamIds.length || teamIds.includes(t.id),
   );
+  const teams = data?.leadershipUnits
+    ? orderedPlanningUnits(data, filteredTeams)
+    : filteredTeams;
   const projects =
     data?.projects.filter(
       (p) => !projectIds.length || projectIds.includes(p.id),
     ) || [];
   const ids = teams.map((t) => t.id);
   const actualTeamIds = new Set(ids);
-  const leaderReportGroups = [...new Set(teams.map((t) => t.lead))].map(
-    (lead) => ({
-      name: lead || "Liderlik eşleştirilmemiş",
-      leader: lead,
-      ids: teams.filter((t) => t.lead === lead).map((t) => t.id),
-    }),
-  );
+  const leaderReportGroups = topLevelReportGroups(data || {}, teams);
   const teamReportGroups = teams.map((t) => ({ name: t.name, ids: [t.id] }));
   const availablePeople =
     data?.resources
-      .filter((r) =>
-        months.some((m) => {
-          return !!visibleActualInScope(
-            r,
-            m,
-            currentMonth,
-            actualTeamIds,
-            user?.role !== "admin" ? user?.resourceId : undefined,
-          );
-        }),
+      .filter(
+        (r) =>
+          !!r.name &&
+          months.some((m) => {
+            return !!visibleActualInScope(
+              r,
+              m,
+              currentMonth,
+              actualTeamIds,
+              user?.role !== "admin" ? user?.resourceId : undefined,
+            );
+          }),
       )
       .map((r) => ({ id: r.id, name: r.name })) || [];
   const capacityFilters = [
@@ -72,8 +84,10 @@ export function selectWorkspaceScope(
     { label: "Başlangıç Ayı", values: [monthLabel(start)], active: true },
   ];
   const leaderItems = allLeads.map((lead) => ({ id: lead, name: lead }));
+  const leaderFilterItems = leaderItems;
   return {
     allLeads,
+    leaderFilterItems,
     leaderItems,
     availableTeams,
     teams,

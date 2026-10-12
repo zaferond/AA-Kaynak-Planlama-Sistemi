@@ -1,3 +1,4 @@
+import { ensureLeadershipUnits } from "../shared/leadership-units.ts";
 import { z } from "zod";
 import { admin, fail } from "./auth.mjs";
 import {
@@ -97,7 +98,9 @@ export function restore(d, u, backup) {
   }
   // An existing undated employment period may be restored unchanged; a JSON
   // upload cannot introduce new undated resources/periods or change their policy.
-  const next = validate(migrate(backup), { previousResources: d.resources });
+  const restored = migrate(backup);
+  if (d.leadershipUnits) ensureLeadershipUnits(restored);
+  const next = validate(restored, { previousResources: d.resources });
   assertActualMonthlyLimits(next);
   // Backup counters belong to another point in time. Rebuild from current
   // revisions, including deleted records, so no stale client becomes current.

@@ -10,17 +10,25 @@ export async function loginUI(page, id, password) {
     .waitFor();
 }
 const openAccess = (page) =>
-  page.getByRole("tab", { name: "Yetki Kontrol Ekranı", exact: true }).click();
+  page
+    .getByRole("tab", {
+      name: "Organizasyon & Çalışan & Yetki",
+      exact: true,
+    })
+    .click();
 async function editAccount(page, id) {
   await page
-    .getByRole("textbox", { name: "Kullanıcı ara", exact: true })
+    .getByRole("textbox", { name: "Kaynak ara", exact: true })
     .fill("qa." + id);
   await page
     .locator(".accesstable tbody tr")
-    .getByRole("button", { name: "Yetkileri Düzenle", exact: true })
+    .getByRole("button", { name: "Düzenle", exact: true })
     .click();
-  await page.locator(".access-permission-form").waitFor();
-  return page.locator(".access-permission-form");
+  const form = page.locator(
+    ".employee-access-editor, .access-permission-dialog",
+  );
+  await form.waitFor();
+  return form;
 }
 export async function checkAccess(f) {
   const admin = await f.client("root-admin"),
@@ -61,7 +69,10 @@ export async function checkAccess(f) {
         assert(cookies.some((cookie) => cookie.httpOnly));
         assert.equal(
           await p
-            .getByRole("tab", { name: "Yetki Kontrol Ekranı", exact: true })
+            .getByRole("tab", {
+              name: "Organizasyon & Çalışan & Yetki",
+              exact: true,
+            })
             .count(),
           0,
         );
@@ -88,18 +99,18 @@ export async function checkAccess(f) {
       "access: root admin is protected; role/resource edits revoke the employee's old session",
       async () => {
         await page
-          .getByRole("textbox", { name: "Kullanıcı ara", exact: true })
+          .getByRole("textbox", { name: "Kaynak ara", exact: true })
           .fill("qa.root-admin");
         assert.equal(
           await page
             .locator(".accesstable tbody tr")
-            .getByRole("button", { name: "Yetkileri Düzenle", exact: true })
+            .getByRole("button", { name: "Düzenle", exact: true })
             .count(),
           0,
         );
         const employee = await f.client("employee");
         const form = await editAccount(page, "employee");
-        await form.locator("select").first().selectOption("manager");
+        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         await form.getByRole("button", { name: "Kaydet", exact: true }).click();
         await form.waitFor({ state: "hidden" });
         assert.equal(
@@ -125,15 +136,19 @@ export async function checkAccess(f) {
         );
         assert.equal(
           await employee.page
-            .getByRole("tab", { name: "Yetki Kontrol Ekranı", exact: true })
+            .getByRole("tab", {
+              name: "Organizasyon & Çalışan & Yetki",
+              exact: true,
+            })
             .count(),
           0,
         );
         const restoreForm = await editAccount(page, "employee");
-        await restoreForm.locator("select").first().selectOption("normal");
-        await restoreForm.locator("select").nth(1).selectOption("r-own");
+        await restoreForm
+          .getByLabel("Rol", { exact: true })
+          .selectOption("normal");
         await page.route(
-          "**/api/users",
+          "**/api/employees/save",
           (route) =>
             route.fulfill({
               status: 503,
@@ -169,19 +184,43 @@ export async function checkAccess(f) {
       },
     );
     await f.check(
+      "access: selecting employee replaces leadership with current assignment",
+      async () => {
+        const form = await editAccount(page, "employee");
+        await form
+          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .fill(f.teamB.lead);
+        await form
+          .getByRole("checkbox", { name: f.teamB.lead, exact: true })
+          .check();
+        assert.equal(
+          await form.getByLabel("Çalışan Kaydı", { exact: true }).count(),
+          0,
+        );
+        assert.equal(
+          (await f.store.findUser({ id: "employee" })).resourceId,
+          "r-own",
+        );
+        await form.getByRole("button", { name: "Vazgeç", exact: true }).click();
+      },
+    );
+    await f.check(
       "access: stale permission revision cannot overwrite another admin's change",
       async () => {
         const otherAdmin = await f.client("root-admin");
         await openAccess(otherAdmin.page);
-        const a = await editAccount(page, "other"),
-          b = await editAccount(otherAdmin.page, "other");
-        await b.locator("select").first().selectOption("admin");
+        const a = await editAccount(page, "admin-edit"),
+          b = await editAccount(otherAdmin.page, "admin-edit");
+        await b.getByLabel("Rol", { exact: true }).selectOption("admin");
         await b.getByRole("button", { name: "Kaydet", exact: true }).click();
         await b.waitFor({ state: "hidden" });
-        await a.locator("select").first().selectOption("manager");
+        await a.getByLabel("Rol", { exact: true }).selectOption("manager");
         await a.getByRole("button", { name: "Kaydet", exact: true }).click();
         await a.getByRole("alert").waitFor();
-        assert.equal((await f.store.findUser({ id: "other" })).role, "admin");
+        assert.equal(
+          (await f.store.findUser({ id: "admin-edit" })).role,
+          "admin",
+        );
         await f.capture(page, "access-conflict");
         await otherAdmin.context.close();
         await page.reload();
@@ -194,7 +233,7 @@ export async function checkAccess(f) {
         const c = await f.client("admin-edit");
         await openAccess(c.page);
         const form = await editAccount(c.page, "admin-edit");
-        await form.locator("select").first().selectOption("manager");
+        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         await form
           .getByRole("checkbox", { name: f.teamA.lead, exact: true })
           .check();
@@ -207,7 +246,10 @@ export async function checkAccess(f) {
         await loginUI(c.page, "admin-edit", f.password);
         assert.equal(
           await c.page
-            .getByRole("tab", { name: "Yetki Kontrol Ekranı", exact: true })
+            .getByRole("tab", {
+              name: "Organizasyon & Çalışan & Yetki",
+              exact: true,
+            })
             .count(),
           0,
         );
@@ -246,33 +288,49 @@ export async function checkAccess(f) {
         await page.reload();
         await openAccess(page);
         await page
+          .getByRole("textbox", { name: "Kaynak ara", exact: true })
+          .fill("Browser New Account");
+        await page
+          .locator(".resource-table tbody tr")
+          .getByRole("button", { name: "Düzenle", exact: true })
+          .click();
+        const form = page.locator('[data-slot="dialog-content"]');
+        const accountForm = form.locator(".resource-account-section");
+        await accountForm
+          .getByLabel("Hesap Eşleştirmesi", { exact: true })
+          .selectOption("new-ad");
+        await accountForm
           .getByRole("button", {
-            name: "AD Kullanıcısına Yetki Tanımla",
+            name: "Directory New Account kullanıcısını seç",
             exact: true,
           })
           .click();
-        const form = page.locator(".access-permission-form");
-        await form
-          .getByLabel("Hesap Açılacak Çalışan", { exact: true })
-          .selectOption("f".repeat(32));
         for (const [label, value] of [
           ["Ad Soyad", "Directory New Account"],
           ["Kullanıcı Adı", "qa.new-manager"],
           ["E-posta", "new.manager@example.test"],
         ]) {
-          const input = form.getByLabel(label, { exact: true });
+          const input = accountForm.getByLabel(label, { exact: true });
           assert.equal(await input.inputValue(), value);
           assert.equal(await input.getAttribute("readonly"), "");
         }
         assert.equal(await form.locator('input[type="password"]').count(), 0);
-        await form
-          .getByLabel("Uygulamadaki Çalışan Kaydı", { exact: true })
-          .selectOption("r-new-account");
+        assert.equal(
+          await accountForm
+            .getByLabel("Uygulamadaki Çalışan Kaydı", { exact: true })
+            .count(),
+          0,
+        );
+        assert(
+          await form
+            .getByRole("checkbox", { name: f.teamA.lead, exact: true })
+            .isChecked(),
+        );
         await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         await f.capture(page, "access-create-directory-employee");
         await form
           .getByRole("button", {
-            name: "Yetki Tanımla ve Eşleştir",
+            name: "Kaydet",
             exact: true,
           })
           .click();
@@ -285,12 +343,12 @@ export async function checkAccess(f) {
         assert.equal(saved.resourceId, "r-new-account");
         const edit = await editAccount(page, "new-manager");
         assert.equal(
-          await edit.getByLabel("Çalışan Kaydı", { exact: false }).inputValue(),
-          "r-new-account",
+          await edit.getByLabel("Çalışan Kaydı", { exact: true }).count(),
+          0,
         );
         await edit.getByLabel("Rol", { exact: true }).selectOption("normal");
         assert.equal(
-          await edit.getByLabel("Çalışan Kaydı", { exact: false }).inputValue(),
+          (await f.store.findUser({ username: "qa.new-manager" })).resourceId,
           "r-new-account",
         );
         await edit.getByRole("button", { name: "Vazgeç", exact: true }).click();
@@ -331,11 +389,14 @@ export async function checkAccess(f) {
         );
         await page
           .getByRole("button", {
-            name: "AD Kullanıcısına Yetki Tanımla",
+            name: "Kaynak Ekle / Yetki Tanımla",
             exact: true,
           })
           .click();
-        const form = page.locator(".access-permission-form");
+        const form = page.locator('[data-slot="dialog-content"]');
+        await form
+          .getByLabel("Hesap Eşleştirmesi", { exact: true })
+          .selectOption("new-ad");
         await form
           .getByRole("status")
           .filter({ hasText: "bağlantısı henüz tanımlanmadı" })
@@ -343,39 +404,99 @@ export async function checkAccess(f) {
         assert.equal(
           await form
             .getByLabel("Hesap Açılacak Çalışan", { exact: true })
-            .isDisabled(),
-          true,
+            .count(),
+          0,
         );
-        assert.equal(
-          await form
-            .getByRole("button", {
-              name: "Yetki Tanımla ve Eşleştir",
-              exact: true,
-            })
-            .isDisabled(),
-          true,
-        );
+        assert.equal(await form.locator(".access-directory-select").count(), 0);
         assert.equal(await form.locator('input[type="password"]').count(), 0);
         await form
           .getByRole("button", { name: "Ara / Yenile", exact: true })
           .click();
+        const assigned = form.getByRole("button", {
+          name: "Directory New Account kullanıcısını seç",
+          exact: true,
+        });
+        await assigned.waitFor();
+        assert(await assigned.isDisabled());
+        await page.keyboard.press("Escape");
+      },
+    );
+    await f.check(
+      "access: select all ignores search, revoke cancels or closes sessions, regrant preserves identity",
+      async () => {
+        await page.reload();
+        await openAccess(page);
+        const form = await editAccount(page, "manager");
         await form
-          .getByLabel("Hesap Açılacak Çalışan", { exact: true })
-          .waitFor({ state: "visible" });
-        await f.wait(
-          async () =>
-            !(await form
-              .getByLabel("Hesap Açılacak Çalışan", { exact: true })
-              .isDisabled()),
-          "directory retry",
-        );
-        assert.notEqual(
-          await form
-            .locator('option[value="' + "f".repeat(32) + '"]')
-            .getAttribute("disabled"),
-          null,
+          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .fill(f.teamA.lead);
+        await form
+          .getByRole("button", { name: "Tüm Liderlikleri Seç", exact: true })
+          .click();
+        await form
+          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .fill("");
+        const boxes = form.locator('input[type="checkbox"]');
+        assert.equal(await boxes.count(), (await f.state()).leaders.length);
+        for (const box of await boxes.all()) assert(await box.isChecked());
+        await form
+          .getByRole("button", { name: "Seçimi Temizle", exact: true })
+          .click();
+        assert.equal(
+          await form.locator('input[type="checkbox"]:checked').count(),
+          0,
         );
         await form.getByRole("button", { name: "Vazgeç", exact: true }).click();
+        const target = await f.client("unmapped");
+        await page
+          .getByRole("textbox", { name: "Kaynak ara", exact: true })
+          .fill("qa.unmapped");
+        await page
+          .locator('tr[data-account-id="unmapped"]')
+          .getByRole("button", { name: "Düzenle", exact: true })
+          .click();
+        const remove = page.getByRole("dialog").getByRole("button", {
+          name: "Uygulama Yetkisini Kaldır",
+          exact: true,
+        });
+        page.once("dialog", (d) => d.dismiss());
+        await remove.click();
+        assert.equal((await f.store.findUser({ id: "unmapped" })).active, true);
+        page.once("dialog", (d) => d.accept());
+        await remove.click();
+        await page
+          .locator(".access-permission-form")
+          .waitFor({ state: "hidden" });
+        assert.equal(
+          (await f.store.findUser({ id: "unmapped" })).active,
+          false,
+        );
+        await target.page.reload();
+        await target.page
+          .getByLabel("Kullanıcı Adı", { exact: true })
+          .waitFor();
+        await page
+          .locator('tr[data-account-id="unmapped"]')
+          .getByRole("button", { name: "Düzenle", exact: true })
+          .click();
+        await page
+          .locator(".access-permission-form")
+          .getByRole("button", { name: "Yeniden Yetki Ver", exact: true })
+          .click();
+        await page
+          .locator(".access-permission-form")
+          .waitFor({ state: "hidden" });
+        assert.equal((await f.store.findUser({ id: "unmapped" })).active, true);
+        await target.context.close();
+        await page
+          .getByRole("textbox", { name: "Kaynak ara", exact: true })
+          .fill("qa.root-admin");
+        assert.equal(
+          await page
+            .getByRole("button", { name: "Yetkiyi Sil", exact: true })
+            .count(),
+          0,
+        );
       },
     );
     await f.check(

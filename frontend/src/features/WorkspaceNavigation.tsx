@@ -26,6 +26,8 @@ type Props = {
   dataLoaded: boolean;
   hasTeams: boolean;
   hasProjects: boolean;
+  organizationView: string;
+  setOrganizationView: (view: string) => void;
 };
 export default function WorkspaceNavigation({
   user,
@@ -41,6 +43,8 @@ export default function WorkspaceNavigation({
   dataLoaded,
   hasTeams,
   hasProjects,
+  organizationView,
+  setOrganizationView,
 }: Props) {
   const isAdmin = user?.role === "admin",
     isManager = user?.role === "manager";
@@ -91,24 +95,27 @@ export default function WorkspaceNavigation({
           </TabsTrigger>
         )}
         {isAdmin && (
-          <>
-            <TabsTrigger value="teams">
-              <Users />
-              {TAB_LABELS.teams}
-            </TabsTrigger>
-            <TabsTrigger value="resources">
-              <Users />
-              {TAB_LABELS.resources}
-            </TabsTrigger>
-            <TabsTrigger value="access">
-              <Users />
-              {TAB_LABELS.access}
-            </TabsTrigger>
-          </>
+          <TabsTrigger value="resources">
+            <Users />
+            {TAB_LABELS.resources}
+          </TabsTrigger>
         )}
       </TabsList>
       {!["access", "teams", "critical", "risk", "activity"].includes(tab) && (
         <div className="workspace-nav-actions">
+          {tab === "resources" && (
+            <Tabs value={organizationView} onValueChange={setOrganizationView}>
+              <TabsList
+                className="organization-view-switch"
+                aria-label="Organizasyon görünümü"
+              >
+                <TabsTrigger value="employees">
+                  Çalışan & Yetki Tanımlama
+                </TabsTrigger>
+                <TabsTrigger value="teams">Organizasyon Yapısı</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           {["plan", "actual", "projects", "overview"].includes(tab) && (
             <label className="densitycontrol">
               Görünüm
@@ -147,22 +154,24 @@ export default function WorkspaceNavigation({
               Yeni Proje Ekle
             </button>
           )}
-          <button
-            className="button"
-            onClick={onExport}
-            disabled={
-              !dataLoaded ||
-              (tab === "overview" && !hasTeams) ||
-              (tab === "projects" && !hasProjects)
-            }
-          >
-            <ArrowDownToLine size={17} />
-            {tab === "projects"
-              ? "Proje Raporunu İndir"
-              : tab === "overview"
-                ? "Kaynak Raporu İndir"
-                : "Excel'e Aktar"}
-          </button>
+          {tab !== "resources" && (
+            <button
+              className="button"
+              onClick={onExport}
+              disabled={
+                !dataLoaded ||
+                (tab === "overview" && !hasTeams) ||
+                (tab === "projects" && !hasProjects)
+              }
+            >
+              <ArrowDownToLine size={17} />
+              {tab === "projects"
+                ? "Proje Raporunu İndir"
+                : tab === "overview"
+                  ? "Kaynak Raporu İndir"
+                  : "Excel'e Aktar"}
+            </button>
+          )}
         </div>
       )}
     </div>

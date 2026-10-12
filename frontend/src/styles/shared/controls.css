@@ -487,3 +487,16 @@ select {
 .project-editor-actions .button.primary {
   margin-left: auto;
 }
+
+.picker-item-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.picker-item-description {
+  color: var(--brand-muted, #65788a);
+  font-size: 0.85em;
+  font-weight: 400;
+}
+.pickeroptions .option > .picker-item-label {
+  flex: 1;
+}

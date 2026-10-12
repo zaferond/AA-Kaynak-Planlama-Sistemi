@@ -1,3 +1,11 @@
+import {
+  directoryResponsibilityIndex,
+  resourceRole,
+  resourceRoleLabels,
+} from "../../../../shared/resource-roles";
+import { directoryEmployees } from "../../../../shared/employee-directory";
+import { descendantLeaders } from "../../../../shared/leadership-hierarchy";
+import { currentPlanningMonth } from "../../../../shared/resource-dates";
 import { Building2, Plus, RefreshCw, Save, Trash2, Users } from "lucide-react";
 import {
   Dialog,
@@ -6,7 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { fold, type Data } from "../../model";
 import { ownValue } from "../../../../shared/records";
 import type { useDirectoryEditor } from "./useDirectoryEditor";
@@ -18,9 +26,21 @@ export default function DirectoryManagementDialog({
   data: Data;
   editor: ReturnType<typeof useDirectoryEditor>;
 }) {
+  const responsibility = directoryResponsibilityIndex(data);
   const { kind, draft, selectedId, dirty, busy, error, conflict } = editor;
   const [query, setQuery] = useState("");
   useEffect(() => setQuery(""), [kind]);
+  const revealSelected = useCallback(
+    (list: HTMLDivElement | null) => {
+      const selected = list?.querySelector<HTMLButtonElement>(
+        'button[aria-pressed="true"]',
+      );
+      if (list && selected)
+        list.scrollTop =
+          selected.offsetTop - (list.clientHeight - selected.offsetHeight) / 2;
+    },
+    [kind, selectedId, query],
+  );
   const leaderMode = kind === "leader";
   const label = leaderMode ? "liderlik" : "takım";
   const rows = (
@@ -29,13 +49,15 @@ export default function DirectoryManagementDialog({
           id: name,
           name,
           detail:
-            ownValue(data.leaderManagers, name) || "Yönetici belirtilmedi",
+            ownValue(responsibility.leaders, name) || "Yönetici belirtilmedi",
         }))
-      : data.teams.map((team) => ({
-          id: team.id,
-          name: team.name,
-          detail: team.lead || "Liderlik eşleştirilmemiş",
-        }))
+      : data.teams
+          .filter((team) => team.kind !== "leadership")
+          .map((team) => ({
+            id: team.id,
+            name: team.name,
+            detail: team.lead || "Liderlik eşleştirilmemiş",
+          }))
   )
     .filter((row) => fold(row.name + " " + row.detail).includes(fold(query)))
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
@@ -44,10 +66,39 @@ export default function DirectoryManagementDialog({
   const name = draft?.kind === "leader" ? draft.name : draft?.value.name || "";
   const manager =
     draft?.kind === "leader"
-      ? draft.managerName
+      ? ownValue(responsibility.leaders, draft.originalName || "") || ""
       : draft?.kind === "team"
-        ? draft.value.managerName || ""
+        ? ownValue(responsibility.teams, draft.value.id) || ""
         : "";
+  const employees =
+    selectedId && (kind === "leader" || kind === "team")
+      ? directoryEmployees(data, kind, selectedId, currentPlanningMonth())
+      : [];
+  const excludedParents = selectedId
+    ? descendantLeaders(data, selectedId)
+    : new Set<string>();
+  const linkedTeams =
+    leaderMode && selectedId
+      ? data.teams
+          .filter(
+            (team) =>
+              team.kind !== "leadership" && excludedParents.has(team.lead),
+          )
+          .sort(
+            (a, b) =>
+              a.lead.localeCompare(b.lead, "tr") ||
+              a.name.localeCompare(b.name, "tr"),
+          )
+      : [];
+  const linkedLeaders =
+    leaderMode && selectedId
+      ? [...excludedParents]
+          .filter((leader) => leader !== selectedId)
+          .sort((a, b) => a.localeCompare(b, "tr"))
+      : [];
+  const hasDescendantTeams = linkedTeams.some(
+    (team) => team.lead !== selectedId,
+  );
   return (
     <Dialog
       open={!!kind}
@@ -92,6 +143,7 @@ export default function DirectoryManagementDialog({
               {leaderMode ? "Yeni Liderlik Ekle" : "Yeni Takım Ekle"}
             </button>
             <div
+              ref={revealSelected}
               className="directory-manager-records"
               aria-label={leaderMode ? "Liderlik listesi" : "Takım listesi"}
             >
@@ -166,18 +218,46 @@ export default function DirectoryManagementDialog({
                       </select>
                     </>
                   )}
+                  {draft.kind === "leader" && (
+                    <>
+                      <label htmlFor="directory-parent">Üst Liderlik</label>
+                      <select
+                        id="directory-parent"
+                        value={draft.parentName}
+                        onChange={(event) =>
+                          editor.update("parentName", event.target.value)
+                        }
+                      >
+                        <option value="">Üst liderlik yok</option>
+                        {(data.leaders || [])
+                          .filter((leader) => !excludedParents.has(leader))
+                          .map((leader) => (
+                            <option key={leader} value={leader}>
+                              {leader}
+                            </option>
+                          ))}
+                      </select>
+                    </>
+                  )}
                   <label htmlFor="directory-manager">
                     {leaderMode ? "Liderlik Yöneticisi" : "Takım Yöneticisi"}
                   </label>
                   <input
                     id="directory-manager"
                     value={manager}
-                    maxLength={200}
-                    placeholder="Yönetici adı (isteğe bağlı)"
-                    onChange={(event) =>
-                      editor.update("managerName", event.target.value)
+                    readOnly
+                    aria-readonly="true"
+                    className="directory-derived-manager"
+                    placeholder={
+                      leaderMode ? "Lider atanmadı" : "Product Owner atanmadı"
                     }
+                    aria-describedby="directory-manager-source"
                   />
+                  <small id="directory-manager-source">
+                    Çalışan &amp; Yetki Tanımlama ekranındaki{" "}
+                    {leaderMode ? "Lider" : "Product Owner"} rolünden otomatik
+                    gösterilir; bu alanda elle değiştirilemez.
+                  </small>
                   <div className="directory-manager-form-actions">
                     {!isNew && (
                       <button
@@ -212,6 +292,85 @@ export default function DirectoryManagementDialog({
                 </strong>
                 <span>Düzenlemek için soldaki listeden seçim yapın.</span>
               </div>
+            )}
+            {leaderMode && selectedId && (
+              <section
+                className="directory-teams"
+                aria-label="Bağlı takımlar ve liderlikler"
+              >
+                <div className="directory-teams-heading">
+                  <strong>Bağlı Takımlar ve Liderlikler</strong>
+                  <span>
+                    {linkedLeaders.length} liderlik · {linkedTeams.length} takım
+                  </span>
+                </div>
+                {hasDescendantTeams && (
+                  <p>Alt liderliklerin takımları dahildir.</p>
+                )}
+                {linkedTeams.length || linkedLeaders.length ? (
+                  <ul>
+                    {linkedLeaders.map((leader) => (
+                      <li key={"leader:" + leader} data-directory-kind="leader">
+                        <div className="directory-linked-name">
+                          <strong>{leader}</strong>
+                          <span className="directory-linked-type">
+                            Liderlik
+                          </span>
+                        </div>
+                        <small>
+                          {ownValue(data.leaderParents, leader) === selectedId
+                            ? "Doğrudan bağlı"
+                            : "Üst liderlik · " +
+                              (ownValue(data.leaderParents, leader) || "—")}
+                        </small>
+                      </li>
+                    ))}
+                    {linkedTeams.map((team) => (
+                      <li key={"team:" + team.id} data-directory-kind="team">
+                        <div className="directory-linked-name">
+                          <strong>{team.name}</strong>
+                          <span className="directory-linked-type">Takım</span>
+                        </div>
+                        <small>
+                          {team.lead === selectedId
+                            ? "Doğrudan bağlı"
+                            : "Alt liderlik · " + team.lead}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Bu liderliğe bağlı takım veya alt liderlik bulunmuyor.</p>
+                )}
+              </section>
+            )}
+            {selectedId && (
+              <section
+                className="directory-employees"
+                aria-label="Bağlı çalışanlar"
+              >
+                <div className="directory-employees-heading">
+                  <strong>Bağlı Çalışanlar</strong>
+                  <span>{employees.length} çalışan</span>
+                </div>
+                {leaderMode && <p>Alt liderliklerin çalışanları dahildir.</p>}
+                {employees.length ? (
+                  <ul>
+                    {employees.map(({ resource, team, version }) => (
+                      <li key={resource.id}>
+                        <strong>{resource.name}</strong>
+                        <small>
+                          {team.name} ·{" "}
+                          {resourceRoleLabels[resourceRole(data, version)]} ·{" "}
+                          {version.status}
+                        </small>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Bu kayda bağlı çalışan bulunmuyor.</p>
+                )}
+              </section>
             )}
             {error && (
               <p className="alert directory-manager-error" role="alert">

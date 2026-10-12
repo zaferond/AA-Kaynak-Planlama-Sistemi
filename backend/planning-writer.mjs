@@ -168,6 +168,7 @@ export async function persistPlanningSnapshot(
         r.versions.map((v) => ({
           resource_id: r.id,
           effective_month: v.effective,
+          assignment_role: v.assignmentRole || null,
           team_id: v.team || null,
           leader_name: v.lead || null,
           status: v.status,

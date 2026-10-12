@@ -1,3 +1,8 @@
+import { directoryResponsibilityIndex } from "../../../shared/resource-roles";
+import { currentPlanningDate } from "../../../shared/resource-dates";
+import { ownValue } from "../../../shared/records";
+import { useMemo } from "react";
+import { selectedLeadershipScope } from "../../../shared/leadership-planning";
 import type { Dispatch, SetStateAction } from "react";
 import { SlidersHorizontal } from "lucide-react";
 import {
@@ -65,8 +70,12 @@ export default function WorkspaceFilters({
   resetAll,
   notice,
 }: Props) {
-  const isAdmin = user?.role === "admin",
-    isManager = user?.role === "manager";
+  const isAdmin = user?.role === "admin";
+  const today = currentPlanningDate();
+  const responsibility = useMemo(
+    () => directoryResponsibilityIndex(data, today),
+    [data, today],
+  );
   return (
     <>
       {!["access", "teams", "critical", "risk"].includes(tab) && (
@@ -87,27 +96,31 @@ export default function WorkspaceFilters({
                   value={leads}
                   onChange={(v) => {
                     setLeads(v);
+                    const selected = selectedLeadershipScope(data, v, true);
                     setTeamIds((old) =>
                       old.filter(
                         (id) =>
                           !v.length ||
-                          v.includes(
+                          selected.has(
                             data.teams.find((t) => t.id === id)?.lead || "",
                           ),
                       ),
                     );
                   }}
-                  items={leaderItems}
+                  items={leaderItems.map((item) => ({
+                    ...item,
+                    description: ownValue(responsibility.leaders, item.id),
+                  }))}
                 />
               )}
               {tab !== "projects" && (
                 <Picker
-                  label="Takım / Birim"
+                  label="Takım"
                   value={teamIds}
                   onChange={setTeamIds}
-                  items={availableTeams.map((t) => ({
-                    ...t,
-                    name: t.name,
+                  items={availableTeams.map((team) => ({
+                    ...team,
+                    description: ownValue(responsibility.teams, team.id),
                   }))}
                 />
               )}
@@ -119,7 +132,7 @@ export default function WorkspaceFilters({
                   items={data.projects}
                 />
               )}
-              {tab === "actual" && (isAdmin || isManager) && (
+              {tab === "actual" && (
                 <Picker
                   label="Kişi"
                   value={personIds}

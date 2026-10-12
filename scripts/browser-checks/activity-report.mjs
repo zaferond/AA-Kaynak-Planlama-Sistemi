@@ -5,6 +5,10 @@ export async function checkActivityReport(f) {
   const ids = [
     "qa-activity-worker",
     "qa-activity-left",
+    "qa-activity-gear",
+    "qa-activity-hourly",
+    "qa-activity-listing-active",
+    "qa-activity-listing-passive",
     ...Array.from({ length: 32 }, (_, i) => "qa-activity-extra-" + i),
   ];
   const base = {
@@ -21,7 +25,7 @@ export async function checkActivityReport(f) {
     id,
     name:
       index === 0
-        ? "Aktivite Test Çalışanı"
+        ? "Aktivite Raporu Uzun İsimli Örnek Test Çalışanı"
         : index === 1
           ? "Ayrılan Test Çalışanı"
           : "Test Çalışanı " + index,
@@ -39,6 +43,12 @@ export async function checkActivityReport(f) {
       { kind: "actual", id: ids[0] + "|p-a|2026-01", value: 0.5, revision: 0 },
       { kind: "actual", id: ids[0] + "|p-b|2026-01", value: 0.25, revision: 0 },
       { kind: "actual", id: ids[1] + "|p-a|2026-04", value: 0.25, revision: 0 },
+      ...ids.slice(4, 6).map((id) => ({
+        kind: "actual",
+        id: id + "|p-a|2026-01",
+        value: 0.1,
+        revision: 0,
+      })),
       {
         kind: "personDay",
         id: ids[0] + "|2026-01-02|leave",
@@ -75,6 +85,20 @@ export async function checkActivityReport(f) {
         value: departed,
         revision: current.revisions["resource:" + departed.id],
       },
+      ...["Gear Up", "SAAT Ücretli Ofis Ç.", "Aktif İlan", "Pasif İlan"].map(
+        (status, i) => ({
+          kind: "resource",
+          id: ids[i + 2],
+          value: {
+            ...resources[i + 2],
+            versions: [
+              base,
+              { ...base, effective: "2026-06", status, included: false },
+            ],
+          },
+          revision: current.revisions["resource:" + ids[i + 2]],
+        }),
+      ),
     ]),
   );
   const before = await f.state();
@@ -92,10 +116,14 @@ export async function checkActivityReport(f) {
     for (const name of names)
       await panel.getByRole("checkbox", { name, exact: true }).check();
     await page.keyboard.press("Escape");
+    await page
+      .getByRole("status")
+      .filter({ hasText: "Aktivite raporu yükleniyor" })
+      .waitFor({ state: "hidden" });
   }
   try {
     await page
-      .getByRole("tab", { name: "Aylık Aktivite Raporu", exact: true })
+      .getByRole("tab", { name: "AA Aylık Aktivite Raporu", exact: true })
       .click();
     await page
       .locator('.planning-filterbar input[type="month"]')
@@ -110,9 +138,9 @@ export async function checkActivityReport(f) {
           .allTextContents();
         assert.equal(
           tabs[tabs.findIndex((t) => t.includes("Gerçekleşen")) + 1],
-          "Aylık Aktivite Raporu",
+          "AA Aylık Aktivite Raporu",
         );
-        for (const label of ["Liderlik", "Takım / Birim", "Proje"])
+        for (const label of ["Liderlik", "Takım", "Proje"])
           assert.equal(
             await page
               .getByRole("button", { name: label, exact: true })
@@ -131,7 +159,48 @@ export async function checkActivityReport(f) {
       },
     );
     await f.check(
-      "activity report: month totals and percent/day/hour units share leave and training calculations",
+      "activity report: only four employee statuses appear even with historical listing activity",
+      async () => {
+        for (const id of ids.slice(0, 4))
+          assert.equal(
+            await page.locator(`[data-activity-resource="${id}"]`).count(),
+            1,
+          );
+        for (const id of ids.slice(4, 6))
+          assert.equal(
+            await page.locator(`[data-activity-resource="${id}"]`).count(),
+            0,
+          );
+      },
+    );
+    await f.check(
+      "activity report: narrow employee column wraps long names without clipping",
+      async () => {
+        const label = page.locator(
+          `[data-activity-resource="${ids[0]}"] .activity-person`,
+        );
+        const layout = await label.evaluate((el) => {
+          const style = getComputedStyle(el);
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const rects = Array.from(range.getClientRects());
+          return {
+            width: el.getBoundingClientRect().width,
+            whiteSpace: style.whiteSpace,
+            lines: new Set(rects.map((r) => Math.round(r.top))).size,
+            fits:
+              el.scrollWidth <= el.clientWidth + 1 &&
+              el.scrollHeight <= el.clientHeight + 1,
+          };
+        });
+        assert(layout.width <= 113);
+        assert.equal(layout.whiteSpace, "normal");
+        assert(layout.lines >= 2);
+        assert(layout.fits);
+      },
+    );
+    await f.check(
+      "activity report: month totals and percent/hour units share leave and training calculations",
       async () => {
         assert.equal(
           await cell(ids[0], "2026-01").locator("strong").innerText(),
@@ -142,10 +211,12 @@ export async function checkActivityReport(f) {
           await cell(ids[0], "2026-01").locator("strong").innerText(),
           "144",
         );
-        await page.getByLabel("Aktivite raporu birimi").selectOption("days");
-        assert.equal(
-          await cell(ids[0], "2026-01").locator("strong").innerText(),
-          "16",
+        assert.deepEqual(
+          await page
+            .getByLabel("Aktivite raporu birimi")
+            .locator("option")
+            .evaluateAll((options) => options.map((option) => option.value)),
+          ["percent", "hours"],
         );
         await page.getByLabel("Aktivite raporu birimi").selectOption("hours");
         await choose("Proje", ["Browser Project A"]);
@@ -208,12 +279,12 @@ export async function checkActivityReport(f) {
             collator.compare(a[2], b[2]),
         );
         assert.deepEqual(values, sorted);
-        await choose("Takım / Birim", [f.teamB.name]);
+        await choose("Takım", [f.teamB.name]);
         assert.equal(
           await page.locator(`[data-activity-resource="${ids[0]}"]`).count(),
           0,
         );
-        await choose("Takım / Birim", []);
+        await choose("Takım", []);
       },
     );
     await f.check(
@@ -278,12 +349,32 @@ export async function checkActivityReport(f) {
     await f.check(
       "activity report: manager and normal accounts retain API scope; reporting does not write data",
       async () => {
+        const originalManager = await f.store.findUser({ id: "manager" });
+        await f.store.mutate(f.actor, (_data, _actor, session) =>
+          f.store.saveUser(
+            {
+              ...originalManager,
+              resourceId: ids[0],
+              revision: originalManager.revision + 1,
+              version: originalManager.version + 1,
+            },
+            session,
+          ),
+        );
         for (const role of ["manager", "employee", "unmapped"]) {
           const client = await f.client(role);
           try {
             await client.page
-              .getByRole("tab", { name: "Aylık Aktivite Raporu", exact: true })
+              .getByRole("tab", {
+                name: "AA Aylık Aktivite Raporu",
+                exact: true,
+              })
               .click();
+            await client.page.locator(".monthly-activity-report").waitFor();
+            await client.page
+              .getByRole("status")
+              .filter({ hasText: "Aktivite raporu yükleniyor" })
+              .waitFor({ state: "hidden" });
             const named = await client.page
               .locator("[data-activity-resource]")
               .evaluateAll((rows) =>
@@ -293,12 +384,26 @@ export async function checkActivityReport(f) {
               assert(named.includes(ids[0]));
               assert(!named.includes("r-other"));
             }
-            if (role === "employee") assert.deepEqual(named, ["r-own"]);
+            if (role === "employee") {
+              assert(named.includes("r-own"));
+              assert(named.includes(ids[0]));
+              assert(!named.includes("r-other"));
+            }
             if (role === "unmapped") assert.deepEqual(named, []);
           } finally {
             await client.context.close();
           }
         }
+        await f.store.mutate(f.actor, (_data, _actor, session) =>
+          f.store.saveUser(
+            {
+              ...originalManager,
+              revision: originalManager.revision + 2,
+              version: originalManager.version + 2,
+            },
+            session,
+          ),
+        );
         assert.deepEqual(await f.state(), before);
       },
     );

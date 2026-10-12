@@ -1,3 +1,7 @@
+import { actualViewQuery } from "./actual-view.mjs";
+import { saveEmployeeRecord } from "./employee-account-command.mjs";
+import { isResponsibilityConflictCode } from "../shared/resource-roles.ts";
+import { activityQuery } from "./activity-report.mjs";
 import express from "express";
 import { z } from "zod";
 import path from "node:path";
@@ -19,6 +23,8 @@ import {
 } from "./operations.mjs";
 import {
   permissionInput,
+  revokePermissionInput,
+  revokePermissions,
   accountInput,
   updatePermissions,
   createEmployeeAccount,
@@ -245,6 +251,14 @@ export function createApp(
   app.get("/api/data", async (req, res) =>
     sendDataSnapshot(req, res, await store.view(req.user)),
   );
+  app.get("/api/actual-view", async (req, res) => {
+    const query = actualViewQuery.parse(req.query);
+    res.json(await store.actualView(req.user, query));
+  });
+  app.get("/api/activity-report", async (req, res) => {
+    const query = activityQuery.parse(req.query);
+    res.json(await store.activityReport(req.user, query));
+  });
   app.get("/api/version", async (req, res) => {
     res.json({
       generation: await store.generation(),
@@ -341,6 +355,18 @@ export function createApp(
     }),
   );
   app.post(
+    "/api/employees/save",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      await attemptLimiter.reserve(
+        "user-edit",
+        req.user._id,
+        ATTEMPT_LIMITS.userEdit,
+      );
+      res.json(await saveEmployeeRecord(store, req.user, req.body, directory));
+    }),
+  );
+  app.post(
     "/api/users",
     admission.handler(async (req, res) => {
       admin(req.user);
@@ -357,6 +383,25 @@ export function createApp(
       );
       // Editing your own permissions invalidates your session. Commit the change
       // first, then return the existing reauthentication response without a snapshot.
+      if (input.id === req.user._id) fail(401, "Oturum yenilenmeli.");
+      res.json(view);
+    }),
+  );
+  app.post(
+    "/api/users/revoke",
+    admission.handler(async (req, res) => {
+      admin(req.user);
+      await attemptLimiter.reserve(
+        "user-edit",
+        req.user._id,
+        ATTEMPT_LIMITS.userEdit,
+      );
+      const input = revokePermissionInput.parse(req.body);
+      const view = await store.mutate(
+        req.user,
+        (_d, u, session) => revokePermissions(store, u, session, input),
+        { auditUsers: true, returnView: input.id !== req.user._id },
+      );
       if (input.id === req.user._id) fail(401, "Oturum yenilenmeli.");
       res.json(view);
     }),
@@ -444,6 +489,7 @@ export function createApp(
       console.error("Request failed", req.method, req.path, err.name);
     if (err.retryAfter) res.set("Retry-After", String(err.retryAfter));
     res.status(status).json({
+      ...(isResponsibilityConflictCode(err.code) ? { code: err.code } : {}),
       error:
         err instanceof z.ZodError
           ? "Veri biçimi geçersiz: " + err.issues[0]?.path.join(".")

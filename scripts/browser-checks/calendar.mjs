@@ -1,3 +1,4 @@
+import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
 
 const actualTab = (page) =>
@@ -521,9 +522,7 @@ export async function checkCalendar(f) {
       "calendar: reports reflect saved labels/dates; manager and unmapped user cannot edit personal records",
       async () => {
         await page.reload();
-        await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         const report = page.locator(".absence-report");
         await report.waitFor();
         assert((await report.innerText()).includes("PRIVATE_LEAVE_LABEL"));
@@ -606,9 +605,7 @@ export async function checkCalendar(f) {
           .getByRole("button", { name: "Kapat", exact: true })
           .click();
         await page.reload();
-        await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         const report = page.locator(".absence-report");
         const row = report
           .locator("tbody tr")

@@ -324,3 +324,77 @@ test("download uses the workbook MIME and releases its URL even when a browser c
     else globalThis.document = saved.document;
   }
 });
+
+test("remaining resource workbooks use the requested headings and preserve standalone unit rows", () => {
+  const group = {
+    name: "Standalone PO",
+    manager: "Synthetic owner",
+    personnel: 1,
+    months: [{ remaining: 0.75, status: "within-capacity" }],
+  };
+  const files = entries(resourceReportWorkbook(["2026-01"], [group], [group]));
+  const leadership = files.get("xl/worksheets/sheet1.xml"),
+    team = files.get("xl/worksheets/sheet2.xml");
+  assert.match(leadership, /Liderlik Bazında Eksik Raporu/);
+  assert.match(leadership, /En Üst Birim/);
+  assert.match(leadership, /Standalone PO/);
+  assert.match(team, /Takım Bazında Eksik Kaynak Raporu/);
+});
+
+test("actual Excel uses authorized monthly capacity and training summaries without peer calendar details", () => {
+  const team = {
+    id: "peer-team",
+    name: "Peer Team",
+    lead: "L",
+    excelCapacity: 0,
+  };
+  const project = {
+    id: "peer-project",
+    name: "Project",
+    start: "2026-01",
+    end: "2026-12",
+    phases: {},
+  };
+  const peer = {
+    id: "peer",
+    name: "Peer",
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        team: team.id,
+        lead: "L",
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+        start: "2026-01-01",
+        end: "",
+      },
+    ],
+  };
+  const snapshot = {
+    teams: [team],
+    projects: [project],
+    resources: [peer],
+    allocations: {},
+    revisions: {},
+    actualAllocations: { "peer|peer-project|2026-09": 0.25 },
+    personCalendar: {},
+  };
+  const sheets = entries(
+    actualAllocationWorkbook(
+      snapshot,
+      [team],
+      [project],
+      ["2026-09"],
+      "2026-10",
+      [],
+      undefined,
+      { "peer|2026-09": { capacityFte: 0.5, trainingHours: 9 } },
+    ),
+  );
+  const sheet = sheets.get("xl/worksheets/sheet1.xml");
+  assert.match(sheet, /r="E5"[^>]*><v>0\.5<\/v>/);
+  assert.match(sheet, /Eğitim/);
+  assert.match(sheet, /r="E6"[^>]*><v>0\.1<\/v>/);
+});

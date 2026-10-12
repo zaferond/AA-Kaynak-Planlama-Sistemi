@@ -54,7 +54,13 @@ export function dataChanges(before, after, { settings } = {}) {
     Object.fromEntries(
       (data.leaders || []).map((name) => [
         name,
-        { name, managerName: ownValue(data.leaderManagers || {}, name) || "" },
+        {
+          name,
+          managerName: ownValue(data.leaderManagers || {}, name) || "",
+          ...(ownValue(data.leaderParents, name)
+            ? { parentName: ownValue(data.leaderParents, name) }
+            : {}),
+        },
       ]),
     );
   changed.leader = recordChanges(leaders(before), leaders(after));

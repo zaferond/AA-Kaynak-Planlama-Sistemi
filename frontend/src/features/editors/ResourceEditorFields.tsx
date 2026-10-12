@@ -1,6 +1,17 @@
+import {
+  resourceRole,
+  resourceRoleLabels,
+} from "../../../../shared/resource-roles";
+import { ownValue } from "../../../../shared/records";
 import { Switch } from "@/components/ui/switch";
 import { Single } from "../../components/FilterPicker";
-import { statuses, type Data, type Team, type Version } from "../../model";
+import {
+  statuses,
+  type Data,
+  type Team,
+  type Version,
+  type ResourceRole,
+} from "../../model";
 import type { EditorFieldProps } from "./editor-field-props";
 type Props = EditorFieldProps<"resource"> & {
   data: Data | null;
@@ -16,6 +27,9 @@ export default function ResourceEditorFields({
   editTeams,
   chooseResourceStatus,
 }: Props) {
+  const assignmentKind =
+    editor.assignmentKind ||
+    resourceRole({ teams: data?.teams || [] }, editor.version);
   const startDateLabel =
     editor.version.status === "Aktif İlan" ||
     editor.version.status === "Pasif İlan"
@@ -37,6 +51,39 @@ export default function ResourceEditorFields({
           }
         />
       </label>
+      <label>
+        Kaynak Rolü
+        <select
+          aria-label="Kaynak Rolü"
+          value={assignmentKind}
+          onChange={(event) => {
+            const next = event.target.value as ResourceRole;
+            setEditor({
+              ...editor,
+              assignmentKind: next,
+              version: {
+                ...editor.version,
+                assignmentRole: next,
+                team:
+                  next === "leader"
+                    ? ownValue(
+                        data?.leadershipUnits,
+                        editor.version.lead || "",
+                      ) || ""
+                    : assignmentKind === "leader"
+                      ? ""
+                      : editor.version.team,
+              },
+            });
+          }}
+        >
+          {Object.entries(resourceRoleLabels).map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
       <div className="resource-form-grid">
         <Single
           label="Liderlik"
@@ -44,39 +91,53 @@ export default function ResourceEditorFields({
           onChange={(l) =>
             setEditor({
               ...editor,
-              version: { ...editor.version, lead: l, team: "" },
+              version: {
+                ...editor.version,
+                lead: l,
+                team:
+                  assignmentKind === "leader"
+                    ? ownValue(data?.leadershipUnits, l) || ""
+                    : "",
+              },
             })
           }
           items={leaderItems}
         />
-        <Single
-          label="Takım"
-          value={editor.version.team}
-          onChange={(t) =>
-            setEditor({
-              ...editor,
-              version: {
-                ...editor.version,
-                team: t,
-                lead:
-                  data?.teams.find((x) => x.id === t)?.lead ||
-                  editor.version.lead,
-              },
-            })
-          }
-          items={editTeams
-            .filter(
-              (t) =>
-                !editor.version.lead ||
-                !t.lead ||
-                t.lead === editor.version.lead,
-            )
-            .map((t) => ({
-              ...t,
-              name: t.name + (!t.lead ? " (liderlik atanacak)" : ""),
-            }))}
-        />
+        {assignmentKind !== "leader" && (
+          <Single
+            label="Takım"
+            value={editor.version.team}
+            onChange={(t) =>
+              setEditor({
+                ...editor,
+                version: {
+                  ...editor.version,
+                  team: t,
+                  lead:
+                    data?.teams.find((x) => x.id === t)?.lead ||
+                    editor.version.lead,
+                },
+              })
+            }
+            items={editTeams
+              .filter(
+                (t) =>
+                  t.kind !== "leadership" &&
+                  (!editor.version.lead || t.lead === editor.version.lead),
+              )
+              .map((t) => ({
+                ...t,
+                name: t.name + (!t.lead ? " (liderlik atanacak)" : ""),
+              }))}
+          />
+        )}
       </div>
+      {assignmentKind === "leader" && (
+        <small>
+          Takım seçilmez. Bu kaynak seçilen liderliğin doğrudan kaynak satırında
+          hesaplanır. Kullanıcı yetkisi ayrıca tanımlanır.
+        </small>
+      )}
       {editor.version.team &&
         !data?.teams.find((t) => t.id === editor.version.team)?.lead && (
           <small>Bu takım seçtiğiniz liderliğe bağlanacak.</small>

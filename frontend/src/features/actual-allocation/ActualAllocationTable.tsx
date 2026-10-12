@@ -35,6 +35,8 @@ export default function ActualAllocationTable({
   selectHoursContext,
   clearSelection,
   save,
+  canEditPersonMonth,
+  canViewPersonalCalendar,
   openLimit,
   onPhaseDetail,
   onOpenPersonalCalendar,
@@ -50,6 +52,8 @@ export default function ActualAllocationTable({
   selectHoursContext: (resourceId: string, month: string, key: string) => void;
   clearSelection: () => void;
   save: ActualAllocationSave;
+  canEditPersonMonth: (id: string, month: string) => boolean;
+  canViewPersonalCalendar: (id: string) => boolean;
   openLimit: ActualCapacityDialog["openLimit"];
   onPhaseDetail: (detail: ActualPhaseDetail) => void;
   onOpenPersonalCalendar: (resource: Resource) => void;
@@ -168,21 +172,33 @@ export default function ActualAllocationTable({
                   <React.Fragment key={project.id + "|" + resource.id}>
                     <TableRow>
                       <TableCell className="rowname">
-                        <button
-                          type="button"
-                          className="person-calendar-trigger"
-                          aria-label={
-                            resource.name + " izin ve eğitim takvimini aç"
-                          }
-                          title={resource.name + " · izin ve eğitim takvimi"}
-                          onClick={() => {
-                            onOpenPersonalCalendar(resource);
-                          }}
-                        >
-                          <CalendarDays size={15} />
-                        </button>
-                        <span className="indent">↳</span>
-                        {resource.name}
+                        <div className="actual-person-label">
+                          <span className="person-calendar-slot">
+                            {canViewPersonalCalendar(resource.id) && (
+                              <button
+                                type="button"
+                                className="person-calendar-trigger"
+                                aria-label={
+                                  resource.name + " izin ve eğitim takvimini aç"
+                                }
+                                title={
+                                  resource.name + " · izin ve eğitim takvimi"
+                                }
+                                onClick={() => {
+                                  onOpenPersonalCalendar(resource);
+                                }}
+                              >
+                                <CalendarDays size={15} />
+                              </button>
+                            )}
+                          </span>
+                          <span className="indent" aria-hidden="true">
+                            ↳
+                          </span>
+                          <span className="actual-person-name">
+                            {resource.name}
+                          </span>
+                        </div>
                       </TableCell>
                       {months.map((month) => {
                         const key =
@@ -202,6 +218,9 @@ export default function ActualAllocationTable({
                             className={
                               [
                                 amount > 0 ? "has-entry" : "",
+                                !canEditPersonMonth(resource.id, month)
+                                  ? "actual-cell-readonly"
+                                  : "",
                                 selectedCell?.key === key
                                   ? "actual-context-selected"
                                   : "",
@@ -235,7 +254,10 @@ export default function ActualAllocationTable({
                                   .capacityFte -
                                   ACTUAL_FTE_TOLERANCE
                               }
-                              disabled={!selectable}
+                              disabled={
+                                !selectable ||
+                                !canEditPersonMonth(resource.id, month)
+                              }
                               onLimitExceeded={(input) =>
                                 openLimit("allocation", input)
                               }

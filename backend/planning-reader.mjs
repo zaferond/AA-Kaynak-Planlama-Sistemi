@@ -4,7 +4,10 @@ import {
   readNumericSnapshot,
 } from "./read-records.mjs";
 import { snapshotMetadataReader } from "./snapshot-metadata.mjs";
-import { visibleTeamScope, actualReadOwnerScope } from "./domain/index.mjs";
+import {
+  visiblePlanningTeamScope,
+  actualReadOwnerScope,
+} from "./domain/index.mjs";
 
 // Read from the caller's snapshot; authorization remains in Store.view/mutate.
 export async function readPlanningSnapshot(c, provider, viewUser) {
@@ -26,6 +29,8 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     workCalendar: s.calendar_days ? JSON.parse(s.calendar_days) : {},
     personCalendar: s.person_calendar ? JSON.parse(s.person_calendar) : {},
     revisions: {},
+    leaderParents: s.leader_parents ? JSON.parse(s.leader_parents) : {},
+    leadershipUnits: s.leadership_units ? JSON.parse(s.leadership_units) : {},
     leaders: leaderRows.map((r) => r.name),
     leaderManagers: Object.fromEntries(
       leaderRows
@@ -42,6 +47,9 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     managerName: r.manager_name || "",
     excelCapacity: r.excel_capacity,
     catalog: !!r.catalog,
+    ...(Object.values(d.leadershipUnits).includes(r.id)
+      ? { kind: "leadership" }
+      : {}),
   }));
   d.projects = (await metadata("projects")).rows.map((r) => ({
     id: r.id,
@@ -108,6 +116,7 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
   for (const r of (await metadata("resourceVersions")).rows)
     rm.get(r.resource_id).versions.push({
       effective: r.effective_month,
+      ...(r.assignment_role ? { assignmentRole: r.assignment_role } : {}),
       team: r.team_id || "",
       lead: r.leader_name || "",
       status: r.status,
@@ -137,7 +146,7 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
     viewUser &&
     viewUser.role !== "admin" &&
     !d.teams.some((t) => t.id.includes("|"))
-      ? [...visibleTeamScope(d, viewUser).ids]
+      ? [...visiblePlanningTeamScope(d, viewUser).ids]
       : undefined;
   d.allocations = await readCompositeMap(
     c,

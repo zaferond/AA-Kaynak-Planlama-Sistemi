@@ -1,3 +1,4 @@
+import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { applyChanges } from "../../backend/operations.mjs";
@@ -64,7 +65,7 @@ export async function checkWorkspaceActions(f) {
             exact: true,
           })
           .click();
-        await choose(page, "Takım / Birim", [f.teamA.name]);
+        await choose(page, "Takım", [f.teamA.name]);
         await choose(page, "Proje", ["Browser Project A"]);
         let xml = await exportSheet(
           page.getByRole("button", { name: "Excel'e Aktar", exact: true }),
@@ -92,7 +93,12 @@ export async function checkWorkspaceActions(f) {
           xml.includes("Browser Project A") &&
             !xml.includes("Browser Project B"),
         );
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         xml = await exportSheet(
           page.getByRole("button", {
             name: "Kaynak Raporu İndir",
@@ -108,7 +114,7 @@ export async function checkWorkspaceActions(f) {
             exact: true,
           })
           .click();
-        await choose(page, "Takım / Birim", []);
+        await choose(page, "Takım", []);
         await choose(page, "Kişi", ["Browser Employee"]);
         xml = await exportSheet(
           page.getByRole("button", { name: "Excel'e Aktar", exact: true }),
@@ -149,7 +155,7 @@ export async function checkWorkspaceActions(f) {
             exact: true,
           })
           .click();
-        await choose(page, "Takım / Birim", [f.teamA.name]);
+        await choose(page, "Takım", [f.teamA.name]);
         await choose(page, "Proje", ["Browser Project A"]);
         await seedPlan();
         await page.reload();
@@ -159,7 +165,7 @@ export async function checkWorkspaceActions(f) {
             exact: true,
           })
           .click();
-        await choose(page, "Takım / Birim", [f.teamA.name]);
+        await choose(page, "Takım", [f.teamA.name]);
         await choose(page, "Proje", ["Browser Project A"]);
         await page
           .locator(".planning-filterbar .period select")
@@ -251,9 +257,7 @@ export async function checkWorkspaceActions(f) {
           { kind: "actual", id: "action-a|p-a|2026-01", value: 0.25 },
         ]);
         await page.reload();
-        await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         await page
           .getByRole("checkbox", { name: "Bulk A seç", exact: true })
           .check();

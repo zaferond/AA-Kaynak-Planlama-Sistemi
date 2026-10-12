@@ -6,6 +6,7 @@ import {
   readLocal,
   StaleSessionError,
   writeBatch,
+  writeEmployeeRecord,
   writeLocal,
   type Change,
 } from "../storage";
@@ -61,6 +62,20 @@ export function usePortalData(assertSessionRef: RefObject<() => void>) {
       setSaving(false);
     }
   }
+  async function saveEmployee(
+    changes: Change[],
+    permission: import("../../../shared/employee-account").EmployeePermission,
+  ) {
+    assertSessionRef.current();
+    setSaving(true);
+    try {
+      setData(await writeEmployeeRecord(changes, permission));
+      setNotice("Çalışan bilgileri ve yetkileri birlikte kaydedildi.");
+      setError("");
+    } finally {
+      setSaving(false);
+    }
+  }
   function change<K extends ChangeKind>(
     kind: K,
     id: string,
@@ -82,6 +97,7 @@ export function usePortalData(assertSessionRef: RefObject<() => void>) {
     reload,
     save,
     batch,
+    saveEmployee,
     change,
   };
 }

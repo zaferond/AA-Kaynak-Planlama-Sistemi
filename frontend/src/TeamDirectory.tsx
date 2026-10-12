@@ -1,8 +1,9 @@
+import { directoryTree } from "../../shared/directory-tree";
+import { directoryResponsibilityIndex } from "../../shared/resource-roles";
 import { ownValue } from "../../shared/records";
 import React, { useState } from "react";
 import { Building2, Users } from "lucide-react";
-import type { Data, Team } from "./model";
-import { fold } from "./model";
+import type { Data } from "./model";
 import {
   Table,
   TableHeader,
@@ -25,49 +26,22 @@ export default function TeamDirectory({
   canEdit: boolean;
   onEditingChange?: (editing: boolean) => void;
 }) {
+  const responsibility = directoryResponsibilityIndex(data);
   const [query, setQuery] = useState("");
   const editor = useDirectoryEditor({ data, onSaved, onEditingChange });
-  const leaders = [
-    ...new Set([
-      ...(data.leaders || []),
-      ...data.teams.map((team) => team.lead),
-    ]),
-  ];
-  const matches = (lead: string, team: Team) =>
-    fold(
-      lead +
-        " " +
-        (ownValue(data.leaderManagers, lead) || "") +
-        " " +
-        team.name +
-        " " +
-        (team.managerName || ""),
-    ).includes(fold(query));
-  const groups = leaders
-    .map((lead) => ({
-      lead,
-      teams: data.teams.filter(
-        (team) => team.lead === lead && matches(lead, team),
-      ),
-    }))
-    .filter(
-      (group) =>
-        !query ||
-        group.teams.length ||
-        fold(
-          group.lead + " " + (ownValue(data.leaderManagers, group.lead) || ""),
-        ).includes(fold(query)),
-    );
+  const groups = directoryTree(data, query);
   return (
     <section className="panel team-directory">
       <div className="panelhead">
         <div>
-          <h2>Liderlik ve Takımlar</h2>
+          <h2>Organizasyon Yapısı</h2>
           <p className="directory-summary">
-            {data.leaders?.length || 0} liderlik · {data.teams.length} takım
+            {data.leaders?.length || 0} liderlik ·{" "}
+            {data.teams.filter((team) => team.kind !== "leadership").length}{" "}
+            takım
           </p>
         </div>
-        <div className="directory-toolbar">
+        <div className="actions resource-toolbar directory-toolbar">
           <input
             type="search"
             aria-label="Liderlik veya takım ara"
@@ -105,16 +79,37 @@ export default function TeamDirectory({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {groups.map(({ lead, teams }) => (
+          {groups.map(({ lead, parent, depth, teams }) => (
             <React.Fragment key={lead}>
-              <TableRow className="directory-group">
+              <TableRow
+                className={
+                  "directory-group" +
+                  (parent ? " directory-child-leadership" : "")
+                }
+                data-depth={depth}
+              >
                 <TableCell>
-                  <strong>{lead || "Liderlik Eşleştirilmemiş"}</strong>
+                  <span
+                    className="directory-indent"
+                    style={{ paddingLeft: depth * 18 }}
+                  >
+                    {parent && <span aria-hidden="true">↳ </span>}
+                    <strong>{lead || "Liderlik Eşleştirilmemiş"}</strong>
+                  </span>
                   <small>{teams.length} takım</small>
                 </TableCell>
-                <TableCell>Liderlik</TableCell>
                 <TableCell>
-                  {ownValue(data.leaderManagers, lead) || "—"}
+                  {parent ? (
+                    <>
+                      <strong>Alt Liderlik</strong>
+                      <small>Bağlı olduğu liderlik · {parent}</small>
+                    </>
+                  ) : (
+                    "Liderlik"
+                  )}
+                </TableCell>
+                <TableCell>
+                  {ownValue(responsibility.leaders, lead) || "—"}
                 </TableCell>
                 {canEdit && (
                   <TableCell>
@@ -134,12 +129,32 @@ export default function TeamDirectory({
                 )}
               </TableRow>
               {teams.map((team) => (
-                <TableRow key={team.id} className="directory-team">
+                <TableRow
+                  key={team.id}
+                  className={
+                    "directory-team" + (parent ? " directory-nested-team" : "")
+                  }
+                  data-directory-lead={lead}
+                  data-depth={depth + 1}
+                  style={
+                    {
+                      "--directory-indent": `${depth * 18}px`,
+                    } as React.CSSProperties
+                  }
+                >
                   <TableCell>{lead || "—"}</TableCell>
                   <TableCell>
-                    <strong>{team.name}</strong>
+                    <span
+                      className="directory-indent"
+                      style={{ paddingLeft: depth * 18 }}
+                    >
+                      {parent && <span aria-hidden="true">↳ </span>}
+                      <strong>{team.name}</strong>
+                    </span>
                   </TableCell>
-                  <TableCell>{team.managerName || "—"}</TableCell>
+                  <TableCell>
+                    {ownValue(responsibility.teams, team.id) || "—"}
+                  </TableCell>
                   {canEdit && (
                     <TableCell>
                       <div className="directory-actions">

@@ -11,7 +11,12 @@ export function directoryCatalogChanged(before: Data, after: Data) {
     JSON.stringify({
       leaders: [...(data.leaders || [])]
         .sort()
-        .map((name) => [name, ownValue(data.leaderManagers, name) || ""]),
+        .map((name) => [
+          name,
+          ownValue(data.leaderManagers, name) || "",
+          ownValue(data.leaderParents, name) || "",
+          ownValue(data.leadershipUnits, name) || "",
+        ]),
       teams: [...data.teams]
         .sort((a, b) => a.id.localeCompare(b.id))
         .map((team) => [

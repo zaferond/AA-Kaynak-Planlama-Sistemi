@@ -1,3 +1,5 @@
+import { allowedTeam } from "./access";
+import { actualVersionAt } from "./model";
 import { useEffect, useState } from "react";
 import type { Resource, Project } from "./model";
 import type { ActualUnit } from "./actual-units";
@@ -25,6 +27,7 @@ export default function PersonAllocationPanel(
 ) {
   const {
     data,
+    user,
     projects,
     months,
     currentMonth,
@@ -48,17 +51,40 @@ export default function PersonAllocationPanel(
   const { openLimit } = limit;
   const selection = useActualCellSelection({
     ...view,
+    loading: props.loading,
     months,
     currentMonth,
     limitOpenRef: limit.openRef,
   });
   const { selectedCell, selectedHoursMonth, selectedHoursPerson } = selection;
+  function canEditPersonMonth(id: string, month: string) {
+    if (user.role === "admin" || id === user.resourceId) return true;
+    const resource = data.resources.find((person) => person.id === id);
+    const version = resource && actualVersionAt(resource, month);
+    return (
+      user.role === "manager" &&
+      !!version &&
+      allowedTeam(data, user, version.team)
+    );
+  }
+  function canViewPersonalCalendar(id: string) {
+    return (
+      user.role === "admin" ||
+      id === user.resourceId ||
+      (user.role === "manager" &&
+        !!data.resources
+          .find((person) => person.id === id)
+          ?.versions.some((version) => allowedTeam(data, user, version.team)))
+    );
+  }
   async function save(
     resource: Resource,
     project: Project,
     month: string,
     entry: ActualEntry,
   ) {
+    if (!canEditPersonMonth(resource.id, month))
+      throw Error("Bu çalışanın verisini düzenleme yetkiniz yok.");
     onSaved(
       await writeBatch([
         prepareActualAllocationChange(
@@ -79,6 +105,8 @@ export default function PersonAllocationPanel(
     input: HTMLInputElement | null,
   ): Promise<boolean> {
     try {
+      if (!canEditPersonMonth(resource.id, month))
+        throw Error("Bu çalışanın verisini düzenleme yetkiniz yok.");
       onSaved(
         await writeBatch([
           prepareWorkedHoursChange(data, resource.id, month, hours),
@@ -109,6 +137,7 @@ export default function PersonAllocationPanel(
         }}
         actualMonths={actualMonths}
         saveHours={saveHours}
+        canEditPersonMonth={canEditPersonMonth}
       />
       <Pager
         total={totalRows}
@@ -129,6 +158,8 @@ export default function PersonAllocationPanel(
         selectHoursContext={selection.selectHoursContext}
         clearSelection={selection.clearSelection}
         save={save}
+        canEditPersonMonth={canEditPersonMonth}
+        canViewPersonalCalendar={canViewPersonalCalendar}
         openLimit={openLimit}
         onPhaseDetail={setPhaseDetail}
         onOpenPersonalCalendar={(resource) => {

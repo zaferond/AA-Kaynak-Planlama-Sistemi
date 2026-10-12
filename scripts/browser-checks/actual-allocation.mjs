@@ -64,13 +64,11 @@ export async function checkActualAllocation(f) {
           "18 hours saved",
         );
         assert.equal(await page.locator(".actual-context-selected").count(), 0);
-        await page.locator("#actual-entry-unit").selectOption("days");
-        await waitText(
-          page.getByRole("textbox", {
-            name: "Browser Employee / Browser Project A / 2026-01 / gün",
-            exact: true,
-          }),
-          "2",
+        assert.deepEqual(
+          await page
+            .locator("#actual-entry-unit option")
+            .evaluateAll((options) => options.map((option) => option.value)),
+          ["percent", "hours"],
         );
         await page.locator("#actual-entry-unit").selectOption("percent");
         await waitText(amount(), "%9,09");

@@ -40,71 +40,6 @@
   outline: 2px solid #2c8061;
   outline-offset: 2px;
 }
-.app.tab-plan .allocation-grid .team-member-tooltip,
-.app.tab-plan .allocation-grid .team-group-label span.team-member-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
-  display: none;
-  width: max-content;
-  min-width: 180px;
-  max-width: min(280px, 80vw);
-  max-height: 230px;
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid #bed3ca;
-  border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 8px 24px #183a2d30;
-  color: #264839;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 1.4;
-  white-space: normal;
-  text-align: left;
-  overflow: auto;
-  cursor: default;
-}
-.app.tab-plan .allocation-grid .team-member-badge:hover .team-member-tooltip,
-.app.tab-plan .allocation-grid .team-member-badge:focus .team-member-tooltip,
-.app.tab-plan
-  .allocation-grid
-  .team-group-label
-  span.team-member-badge:hover
-  .team-member-tooltip,
-.app.tab-plan
-  .allocation-grid
-  .team-group-label
-  span.team-member-badge:focus
-  .team-member-tooltip {
-  display: block;
-}
-.app.tab-plan .allocation-grid .team-member-tooltip > strong {
-  display: block;
-  margin-bottom: 6px;
-  color: #1c5940;
-  font-size: 11px;
-}
-.app.tab-plan .allocation-grid .team-member-tooltip .team-member-names {
-  display: grid;
-  gap: 4px;
-}
-.app.tab-plan .allocation-grid .team-member-tooltip .team-member-names > span {
-  display: block;
-  margin: 0;
-  padding: 0;
-  color: #294737;
-  font-size: 11px;
-}
-.app.tab-plan .allocation-grid td.rowname:has(.team-member-badge:hover),
-.app.tab-plan .allocation-grid td.rowname:has(.team-member-badge:focus),
-.app.tab-plan .allocation-grid tr.group:has(.team-member-badge:hover) td,
-.app.tab-plan .allocation-grid tr.group:has(.team-member-badge:focus) td {
-  position: relative;
-  z-index: 9;
-}
-
 .app.tab-overview .remaining-report td:nth-child(2):has(.team-member-badge) {
   overflow: visible;
 }
@@ -145,72 +80,52 @@
   outline: 2px solid #2c8061;
   outline-offset: 2px;
 }
-.app.tab-overview .remaining-report .team-member-tooltip {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  z-index: 30;
-  display: none;
-  width: max-content;
-  min-width: 180px;
-  max-width: min(280px, 80vw);
-  max-height: 230px;
-  padding: 10px 12px;
-  border: 1px solid #bed3ca;
-  border-radius: 7px;
+
+/* Portalled outside table scroll/sticky layers; placement flips at viewport edges. */
+.team-member-floating[data-slot="popover-content"] {
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+  max-height: min(
+    280px,
+    calc(
+      var(--radix-popover-content-available-height) /
+        var(--popover-page-scale, 1)
+    )
+  );
+  padding: 12px;
+  border: 1px solid #bbcbb0;
+  border-radius: 8px;
   background: #fff;
-  box-shadow: 0 8px 24px #183a2d30;
-  color: #264839;
+  box-shadow: 0 8px 24px #23351b26;
+  color: #30452b;
   font-size: 11px;
   font-weight: 400;
-  line-height: 1.4;
-  white-space: normal;
+  line-height: 1.5;
   text-align: left;
-  overflow: auto;
-  cursor: default;
+  white-space: normal;
 }
-.app.tab-overview
-  .remaining-report
-  .team-member-badge:hover
-  .team-member-tooltip,
-.app.tab-overview
-  .remaining-report
-  .team-member-badge:focus
-  .team-member-tooltip {
-  display: block;
-}
-.app.tab-overview .remaining-report .team-member-tooltip > strong {
-  display: block;
-  margin-bottom: 6px;
-  color: #1c5940;
+.team-member-floating > strong {
+  flex: none;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #e0e7da;
+  color: #344e28;
   font-size: 11px;
 }
-.app.tab-overview .remaining-report .team-member-tooltip .team-member-names {
+.team-member-floating .team-member-names {
   display: grid;
-  gap: 4px;
+  gap: 5px;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
 }
-.app.tab-overview
-  .remaining-report
-  .team-member-tooltip
-  .team-member-names
-  > span {
+.team-member-floating .team-member-names > span {
   display: block;
-  color: #294737;
-  font-size: 11px;
+  overflow-wrap: anywhere;
 }
-.app.tab-overview
-  .remaining-report
-  tbody
-  tr:has(.team-member-badge:hover)
-  > td:nth-child(2),
-.app.tab-overview
-  .remaining-report
-  tbody
-  tr:has(.team-member-badge:focus)
-  > td:nth-child(2) {
-  z-index: 9;
-}
-
 /* Manager is a quiet second line in the fixed team column. */
 .app.tab-plan .project-team-view .rowname {
   vertical-align: middle;

@@ -1,4 +1,6 @@
+import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
+import { directoryRevision } from "../../shared/directory-policy.ts";
 import { applyChanges, applyLeaderChange } from "../../backend/operations.mjs";
 
 export async function checkDirectoryManagement(f) {
@@ -84,9 +86,99 @@ export async function checkDirectoryManagement(f) {
     await dialog().waitFor({ state: "hidden" });
   }
   try {
-    await page
-      .getByRole("tab", { name: "Liderlik ve Takımlar", exact: true })
-      .click();
+    await selectWorkspaceTab(page, "Liderlik ve Takımlar");
+    await f.check(
+      "directory: edit reveals selected team in left scroll list",
+      async () => {
+        const teams = (await f.state()).teams
+          .filter((team) => team.kind !== "leadership")
+          .toSorted((a, b) => a.name.localeCompare(b.name, "tr"));
+        for (const team of [teams.at(-1), teams[0]]) {
+          await page
+            .getByRole("button", {
+              name: team.name + " takımını düzenle",
+              exact: true,
+            })
+            .click();
+          const list = dialog().locator(".directory-manager-records");
+          await f.wait(
+            async () =>
+              list.evaluate((element) => {
+                const selected = element.querySelector(
+                  'button[aria-pressed="true"]',
+                );
+                if (!selected) return false;
+                const a = selected.getBoundingClientRect(),
+                  b = element.getBoundingClientRect();
+                return a.top >= b.top - 1 && a.bottom <= b.bottom + 1;
+              }),
+            "selected team visible on open",
+          );
+          assert.equal(
+            await list
+              .locator('button[aria-pressed="true"]')
+              .getAttribute("aria-label"),
+            "Takım: " + team.name,
+          );
+          if (team === teams.at(-1))
+            assert((await list.evaluate((element) => element.scrollTop)) > 0);
+          await f.capture(
+            page,
+            team === teams[0]
+              ? "directory-first-selected"
+              : "directory-last-selected",
+          );
+          await close();
+        }
+      },
+    );
+    await f.check(
+      "directory: team and leadership dialogs list linked employee names",
+      async () => {
+        await page
+          .getByRole("button", {
+            name: f.teamA.name + " takımını düzenle",
+            exact: true,
+          })
+          .click();
+        const own = (await f.state()).resources.find(
+          (resource) => resource.id === "r-own",
+        );
+        assert(
+          (
+            await dialog()
+              .getByRole("region", { name: "Bağlı çalışanlar", exact: true })
+              .innerText()
+          ).includes(own.name),
+        );
+        await close();
+        await page
+          .getByRole("button", { name: "Liderlikleri Yönet", exact: true })
+          .click();
+        await dialog()
+          .getByRole("button", {
+            name: "Liderlik: " + f.teamA.lead,
+            exact: true,
+          })
+          .click();
+        assert(
+          (
+            await dialog()
+              .getByRole("region", { name: "Bağlı çalışanlar", exact: true })
+              .innerText()
+          ).includes(own.name),
+        );
+        assert.equal(
+          await dialog()
+            .getByLabel("Üst Liderlik", { exact: true })
+            .locator("option")
+            .filter({ hasText: f.teamA.lead })
+            .count(),
+          0,
+        );
+        await close();
+      },
+    );
     await f.check(
       "directory: dedicated leadership/team lists create records and refresh combo choices",
       async () => {
@@ -101,7 +193,8 @@ export async function checkDirectoryManagement(f) {
           .fill(leaderName);
         await dialog()
           .getByLabel("Liderlik Yöneticisi", { exact: true })
-          .fill("QA Manager");
+          .getAttribute("readonly")
+          .then((value) => assert.notEqual(value, null));
         await save("/api/leaders/change", "Ekle");
         await dialog()
           .getByRole("button", { name: "Liderlik: " + leaderName, exact: true })
@@ -119,7 +212,8 @@ export async function checkDirectoryManagement(f) {
           .selectOption(leaderName);
         await dialog()
           .getByLabel("Takım Yöneticisi", { exact: true })
-          .fill("QA Team Manager");
+          .getAttribute("readonly")
+          .then((value) => assert.notEqual(value, null));
         await save("/api/changes", "Ekle");
         await dialog()
           .getByRole("button", { name: "Takım: " + teamName, exact: true })
@@ -129,11 +223,12 @@ export async function checkDirectoryManagement(f) {
         assert.equal(team.catalog, true);
         await f.capture(page, "directory-team-management");
         await close();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
-        await page
-          .getByRole("button", { name: "Kaynak Ekle", exact: true })
+          .getByRole("button", {
+            name: "Kaynak Ekle / Yetki Tanımla",
+            exact: true,
+          })
           .click();
         await scrollPicker("Liderlik");
         await scrollPicker("Takım");
@@ -143,28 +238,25 @@ export async function checkDirectoryManagement(f) {
           .getByRole("button", { name: "Close", exact: true })
           .click();
         await page.reload();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
-        await page
-          .getByRole("button", { name: "Kaynak Ekle", exact: true })
+          .getByRole("button", {
+            name: "Kaynak Ekle / Yetki Tanımla",
+            exact: true,
+          })
           .click();
         await choose("Liderlik", leaderName);
         await choose("Takım", teamName);
         await dialog()
           .getByRole("button", { name: "Close", exact: true })
           .click();
-        await page
-          .getByRole("tab", { name: "Liderlik ve Takımlar", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Liderlik ve Takımlar");
       },
     );
     await f.check(
       "directory: bulk resource pickers align below their triggers at 90 percent scale and retain keyboard/scroll behavior",
       async () => {
-        await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         await page.getByLabel("Browser Employee seç", { exact: true }).check();
         for (const width of [1800, 1280]) {
           await page.setViewportSize({ width, height: 1050 });
@@ -202,9 +294,7 @@ export async function checkDirectoryManagement(f) {
           .getByLabel("Browser Employee seç", { exact: true })
           .uncheck();
         await page.setViewportSize({ width: 1800, height: 1050 });
-        await page
-          .getByRole("tab", { name: "Liderlik ve Takımlar", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Liderlik ve Takımlar");
       },
     );
     await f.check(
@@ -217,8 +307,8 @@ export async function checkDirectoryManagement(f) {
           .getByRole("button", { name: "Liderlik: " + leaderName, exact: true })
           .click();
         await dialog()
-          .getByLabel("Liderlik Yöneticisi", { exact: true })
-          .fill("Local manager after project edit");
+          .getByLabel("Üst Liderlik", { exact: true })
+          .selectOption(f.teamA.lead);
         const state = await f.state();
         await f.store.mutate(f.actor, (d, u) =>
           applyChanges(d, u, [
@@ -244,10 +334,7 @@ export async function checkDirectoryManagement(f) {
           sent.catalogRevision,
           state.revisions["directory:shared"] || 0,
         );
-        assert.equal(
-          (await f.state()).leaderManagers[leaderName],
-          "Local manager after project edit",
-        );
+        assert.equal((await f.state()).leaderParents[leaderName], f.teamA.lead);
         await f.wait(
           async () =>
             !(await dialog()
@@ -432,6 +519,134 @@ export async function checkDirectoryManagement(f) {
           "manual leader deleted",
         );
         await close();
+      },
+    );
+    await f.check(
+      "directory: parent leadership and leader role feed a dedicated planning row without duplicate capacity",
+      async () => {
+        const name = "QA Direct Leadership";
+        await page
+          .getByRole("button", { name: "Liderlikleri Yönet", exact: true })
+          .click();
+        await dialog()
+          .getByRole("button", { name: "Yeni Liderlik Ekle", exact: true })
+          .click();
+        await dialog().getByLabel("Liderlik Adı", { exact: true }).fill(name);
+        await dialog()
+          .getByLabel("Üst Liderlik", { exact: true })
+          .selectOption(f.teamA.lead);
+        await save("/api/leaders/change", "Ekle");
+        assert.equal((await f.state()).leaderParents[name], f.teamA.lead);
+        const unit = (await f.state()).leadershipUnits[name];
+        assert(unit);
+        await close();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
+        await page
+          .getByRole("button", {
+            name: "Kaynak Ekle / Yetki Tanımla",
+            exact: true,
+          })
+          .click();
+        await dialog()
+          .getByLabel("Ad Soyad", { exact: true })
+          .fill("QA Direct Leader Employee");
+        await dialog()
+          .getByLabel("Kaynak Rolü", { exact: true })
+          .selectOption("leader");
+        assert.equal(
+          await dialog()
+            .getByRole("button", { name: "Takım", exact: true })
+            .count(),
+          0,
+        );
+        await choose("Liderlik", name);
+        await save("/api/changes", "Kaydet");
+        await dialog().waitFor({ state: "hidden" });
+        const worker = (await f.state()).resources.find(
+          (resource) => resource.name === "QA Direct Leader Employee",
+        );
+        assert.equal(worker.versions.at(-1).team, unit);
+        await page
+          .getByRole("tab", {
+            name: "AA Planlanan Kaynak Dağılımı",
+            exact: true,
+          })
+          .click();
+        await page.getByRole("button", { name: "Proje", exact: true }).click();
+        await picker()
+          .getByRole("button", { name: "Seçimleri Kaldır", exact: true })
+          .click();
+        await picker()
+          .getByRole("checkbox", { name: "Browser Project A", exact: true })
+          .check();
+        await page.keyboard.press("Escape");
+        await page
+          .getByRole("button", { name: "Liderlik", exact: true })
+          .click();
+        await picker()
+          .getByRole("button", { name: "Seçimleri Kaldır", exact: true })
+          .click();
+        await picker().getByRole("checkbox", { name, exact: true }).check();
+        await page.keyboard.press("Escape");
+        const cell = page.locator(
+          '[data-plan-cell="' + unit + '|p-a|2026-01"]',
+        );
+        await cell.scrollIntoViewIfNeeded();
+        assert(
+          !(await cell.locator("xpath=..").innerText()).includes(
+            "Liderlik · Doğrudan Kaynak",
+          ),
+        );
+        await cell.locator("input").fill("0,5");
+        await cell.locator("input").press("Enter");
+        await f.wait(
+          async () =>
+            (await f.state()).allocations[unit + "|p-a|2026-01"] === 0.5,
+          "direct leader allocation saved",
+        );
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
+        const labels = await page
+          .locator(".leader-report tbody tr .report-unit-title")
+          .allTextContents();
+        assert(!labels.some((label) => label.includes(name)));
+        assert(labels.some((label) => label.includes(f.teamA.lead)));
+        await f.capture(page, "hierarchy-top-leader-report");
+        await f.store.mutate(f.actor, (data, actor) =>
+          applyChanges(data, actor, [
+            {
+              kind: "resource",
+              id: worker.id,
+              operation: "delete",
+              value: null,
+              revision: data.revisions["resource:" + worker.id],
+            },
+            {
+              kind: "allocation",
+              id: unit + "|p-a|2026-01",
+              value: null,
+              operation: "delete",
+              revision: data.revisions["allocation:" + unit + "|p-a|2026-01"],
+            },
+          ]),
+        );
+        await f.store.mutate(f.actor, (data, actor, session, generation) =>
+          applyLeaderChange(
+            data,
+            actor,
+            {
+              action: "delete",
+              name,
+              catalogRevision: directoryRevision(data),
+            },
+            session,
+            generation,
+          ),
+        );
       },
     );
   } catch (error) {

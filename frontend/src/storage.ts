@@ -1,3 +1,4 @@
+import { isResponsibilityConflictCode } from "../../shared/resource-roles";
 import type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
 export type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
 import type { Data } from "./model";
@@ -36,10 +37,12 @@ export class StaleSessionError extends Error {
 }
 export class ApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) {
+  readonly code?: string;
+  constructor(message: string, status: number, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.code = code;
   }
 }
 function clearSession() {
@@ -129,7 +132,11 @@ async function api(path: string, body?: unknown) {
     if (response.status === 401 && path !== "/auth/login") {
       expireSession();
     }
-    throw new ApiError(result.error || "Sunucu hatası.", response.status);
+    throw new ApiError(
+      result.error || "Sunucu hatası.",
+      response.status,
+      isResponsibilityConflictCode(result.code) ? result.code : undefined,
+    );
   }
   if (result.responseMode === "planning-delta-v1") {
     if (latestView && result.generation <= latestView.generation)
@@ -212,6 +219,26 @@ export async function logout() {
 export async function readLocal(): Promise<Data> {
   return (await api("/data")).data;
 }
+export type ActivityReportSnapshot = {
+  teams: import("./model").Team[];
+  leaders: string[];
+  leaderParents: Record<string, string>;
+  rows: import("../../shared/activity-report").ActivityRow[];
+};
+export async function readActivityReport(
+  start: string,
+  count: number,
+  projects: string[],
+): Promise<ActivityReportSnapshot> {
+  return api(
+    "/activity-report?" +
+      new URLSearchParams({
+        start,
+        count: String(count),
+        projects: JSON.stringify(projects),
+      }),
+  );
+}
 export async function checkUpdates() {
   const epoch = sessionEpoch;
   try {
@@ -279,6 +306,24 @@ export async function writeBatch(changes: Change[]): Promise<Data> {
   return (await request).data;
 }
 
+export async function writeEmployeeRecord(
+  changes: Change[],
+  permission: import("../../shared/employee-account").EmployeePermission,
+): Promise<Data> {
+  const epoch = sessionEpoch,
+    writeEpoch = writeRecovery.capture();
+  const request = writeTail.then(() => {
+    if (epoch !== sessionEpoch) throw new StaleSessionError();
+    writeRecovery.assert(writeEpoch);
+    return api("/employees/save", { changes, permission });
+  });
+  writeTail = request.then(
+    () => undefined,
+    () => undefined,
+  );
+  return (await request).data;
+}
+
 export async function inspectUncertainWrite() {
   const assertSession = captureSessionGuard();
   const epoch = writeRecovery.capture();
@@ -301,6 +346,7 @@ export async function changeLeader(input: {
   name: string;
   newName?: string;
   managerName?: string;
+  parentName?: string;
   generation?: number;
   catalogRevision?: number;
 }): Promise<Data> {
@@ -329,9 +375,15 @@ export type UserInput = {
   leaders: string[];
   resourceId: string;
   revision: number;
+  reactivate?: boolean;
 };
 export async function saveUser(input: UserInput): Promise<Data> {
   return (await api("/users", input)).data;
+}
+export async function revokeUser(
+  input: Pick<UserInput, "id" | "revision">,
+): Promise<Data> {
+  return (await api("/users/revoke", input)).data;
 }
 export type CreateUserInput = {
   directoryId: string;
@@ -386,4 +438,20 @@ export async function readAuditLog(
   limit = 30,
 ): Promise<import("../../shared/audit-types").AuditPage> {
   return api("/audit?offset=" + offset + "&limit=" + limit);
+}
+
+export type ActualViewSnapshot = {
+  data: Data;
+  monthSummaries: Record<
+    string,
+    import("../../shared/actual-months").ActualMonthSummary
+  >;
+};
+export async function readActualView(
+  start: string,
+  count: number,
+): Promise<ActualViewSnapshot> {
+  return api(
+    "/actual-view?" + new URLSearchParams({ start, count: String(count) }),
+  );
 }

@@ -107,6 +107,7 @@ export const tables = {
     columns: {
       resource_id: "nvarchar(120)",
       effective_month: "varchar(7)",
+      assignment_role: "varchar(20)",
       team_id: "nvarchar(120)",
       leader_name: "nvarchar(200)",
       status: "nvarchar(50)",
@@ -210,6 +211,8 @@ export const tables = {
       legacy_archive: "nvarchar(max)",
       calendar_days: "nvarchar(max)",
       person_calendar: "nvarchar(max)",
+      leader_parents: "nvarchar(max)",
+      leadership_units: "nvarchar(max)",
     },
   },
 };

@@ -4,12 +4,13 @@ import { riskCategories, riskStatuses, riskStrategies } from "./risk-policy.ts";
 import { validPlanningMonth, validPlanningDate } from "./planning-dates.ts";
 import { personDaySchema, calendarDaySchema } from "./calendar-rules.ts";
 import { initialRiskSystems } from "./risk-system-seed.ts";
-import { statuses, phasePalette } from "./model.ts";
+import { statuses, phasePalette, resourceRoles } from "./model.ts";
 import { MAX_RECORDED_MONTHLY_HOURS } from "./actual-units.ts";
 
 const mo = z.string().refine(validPlanningMonth, "Geçersiz ay.");
 const day = z.string().refine(validPlanningDate, "Geçersiz gün.");
 const ver = z.object({
+  assignmentRole: z.enum(resourceRoles).optional(),
   effective: mo,
   team: z.string(),
   lead: z.string().optional(),
@@ -33,6 +34,7 @@ export const teamSchema = z.object({
   managerName: z.string().trim().max(200).optional(),
   excelCapacity: z.number(),
   catalog: z.boolean().optional(),
+  kind: z.literal("leadership").optional(),
 });
 export const riskSystemSchema = z
   .object({
@@ -202,6 +204,8 @@ export const snapshotSchema = z.object({
   revisions: numericRecordSchema({ integer: true }),
   leaders: z.array(z.string()).optional(),
   leaderManagers: leaderManagersSchema.default({}),
+  leaderParents: leaderManagersSchema.optional(),
+  leadershipUnits: leaderManagersSchema.optional(),
   catalogVersion: z.number().optional(),
   users: z.array(accountSchema).optional(),
   legacyArchive: z

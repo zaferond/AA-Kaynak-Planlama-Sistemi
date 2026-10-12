@@ -14,6 +14,7 @@ export type Team = {
   lead: string;
   managerName?: string;
   excelCapacity: number;
+  kind?: "leadership";
   catalog?: boolean;
 };
 export type MilestoneNote = {
@@ -85,7 +86,10 @@ export type Risk = {
   updatedAt: string;
 };
 export type RiskSystem = { id: string; name: string };
+export const resourceRoles = ["leader", "productOwner", "member"] as const;
+export type ResourceRole = (typeof resourceRoles)[number];
 export type Version = {
+  assignmentRole?: ResourceRole;
   effective: string;
   team: string;
   lead?: string;
@@ -115,9 +119,13 @@ export type Data = {
   workCalendar?: WorkCalendar;
   personCalendar?: PersonCalendar;
   actualTeamTotals?: Record<string, number>;
+  /** Response-only organisational labels; never persisted or used for authorization. */
+  planningUnitManagers?: Record<string, string>;
   revisions: Record<string, number>;
   leaders?: string[];
   leaderManagers?: Record<string, string>;
+  leaderParents?: Record<string, string>;
+  leadershipUnits?: Record<string, string>;
   catalogVersion?: number;
   users?: Account[];
   legacyArchive?: {

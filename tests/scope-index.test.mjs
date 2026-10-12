@@ -220,9 +220,13 @@ test("scoped views preserve historical team boundaries, owned actuals, anonymous
   assert.deepEqual(a.actualTeamTotals, {
     "a|p|2026-01": 0.375,
     "a|p|2026-05": 0,
+    "b|p|2026-07": 0.5,
   });
-  assert.deepEqual(own.actualTeamTotals, a.actualTeamTotals);
-  assert.deepEqual(b.actualTeamTotals, { "b|p|2026-07": 0.5 });
+  assert.deepEqual(own.actualTeamTotals, {
+    "a|p|2026-01": 0.375,
+    "a|p|2026-05": 0,
+  });
+  assert.deepEqual(b.actualTeamTotals, a.actualTeamTotals);
   assert.equal(a.actualWorkedHours["r|2026-07"], undefined);
   assert.equal(own.actualWorkedHours["r|2026-07"], 180);
   assert.equal(a.actualPercentEntries["r|p|2026-07"], undefined);
@@ -337,10 +341,7 @@ test("a normal user's own record survives a complete transfer outside their acco
   assert.equal(view.actualAllocations["private-b|p|2026-07"], undefined);
   assert.equal(view.personCalendar["private-b|2026-07-02|leave"], undefined);
   const manager = scopeData(data, principal("manager"));
-  assert.equal(
-    manager.resources.some((r) => r.id === "r"),
-    false,
-  );
+  assert.equal(manager.resources.find((r) => r.id === "r").name, "");
 });
 
 test("personal read owner candidates preserve own transfers and historical managers without granting unassigned access", () => {

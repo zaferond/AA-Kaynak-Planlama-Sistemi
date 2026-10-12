@@ -15,6 +15,10 @@ import {
 } from "./resource-report-data";
 type Props = {
   data: Data | null;
+  actualMonthSummaries?: Record<
+    string,
+    import("../../../../shared/actual-months").ActualMonthSummary
+  >;
   user: Principal | null;
   tab: string;
   teams: Team[];
@@ -35,6 +39,7 @@ type Props = {
 /** Dispatch only the current authorized view to the existing workbook writers. */
 export function createWorkspaceExports({
   data,
+  actualMonthSummaries,
   user,
   tab,
   teams,
@@ -52,8 +57,6 @@ export function createWorkspaceExports({
   metric,
   setError,
 }: Props) {
-  const isAdmin = user?.role === "admin",
-    isManager = user?.role === "manager";
   function exportResourceReport() {
     if (!data) return;
     downloadResourceReport(
@@ -93,8 +96,9 @@ export function createWorkspaceExports({
           projects,
           months,
           currentMonth,
-          isAdmin || isManager ? personIds : [user?.resourceId || ""],
+          personIds,
           user?.role !== "admin" ? user?.resourceId : undefined,
+          actualMonthSummaries,
         );
     } catch (e) {
       setError((e as Error).message);

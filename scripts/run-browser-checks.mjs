@@ -1,3 +1,6 @@
+import { checkPlanningPermissions } from "./browser-checks/planning-permissions.mjs";
+import { checkActualTeamView } from "./browser-checks/actual-team-view.mjs";
+import { checkReportOwnerSource } from "./browser-checks/report-owner-source.mjs";
 import assert from "node:assert/strict";
 import { fixture } from "./browser-checks/fixture.mjs";
 import { checkRisks } from "./browser-checks/risk.mjs";
@@ -16,6 +19,12 @@ import { checkMilestoneOverlap } from "./browser-checks/milestone-overlap.mjs";
 import { checkSessionConsistency } from "./browser-checks/session-consistency.mjs";
 import { checkEntityEditors } from "./browser-checks/entity-editors.mjs";
 import { checkTableStyles } from "./browser-checks/table-styles.mjs";
+import { checkLeadershipFilterRoots } from "./browser-checks/leadership-filter-roots.mjs";
+import { checkPlannedHierarchy } from "./browser-checks/planned-hierarchy.mjs";
+import { checkPermissionPopup } from "./browser-checks/permission-popup.mjs";
+import { checkEmployeeAccess } from "./browser-checks/employee-access.mjs";
+import { checkMemberBadges } from "./browser-checks/member-badges.mjs";
+import { checkResourceRoles } from "./browser-checks/resource-roles.mjs";
 import { checkDirectoryManagement } from "./browser-checks/directory-management.mjs";
 import { checkMilestoneReportMenu } from "./browser-checks/milestone-report-menu.mjs";
 import { checkTimelineConcurrency } from "./browser-checks/timeline-concurrency.mjs";
@@ -33,6 +42,52 @@ import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 
 import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
 
+for (const check of [
+  checkPlanningPermissions,
+  checkActualTeamView,
+  checkReportOwnerSource,
+]) {
+  const isolated = await fixture();
+  try {
+    await check(isolated);
+    assert.deepEqual(isolated.errors, []);
+    await isolated.report("passed");
+  } catch (error) {
+    await isolated.report("failed", error);
+    throw error;
+  } finally {
+    await isolated.close();
+  }
+}
+
+const hierarchy = await fixture();
+try {
+  await checkPlannedHierarchy(hierarchy);
+  assert.deepEqual(hierarchy.errors, []);
+  await hierarchy.report("passed");
+} finally {
+  await hierarchy.close();
+}
+
+const roots = await fixture();
+try {
+  await checkLeadershipFilterRoots(roots);
+  assert.deepEqual(roots.errors, []);
+  await roots.report("passed");
+} finally {
+  await roots.close();
+}
+
+const combined = await fixture();
+try {
+  await checkEmployeeAccess(combined);
+  await checkPermissionPopup(combined);
+  assert.deepEqual(combined.errors, []);
+  await combined.report("passed");
+} finally {
+  await combined.close();
+}
+
 const f = await fixture();
 try {
   await checkMutationAdmission(f);
@@ -44,6 +99,7 @@ try {
   await checkPortalRefresh(f);
   await checkEntityEditors(f);
   await checkDirectoryManagement(f);
+  await checkResourceRoles(f);
   await checkRiskSystems(f);
   await checkHeadcountForecast(f);
   await checkMilestoneReportMenu(f);
@@ -64,6 +120,7 @@ try {
   await checkMilestoneOverlap(f);
   await checkTimelineLayers(f);
   await checkResourceReports(f);
+  await checkMemberBadges(f);
   // Activity's fixed capacity expectations require its own empty calendar;
   // the preceding calendar checks intentionally retain shared holidays.
   const activity = await fixture();

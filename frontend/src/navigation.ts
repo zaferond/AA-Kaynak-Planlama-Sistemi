@@ -7,9 +7,7 @@ const adminDefaultTabs = [
   "risk",
   "critical",
   "overview",
-  "teams",
   "resources",
-  "access",
 ] as const;
 const managerDefaultTabs = [
   "actual",
@@ -35,7 +33,9 @@ export function allowedDefaultTabs(
 export function readDefaultTab(user: ReturnType<typeof currentUser>) {
   if (!user) return "plan";
   try {
-    const stored = localStorage.getItem(defaultTabKey(user.id));
+    const value = localStorage.getItem(defaultTabKey(user.id));
+    const stored =
+      value === "access" || value === "teams" ? "resources" : value;
     return stored && allowedDefaultTabs(user).includes(stored)
       ? stored
       : allowedDefaultTabs(user)[0];

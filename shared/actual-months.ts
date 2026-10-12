@@ -52,3 +52,7 @@ export function createActualMonthIndex(data: ActualMonthData) {
     },
   };
 }
+
+export type ActualMonthSummary = ReturnType<
+  ReturnType<typeof createActualMonthIndex>["get"]
+>;

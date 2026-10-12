@@ -153,7 +153,12 @@ export async function checkRiskConcurrency(f) {
           (await f.state()).risks.find((r) => r.id === id).description,
           initial.description,
         );
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         assert.equal(
           await page
             .getByRole("tab", { name: "AA Risk Yönetimi", exact: true })

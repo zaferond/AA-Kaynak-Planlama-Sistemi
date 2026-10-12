@@ -1,3 +1,8 @@
+import {
+  resourceRole,
+  assertUniqueResourceResponsibilities,
+} from "../../../shared/resource-roles.ts";
+import { ownValue } from "../../../shared/records.ts";
 import type {
   Change,
   ChangeKind,
@@ -5,6 +10,7 @@ import type {
 } from "../../../shared/commands.ts";
 import {
   withVersion,
+  type Resource,
   type Data,
   type Milestone,
 } from "../../../shared/model.ts";
@@ -100,9 +106,32 @@ function resourceChanges(
 ): Change[] {
   const changes: Change[] = [];
 
+  const assignmentKind =
+    editor.assignmentKind || resourceRole(data, editor.version);
+  const selectedVersion = {
+    ...editor.version,
+    assignmentRole: assignmentKind,
+    team:
+      assignmentKind === "leader"
+        ? ownValue(data.leadershipUnits, editor.version.lead || "") || ""
+        : editor.version.team,
+  };
+  if (
+    assignmentKind === "leader" &&
+    (!selectedVersion.lead || !selectedVersion.team)
+  )
+    throw Error(
+      "Liderlik seçin. Liderlik kaynak satırı yoksa güncel listeyi yükleyin.",
+    );
+  if (
+    assignmentKind !== "leader" &&
+    data.teams.find((team) => team.id === selectedVersion.team)?.kind ===
+      "leadership"
+  )
+    throw Error("Product Owner ve Team Member için bir takım seçin.");
   const { resource: resourceForSave, version: v } = resourceVersionForSave(
     editor.value,
-    editor.version,
+    selectedVersion,
     editor.isNew,
     start,
   );
@@ -157,7 +186,18 @@ function bulkResourceChanges(
     const old = resourceVersionForEdit(r, editor.effective);
     const v = {
       ...old,
-      ...(t ? { team: t.id, lead: leader } : {}),
+      ...(t
+        ? {
+            team: t.id,
+            lead: leader,
+            assignmentRole:
+              t.kind === "leadership"
+                ? ("leader" as const)
+                : resourceRole(data, old) === "leader"
+                  ? ("member" as const)
+                  : resourceRole(data, old),
+          }
+        : {}),
       ...(editor.status ? { status: editor.status } : {}),
       ...(editor.included !== "keep"
         ? { included: editor.included === "yes" }
@@ -184,15 +224,40 @@ export function prepareEditorChanges(
   editor: PortalEditor,
   context: EditorContext,
 ): Change[] {
+  let changes: Change[];
   switch (editor.kind) {
     case "milestone":
-      return milestoneChanges(data, editor);
+      changes = milestoneChanges(data, editor);
+      break;
     case "project":
     case "projectPhase":
-      return projectChanges(editor);
+      changes = projectChanges(editor);
+      break;
     case "resource":
-      return resourceChanges(data, editor, context.start);
+      changes = resourceChanges(data, editor, context.start);
+      break;
     case "bulkResources":
-      return bulkResourceChanges(data, editor, context.resourceIds);
+      changes = bulkResourceChanges(data, editor, context.resourceIds);
+      break;
   }
+  const updates = changes.filter((change) => change.kind === "resource");
+  if (updates.length) {
+    const resources = new Map(
+      data.resources.map((person) => [person.id, person]),
+    );
+    for (const update of updates)
+      resources.set(update.id, update.value as Resource);
+    assertUniqueResourceResponsibilities(
+      { teams: data.teams, resources: [...resources.values()] },
+      new Map(
+        data.resources.map((person) => [
+          person.id,
+          new Map(
+            person.versions.map((version) => [version.effective, version]),
+          ),
+        ]),
+      ),
+    );
+  }
+  return changes;
 }

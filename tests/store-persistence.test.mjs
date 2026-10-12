@@ -543,3 +543,118 @@ test("a planned edit cannot commit while an unrelated draft record fails full va
     assert.equal((await store.auditLog(user)).total, audit);
   }
 });
+
+test("schema 33 preserves schema 32 employee links, credentials and allocations, creates independent leadership owners once", async (t) => {
+  const { store, user, env, team } = await setup(t);
+  await store.mutate(user, (data, active) =>
+    applyChanges(data, active, [
+      {
+        kind: "allocation",
+        id: team.id + "|p|2026-09",
+        value: 0.5,
+        revision: 0,
+      },
+      {
+        kind: "actual",
+        id: "r|p|2026-09",
+        value: { unit: "hours", value: 8 },
+        revision: 0,
+      },
+    ]),
+  );
+  const before = await store.read();
+  const accountBefore = await store.findUser({ id: user._id });
+  const auditBefore = await store.auditLog(user);
+  const oldUnits = new Set(Object.values(before.data.leadershipUnits));
+  await store.close();
+  const adapter = new SqlJsAdapter(env.SQLJS_FILE);
+  try {
+    await adapter.open();
+    await adapter.transaction(async (c) => {
+      for (const id of oldUnits) {
+        await c.query(
+          "DELETE FROM kp_revisions WHERE kind='team' AND record_id=@p0",
+          [id],
+        );
+        await c.query("DELETE FROM kp_teams WHERE id=@p0", [id]);
+      }
+      await c.query("ALTER TABLE kp_settings DROP COLUMN leader_parents");
+      await c.query("ALTER TABLE kp_settings DROP COLUMN leadership_units");
+      await c.query("DELETE FROM kp_schema_migrations WHERE version=33");
+    });
+  } finally {
+    await adapter.close();
+  }
+  const upgraded = new Store({ env });
+  try {
+    await upgraded.connect();
+    const after = await upgraded.read();
+    const units = new Set(Object.values(after.data.leadershipUnits));
+    assert.equal(units.size, after.data.leaders.length);
+    assert.equal(after.generation, before.generation + 1);
+    const original = structuredClone(before.data);
+    original.teams = original.teams.filter((t) => !oldUnits.has(t.id));
+    for (const id of oldUnits) delete original.revisions["team:" + id];
+    delete original.leadershipUnits;
+    delete original.leaderParents;
+    const retained = structuredClone(after.data);
+    retained.teams = retained.teams.filter((t) => !units.has(t.id));
+    for (const id of units) delete retained.revisions["team:" + id];
+    delete retained.leadershipUnits;
+    delete retained.leaderParents;
+    assert.deepEqual(retained, original);
+    assert.deepEqual(await upgraded.findUser({ id: user._id }), accountBefore);
+    assert.deepEqual(await upgraded.auditLog(user), auditBefore);
+    assert(
+      after.data.teams
+        .filter((t) => units.has(t.id))
+        .every((t) => t.kind === "leadership" && t.excelCapacity === 0),
+    );
+    await upgraded.close();
+    await upgraded.connect();
+    assert.deepEqual(await upgraded.read(), after); // Repeated startup does not duplicate units or change generation.
+  } finally {
+    await upgraded.close();
+  }
+});
+
+test("schema 34 preserves schema 33 resource histories, user credentials and data and leaves legacy role fields absent", async (t) => {
+  const { store, user, env } = await setup(t),
+    before = await store.read(),
+    account = await store.findUser({ id: user._id });
+  await store.close();
+  const adapter = new SqlJsAdapter(env.SQLJS_FILE);
+  try {
+    await adapter.open();
+    await adapter.transaction(async (c) => {
+      await c.query(
+        "ALTER TABLE kp_resource_versions DROP COLUMN assignment_role",
+      );
+      await c.query("DELETE FROM kp_schema_migrations WHERE version=34");
+    });
+  } finally {
+    await adapter.close();
+  }
+  const upgraded = new Store({ env });
+  try {
+    await upgraded.connect();
+    assert.deepEqual(await upgraded.read(), before);
+    assert.deepEqual(await upgraded.findUser({ id: user._id }), account);
+    assert(
+      !Object.hasOwn(
+        (await upgraded.read()).data.resources[0].versions[0],
+        "assignmentRole",
+      ),
+    );
+    await assert.rejects(
+      () =>
+        upgraded.transaction((c) =>
+          c.query("UPDATE kp_resource_versions SET assignment_role='admin'"),
+        ),
+      /CHECK/,
+    );
+    assert.deepEqual(await upgraded.read(), before);
+  } finally {
+    await upgraded.close();
+  }
+});

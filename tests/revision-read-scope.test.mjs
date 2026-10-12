@@ -335,8 +335,8 @@ test("all authenticated roles match complete-read revision views, including tran
     assert.equal(JSON.stringify(actual), JSON.stringify(full));
     assert.equal(read.sql.includes("WHERE"), user.role !== "admin");
     if (user.role === "admin") assert.equal(read.rows, fullCount);
-    if (user.role === "normal" || user._id === "manager")
-      assert(read.rows < fullCount);
+    if (user.role === "normal") assert(read.rows < fullCount);
+    if (user.role === "manager") assert.equal(read.rows, fullCount);
     assert.equal(actual.data.revisions["risk:deleted-risk"], 7);
     assert.equal(actual.data.revisions["calendar:shared"], 8);
     if (user.role === "normal")
@@ -472,7 +472,7 @@ test("empty and legacy team scopes keep special revisions and full-read referenc
   observations.length = 0;
   const empty = await store.view(users.manager);
   assert(observations[0].sql.includes("WHERE"));
-  assert.equal(observations[0].values.length, 0);
+  assert(observations[0].values.length > 0);
   assert.deepEqual(empty, await reference(users.manager));
   await store.transaction((c) =>
     c.upsert("teams", [

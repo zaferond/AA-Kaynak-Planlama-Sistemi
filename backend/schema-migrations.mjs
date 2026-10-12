@@ -1,3 +1,4 @@
+import { ensureLeadershipUnits } from "../shared/leadership-units.ts";
 import catalog from "../shared/catalog.json" with { type: "json" };
 import { initialRiskSystems } from "../shared/risk-system-seed.ts";
 import {
@@ -516,6 +517,20 @@ export async function prepareSchema(c, { provider, auto }) {
       );
     await executeSqlMigration(c, provider, 32);
   }
+  if (!versions.includes(33)) {
+    if (!auto)
+      throw Error(
+        "Liderlik hiyerarşisi için IT npm run db:migrate çalıştırmalı.",
+      );
+    await executeSqlMigration(c, provider, 33);
+  }
+  if (!versions.includes(34)) {
+    if (!auto)
+      throw Error(
+        "Çalışan kaynak rolleri için IT npm run db:migrate çalıştırmalı.",
+      );
+    await executeSqlMigration(c, provider, 34);
+  }
   assertMigrationHistory(
     (await c.query("SELECT version FROM kp_schema_migrations")).rows.map(
       (row) => Number(row.version),
@@ -533,6 +548,8 @@ export async function prepareSchema(c, { provider, auto }) {
         legacy_archive: null,
         calendar_days: "{}",
         person_calendar: "{}",
+        leader_parents: "{}",
+        leadership_units: "{}",
       },
     ]);
     await c.upsert(
@@ -549,6 +566,52 @@ export async function prepareSchema(c, { provider, auto }) {
         excel_capacity: t.excelCapacity,
         catalog: true,
       })),
+    );
+  }
+  if (!versions.includes(33)) {
+    const leaders = (
+      await c.query("SELECT name,manager_name FROM kp_leaders ORDER BY name")
+    ).rows;
+    const rows = (await c.query("SELECT * FROM kp_teams ORDER BY id")).rows;
+    const data = {
+      leaders: leaders.map((row) => row.name),
+      leaderManagers: Object.fromEntries(
+        leaders.map((row) => [row.name, row.manager_name || ""]),
+      ),
+      leadershipUnits: {},
+      revisions: {},
+      teams: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        lead: row.leader_name || "",
+        excelCapacity: row.excel_capacity,
+      })),
+    };
+    ensureLeadershipUnits(data);
+    await c.upsert(
+      "teams",
+      data.teams
+        .filter((team) => team.kind === "leadership")
+        .map((team) => ({
+          id: team.id,
+          name: team.name,
+          leader_name: team.lead,
+          excel_capacity: 0,
+          catalog: true,
+          manager_name: team.managerName || "",
+        })),
+    );
+    await c.upsert(
+      "revisions",
+      Object.entries(data.revisions).map(([key, revision]) => ({
+        kind: "team",
+        record_id: key.slice(5),
+        revision,
+      })),
+    );
+    await c.query(
+      "UPDATE kp_settings SET leadership_units=@p0,generation=generation+1 WHERE id=1",
+      [JSON.stringify(data.leadershipUnits)],
     );
   }
 }

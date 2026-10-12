@@ -232,3 +232,25 @@ export async function fixture({ mutationLimits } = {}) {
     throw error;
   }
 }
+
+export async function selectWorkspaceTab(page, name) {
+  const employee = name === "Çalışan & Yetki Tanımlama";
+  const directory =
+    name === "Liderlik ve Takımlar" || name === "Organizasyon Yapısı";
+  if (employee || directory) {
+    await page
+      .getByRole("tab", {
+        name: "Organizasyon & Çalışan & Yetki",
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("tab", {
+        name: employee ? "Çalışan & Yetki Tanımlama" : "Organizasyon Yapısı",
+        exact: true,
+      })
+      .click();
+  } else {
+    await page.getByRole("tab", { name, exact: true }).click();
+  }
+}

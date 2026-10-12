@@ -402,13 +402,33 @@
   outline: 2px solid #4c92bd;
   outline-offset: 2px;
 }
+/* Reserve the same calendar column for every employee, including read-only peers. */
+.person-allocation .actual-person-label {
+  display: grid;
+  grid-template-columns: 24px 10px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 5px;
+}
+.person-allocation .person-calendar-slot {
+  display: flex;
+  align-items: center;
+  min-height: 24px;
+}
+.app .person-allocation .actual-person-label .indent {
+  margin-right: 0;
+}
+.person-allocation .actual-person-name {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .person-allocation .person-calendar-trigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 24px;
   height: 24px;
-  margin-right: 5px;
+  margin-right: 0;
   vertical-align: middle;
   border: 1px solid #c7d9e8;
   border-radius: 5px;

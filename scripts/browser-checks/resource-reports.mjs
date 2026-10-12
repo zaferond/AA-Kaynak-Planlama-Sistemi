@@ -1,3 +1,4 @@
+import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { applyChanges } from "../../backend/operations.mjs";
@@ -106,9 +107,7 @@ export async function checkResourceReports(f) {
   const before = await f.state();
   const { page, context } = await f.client("root-admin");
   async function choose(names) {
-    await page
-      .getByRole("button", { name: "Takım / Birim", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Takım", exact: true }).click();
     const panel = page.locator('.pickerpanel[data-state="open"]');
     await panel
       .getByRole("button", { name: "Seçimleri Kaldır", exact: true })
@@ -118,7 +117,9 @@ export async function checkResourceReports(f) {
     await page.keyboard.press("Escape");
   }
   try {
-    await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+    await page
+      .getByRole("tab", { name: "AA Kaynak Planlama Raporları", exact: true })
+      .click();
     await page
       .locator('.planning-filterbar input[type="month"]')
       .fill("2026-10");
@@ -422,16 +423,19 @@ export async function checkResourceReports(f) {
         await summary.hover();
         await page.waitForTimeout(220);
         assert.deepEqual(await background(), closed);
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         assert.deepEqual(await f.state(), before);
       },
     );
     await f.check(
       "resource reports: absence report moved below resources and period filters work",
       async () => {
-        await page
-          .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-          .click();
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         const report = page.locator(".absence-report");
         await report.waitFor();
         assert.match(await report.innerText(), /Synthetic report leave/);

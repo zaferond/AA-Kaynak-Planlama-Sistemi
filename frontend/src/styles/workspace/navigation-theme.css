@@ -43,9 +43,9 @@
   gap: 4px !important;
   width: 100%;
   height: auto !important;
-  min-height: 46px;
+  min-height: 52px;
   margin: 0 0 2px;
-  padding: 4px;
+  padding: 4px 4px 10px;
   border: 1px solid #d3e0ea !important;
   border-radius: 9px;
   background: #eaf1f6;
@@ -106,7 +106,7 @@
 }
 @media (max-width: 650px) {
   .app .workspace-nav .navtabs {
-    min-height: 46px;
+    min-height: 52px;
     scrollbar-width: none;
   }
   .app .workspace-nav .navtabs::-webkit-scrollbar {

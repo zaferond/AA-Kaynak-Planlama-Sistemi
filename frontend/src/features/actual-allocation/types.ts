@@ -3,6 +3,12 @@ import type { ActualEntry } from "../actual-allocation-commands";
 
 export type PersonAllocationPanelProps = {
   data: Data;
+  loading?: boolean;
+  user: import("../../access").Principal;
+  monthSummaries?: Record<
+    string,
+    import("../../../../shared/actual-months").ActualMonthSummary
+  >;
   teams: Team[];
   projects: Project[];
   months: string[];

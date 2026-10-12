@@ -250,7 +250,7 @@ test("authenticated scoped SQL views match full reads for all roles, transfers, 
     );
     assert.equal(read.rows, Object.keys(actual.data.allocations).length);
     assert.equal(read.sql.includes("WHERE"), user.role !== "admin");
-    if (user.leaders.length) assert(read.rows < 1000);
+    if (user.role === "normal" && user.leaders.length) assert(read.rows < 1000);
     if (user.role === "normal")
       assert.deepEqual(
         actual.data.actualAllocations,
@@ -301,7 +301,7 @@ test("planning read uses the current persisted account and team leadership, neve
     await reference(users.manager),
   );
   assert(
-    !Object.keys((await store.view(users.manager)).data.allocations).some((k) =>
+    Object.keys((await store.view(users.manager)).data.allocations).some((k) =>
       k.startsWith(team.id + "|"),
     ),
   );
@@ -402,7 +402,7 @@ test("legacy team IDs containing composite separators retain the full-read view 
   assert.equal(actual.data.allocations[legacyId + "|bench-p0|2026-01"], 0.75);
 });
 
-test("an assigned leadership without teams returns an empty planning map and ordinary-query fallback matches streaming", async (t) => {
+test("an assigned leadership without teams still sees all planning rows and ordinary-query fallback matches streaming", async (t) => {
   const { store, users, observations } = await setup(t);
   await store.transaction(async (c) => {
     await c.upsert("leaders", [{ name: "Empty leadership", manager_name: "" }]);
@@ -415,17 +415,24 @@ test("an assigned leadership without teams returns an empty planning map and ord
   });
   observations.length = 0;
   const view = await store.view(users.manager);
-  assert.deepEqual(view.data.allocations, {});
-  assert.equal(observations[0].rows, 0);
-  assert(observations[0].sql.includes(" WHERE 1=0"));
+  assert.equal(Object.keys(view.data.allocations).length, 1000);
+  assert.equal(observations[0].rows, 1000);
+  assert(!observations[0].sql.includes(" WHERE 1=0"));
   await store.transaction(async (c) => {
     const active = view.user;
     const streamed = await store.read(c, active);
     assert.deepEqual(await store.read({ query: c.query }, active), streamed);
+    // Empty normal scope uses portable SQL in this SQL.js adapter test.
+    // Nonempty MSSQL predicates are checked separately against their dialect.
+    const emptyActive = { ...active, role: "normal" };
+    const emptyStreamed = await store.read(c, emptyActive);
     const provider = store.provider;
     try {
       store.provider = "mssql";
-      assert.deepEqual(await store.read({ query: c.query }, active), streamed);
+      assert.deepEqual(
+        await store.read({ query: c.query }, emptyActive),
+        emptyStreamed,
+      );
     } finally {
       store.provider = provider;
     }

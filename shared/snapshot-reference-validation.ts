@@ -1,3 +1,5 @@
+import { validateLeadershipUnits } from "./leadership-units.ts";
+import { validateLeaderParents } from "./leadership-hierarchy.ts";
 import type { Data } from "./model.ts";
 import { invalidSnapshot as bad } from "./snapshot-validation-error.ts";
 import { riskSystemNameKey } from "./risk-system-policy.ts";
@@ -12,6 +14,11 @@ export function validateSnapshotCatalogs(d: Data) {
   );
   if (new Set(systemNames).size !== systemNames.length)
     throw bad("Tekrarlanan sistem / alt sistem adı.");
+  try {
+    validateLeadershipUnits(d);
+  } catch (error) {
+    throw bad((error as Error).message);
+  }
   const teamIds = new Set(d.teams.map((team) => team.id));
   const projectRanks = d.projects.flatMap((p) =>
     p.sortOrder === undefined ? [] : [p.sortOrder],
@@ -68,6 +75,11 @@ export function validateSnapshotIdentifiers(
     if (t.lead && !leaderNames.has(t.lead)) throw bad("Geçersiz liderlik.");
   for (const name of Object.keys(d.leaderManagers || {}))
     if (!leaderNames.has(name)) throw bad("Geçersiz liderlik yöneticisi.");
+  try {
+    validateLeaderParents(d);
+  } catch (error) {
+    throw bad((error as Error).message);
+  }
   for (const p of d.projects)
     for (const m of Object.keys(p.phases))
       if (!validPlanningMonth(m)) throw bad("Geçersiz proje ayı.");

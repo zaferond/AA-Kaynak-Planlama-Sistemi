@@ -69,7 +69,7 @@ export default function WorkspaceReports({
       <section className="panel">
         <div className="panelhead">
           <div>
-            <h2>Liderlik Bazında Kalan Kaynak</h2>
+            <h2>Liderlik Bazında Eksik Raporu</h2>
           </div>
         </div>
         <RemainingResourceTable
@@ -82,7 +82,7 @@ export default function WorkspaceReports({
       <section className="panel report">
         <div className="panelhead">
           <div>
-            <h2>Takım Bazında Kalan Kaynak</h2>
+            <h2>Takım Bazında Eksik Kaynak Raporu</h2>
           </div>
         </div>
         <RemainingResourceTable

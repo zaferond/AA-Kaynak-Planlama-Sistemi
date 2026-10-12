@@ -14,6 +14,8 @@ import {
   DEFAULT_MONTHLY_HOURS,
 } from "./actual-units.ts";
 import { createWorkbook, downloadWorkbook } from "./xlsx-workbook.ts";
+import type { ActualMonthSummary } from "../../shared/actual-months.ts";
+import { ownValue } from "../../shared/records.ts";
 import { SYSTEM_NAME } from "./settings.ts";
 
 const namespace = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -228,6 +230,7 @@ export function actualAllocationWorkbook(
   currentMonth: string,
   selectedPersonIds: string[],
   ownResourceId?: string,
+  monthSummaries?: Record<string, ActualMonthSummary>,
 ): Uint8Array {
   const allowedTeams = new Set(teams.map((team) => team.id)),
     selected = new Set(selectedPersonIds),
@@ -271,6 +274,7 @@ export function actualAllocationWorkbook(
     ];
   };
   const calendarFor = (resource: Resource, month: string) =>
+    ownValue(monthSummaries, resource.id + "|" + month) ||
     personCalendarHoursInMonth(
       month,
       resource.id,
@@ -278,6 +282,8 @@ export function actualAllocationWorkbook(
       data.personCalendar,
     );
   const capacityFor = (resource: Resource, month: string) => {
+    const summary = ownValue(monthSummaries, resource.id + "|" + month);
+    if (summary) return summary.capacityFte;
     const manual = data.actualWorkedHours?.[resource.id + "|" + month];
     const hours = effectivePersonHoursInMonth(
       month,
@@ -367,6 +373,7 @@ export function downloadActualAllocations(
   currentMonth: string,
   selectedPersonIds: string[],
   ownResourceId?: string,
+  monthSummaries?: Record<string, ActualMonthSummary>,
 ) {
   downloadWorkbook(
     actualAllocationWorkbook(
@@ -377,6 +384,7 @@ export function downloadActualAllocations(
       currentMonth,
       selectedPersonIds,
       ownResourceId,
+      monthSummaries,
     ),
     `AA-Gerceklesen-Kaynak-Dagilimi-${months[0]}-${months.at(-1)}.xlsx`,
   );

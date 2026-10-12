@@ -11,13 +11,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { RefObject } from "react";
+import { useMemo, type RefObject } from "react";
+import { directoryResponsibilityIndex } from "../../../shared/resource-roles";
 import { capacityStatus } from "../capacity-status";
 import MemberBadge from "../components/MemberBadge";
 import { fmt, monthLabel } from "../format";
 import type { Metric } from "../metrics";
 import type { Data, Team } from "../model";
-export type ReportGroup = { name: string; ids: string[]; leader?: string };
+import { reportGroupManager, type ReportGroup } from "./resource-report-groups";
+export type { ReportGroup } from "./resource-report-groups";
 type Props = {
   groups: ReportGroup[];
   teamReport: boolean;
@@ -44,6 +46,13 @@ export default function RemainingResourceTable({
   metric,
   tableRef,
 }: Props) {
+  const responsibility = useMemo(
+    () =>
+      data
+        ? directoryResponsibilityIndex(data, todayDate)
+        : { leaders: {}, teams: {} },
+    [data, todayDate],
+  );
   const memberBadge = (label: string, members: string[]) => (
     <MemberBadge label={label} members={members} currentMonth={currentMonth} />
   );
@@ -59,10 +68,7 @@ export default function RemainingResourceTable({
   function reportMonthHead(month: string) {
     return <TimelineMonthHead key={month} month={month} years={years} />;
   }
-  function reportRows(
-    groups: { name: string; ids: string[]; leader?: string }[],
-    teamReport = false,
-  ) {
+  function reportRows(groups: ReportGroup[], teamReport = false) {
     return (
       <>
         <Table
@@ -85,7 +91,7 @@ export default function RemainingResourceTable({
             {reportYearRow()}
             <TableRow>
               <TableHead>Yönetici</TableHead>
-              <TableHead>{teamReport ? "Takım" : "Liderlik"}</TableHead>
+              <TableHead>{teamReport ? "Takım" : "En Üst Birim"}</TableHead>
               {months.map(reportMonthHead)}
             </TableRow>
           </TableHeader>
@@ -93,14 +99,12 @@ export default function RemainingResourceTable({
             {groups.map((g) => (
               <TableRow
                 key={
-                  (teamReport ? "team:" : "leader:") +
-                  (teamReport ? g.ids[0] : g.leader || g.name)
+                  (teamReport ? "team:" : g.unitId ? "unit:" : "leader:") +
+                  (teamReport ? g.ids[0] : g.unitId || g.leader || g.name)
                 }
               >
                 <TableCell>
-                  {teamReport
-                    ? teams.find((t) => t.id === g.ids[0])?.managerName || "—"
-                    : ownValue(data?.leaderManagers, g.leader || "") || "—"}
+                  {reportGroupManager(responsibility, teams, g, teamReport)}
                 </TableCell>
                 <TableCell>
                   <span className="report-unit-title">

@@ -1,3 +1,6 @@
+import { planningUnitManagerIndex } from "../../../../shared/resource-roles";
+import { ownValue } from "../../../../shared/records";
+import { planningUnitHierarchy } from "../../../../shared/leadership-planning";
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { fmt, monthLabel } from "../../format";
@@ -12,6 +15,7 @@ import {
   actualRowsVisible,
   PlannedActualToggle,
   PlannedTeamBadge,
+  PlannedUnitName,
 } from "./PlannedTeamLabels";
 import { useWindowedSections } from "../workspace/useWindowedSections";
 import type { WindowedSection } from "../workspace/useWindowedSections";
@@ -44,6 +48,12 @@ export default function PlannedAllocationTable(
     projects,
     projectTotals,
   } = props;
+  const managerNames = useMemo(
+    () =>
+      props.data.planningUnitManagers ??
+      planningUnitManagerIndex(props.data, todayDate),
+    [props.data, todayDate],
+  );
   const cellSet = useMemo(() => new Set(props.cells), [props.cells]);
   const sections: WindowedSection[] =
     view === "team"
@@ -65,21 +75,26 @@ export default function PlannedAllocationTable(
                 render: () => (
                   <TableBody key={key} data-window-key={key}>
                     {first && (
-                      <TableRow className="group">
+                      <TableRow
+                        className="group"
+                        data-planning-group={t.id}
+                        data-hierarchy-depth={
+                          planningUnitHierarchy(props.data, t).depth
+                        }
+                      >
                         <TableCell colSpan={months.length + 1}>
                           <div className="team-group-label">
                             <PlannedActualToggle team={t} {...props} />
                             <div>
                               <div className="team-heading">
-                                <strong
-                                  title={t.lead || "Liderlik eşleştirilmemiş"}
-                                >
-                                  {t.name}
+                                <strong>
+                                  <PlannedUnitName data={props.data} team={t} />
                                 </strong>
                                 <PlannedTeamBadge team={t} {...props} />
                               </div>
                               <span>
-                                Yönetici: {t.managerName || "Atanmamış"}
+                                Yönetici:{" "}
+                                {ownValue(managerNames, t.id) || "Atanmamış"}
                               </span>
                             </div>
                           </div>
@@ -90,6 +105,9 @@ export default function PlannedAllocationTable(
                       <PlannedAllocationRow
                         key={t.id + projects[i].id}
                         team={t}
+                        managerName={
+                          ownValue(managerNames, t.id) || "Atanmamış"
+                        }
                         project={projects[i]}
                         cellSet={cellSet}
                         {...props}
@@ -141,6 +159,9 @@ export default function PlannedAllocationTable(
                   <PlannedAllocationRow
                     key={teams[i].id + p.id}
                     team={teams[i]}
+                    managerName={
+                      ownValue(managerNames, teams[i].id) || "Atanmamış"
+                    }
                     project={p}
                     cellSet={cellSet}
                     {...props}

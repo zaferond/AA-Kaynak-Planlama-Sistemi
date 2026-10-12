@@ -7,16 +7,18 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import type { Data, Project, Team } from "../../model";
+import type { Team } from "../../model";
 import { DEFAULT_MONTHLY_HOURS, type ActualUnit } from "../../actual-units";
 import { fmt, fullDateLabel, monthLabel, shortDateFormat } from "../../format";
 import {
   activityValue,
-  buildActivityRows,
+  type ActivityRow,
   type ActivityMonth,
 } from "./activity-report-data";
 
 const PAGE_SIZE = 100;
+const PERSON_COLUMN_WIDTH = 112;
+const LABEL_COLUMNS_WIDTH = 124 + 124 + PERSON_COLUMN_WIDTH;
 const states = {
   working: "",
   "before-start": "İşbaşı öncesi",
@@ -43,37 +45,23 @@ function cellTitle(cell: ActivityMonth) {
     .join(" · ");
 }
 export default function MonthlyActivityReport({
-  data,
+  rows: allRows,
   teams,
-  projects,
   months,
-  currentMonth,
   todayDate,
-  ownResourceId,
 }: {
-  data: Data;
+  rows: ActivityRow[];
   teams: Team[];
-  projects: Project[];
   months: string[];
-  currentMonth: string;
   todayDate: string;
-  ownResourceId?: string;
 }) {
   const [unit, setUnit] = useState<ActualUnit>("percent");
   const [page, setPage] = useState(0);
-  useEffect(() => setPage(0), [teams, projects, months, ownResourceId]);
-  const rows = useMemo(
-    () =>
-      buildActivityRows(
-        data,
-        teams,
-        projects,
-        months,
-        currentMonth,
-        ownResourceId,
-      ),
-    [data, teams, projects, months, currentMonth, ownResourceId],
-  );
+  useEffect(() => setPage(0), [teams, months, allRows]);
+  const rows = useMemo(() => {
+    const ids = new Set(teams.map((team) => team.id));
+    return allRows.filter((row) => ids.has(row.teamId));
+  }, [allRows, teams]);
   const years = [...new Set(months.map((month) => month.slice(0, 4)))];
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const activePage = Math.min(page, pages - 1);
@@ -92,7 +80,8 @@ export default function MonthlyActivityReport({
         Math.max(
           42,
           Math.floor(
-            (panel.clientWidth - 384 - 18) / Math.min(months.length || 12, 12),
+            (panel.clientWidth - LABEL_COLUMNS_WIDTH - 18) /
+              Math.min(months.length || 12, 12),
           ),
         ),
       );
@@ -123,7 +112,6 @@ export default function MonthlyActivityReport({
             onChange={(e) => setUnit(e.target.value as ActualUnit)}
           >
             <option value="percent">Yüzde (%)</option>
-            <option value="days">Gün</option>
             <option value="hours">Saat</option>
           </select>
         </label>
@@ -133,12 +121,12 @@ export default function MonthlyActivityReport({
         aria-label="Çalışanların aylık aktiviteleri"
         todayDate={todayDate}
         todayMonthsKey={months.join("|")}
-        style={{ width: 384 + months.length * monthWidth }}
+        style={{ width: LABEL_COLUMNS_WIDTH + months.length * monthWidth }}
       >
         <colgroup>
           <col style={{ width: 124 }} />
           <col style={{ width: 124 }} />
-          <col style={{ width: 136 }} />
+          <col style={{ width: PERSON_COLUMN_WIDTH }} />
           {months.map((month) => (
             <col key={month} style={{ width: monthWidth }} />
           ))}

@@ -98,3 +98,14 @@
     max-height: 65dvh !important;
   }
 }
+
+.leadership-unit-label {
+  display: block;
+  margin-top: 2px;
+  color: #53674a;
+  font-size: 9px;
+  font-weight: 600;
+}
+.leadership-planning-row .rowname {
+  background: #edf2e7;
+}

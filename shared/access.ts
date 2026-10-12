@@ -1,3 +1,5 @@
+import { ownValue } from "./records.ts";
+import { visibleLeaderParents } from "./leadership-hierarchy.ts";
 import type { Data, Resource } from "./model.ts";
 import { actualTeamTotalIndex, createActualTeamIndex } from "./model.ts";
 import { filterOwnRecords } from "./records.ts";
@@ -39,8 +41,37 @@ export function allowedTeam(d: Data, u: Principal, id: string) {
       ))
   );
 }
-// View visibility also drives the optional SQL planning read. Write permission
-// remains allowedTeam; an unassigned manager can view teams but cannot edit them.
+// Planning grants are inherited by descendant leaderships. Keep actual-data
+// permissions separate: planning visibility must not grant personal-data access.
+export function allowedPlanningTeam(
+  d: Pick<Data, "teams" | "leaderParents">,
+  u: Principal,
+  id: string,
+) {
+  if (u.role === "admin") return true;
+  if (u.role !== "manager") return false;
+  let lead = d.teams.find((team) => team.id === id)?.lead;
+  const visited = new Set<string>();
+  while (lead && !visited.has(lead)) {
+    if (u.leaders.includes(lead)) return true;
+    visited.add(lead);
+    lead = ownValue(d.leaderParents, lead);
+  }
+  return false;
+}
+export function visiblePlanningTeamScope(
+  d: Pick<Data, "teams" | "leaders">,
+  u: Principal,
+) {
+  if (u.role !== "manager" && u.role !== "admin") return visibleTeamScope(d, u);
+  return {
+    leaderNames: new Set(d.leaders || []),
+    teams: d.teams,
+    ids: new Set(d.teams.map((team) => team.id)),
+  };
+}
+
+// Existing personal actual/calendar scope; independent of planning visibility.
 export function visibleTeamScope(
   d: Pick<Data, "teams" | "leaders">,
   u: Principal,
@@ -80,17 +111,18 @@ export function actualReadOwnerScope(
 }
 export function scopeData(d: Data, u: Principal): Data {
   if (u.role === "admin") return d;
-  const { leaderNames, teams, ids } = visibleTeamScope(d, u);
+  const { leaderNames, teams, ids } = visiblePlanningTeamScope(d, u);
+  const privateIds = visibleTeamScope(d, u).ids;
   const ownId = u.resourceId || "";
   const managerCanSeePeople = u.role === "manager" && u.leaders.length > 0;
   const assignments = createActualTeamIndex(d.resources);
-  const actualOwners = new Set(actualReadOwnerScope(d, u, ids));
+  const actualOwners = new Set(actualReadOwnerScope(d, u, privateIds));
   const canSeeResourceMonth = (resourceId: string, month: string) => {
     if (!actualOwners.has(resourceId)) return false;
     if (resourceId === ownId) return true;
     if (!month) return false;
     const team = assignments.get(resourceId, month);
-    return team !== undefined && ids.has(team);
+    return team !== undefined && privateIds.has(team);
   };
   const canSeeActual = (key: string, kind: "actual" | "workedHours") => {
     const parts = key.split("|"),
@@ -162,6 +194,11 @@ export function scopeData(d: Data, u: Principal): Data {
     legacyArchive: undefined,
     teams,
     leaders: (d.leaders || []).filter((l) => leaderNames.has(l)),
+    leaderParents: visibleLeaderParents(d, leaderNames),
+    leadershipUnits: filterOwnRecords(
+      d.leadershipUnits,
+      (name) => leaderNames.has(name) && ids.has(d.leadershipUnits![name]),
+    ),
     leaderManagers: filterOwnRecords(d.leaderManagers, (name) =>
       leaderNames.has(name),
     ),
@@ -169,7 +206,12 @@ export function scopeData(d: Data, u: Principal): Data {
       .filter((r) => r.id === ownId || r.versions.some((v) => ids.has(v.team)))
       .map((r) => ({
         ...r,
-        name: managerCanSeePeople || r.id === ownId ? r.name : "",
+        name:
+          r.id === ownId ||
+          (managerCanSeePeople &&
+            r.versions.some((v) => privateIds.has(v.team)))
+            ? r.name
+            : "",
         note: "",
         code: undefined,
         versions: r.versions.map((v) =>

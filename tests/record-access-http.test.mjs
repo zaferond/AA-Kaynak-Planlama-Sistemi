@@ -2074,10 +2074,7 @@ test("AD provisioning and manager ownership preserve authorization boundaries", 
         view.resources.find((r) => r.id === "employee-a").name,
         "Synthetic employee-a",
       );
-      assert.equal(
-        view.resources.some((r) => r.id === "employee-b"),
-        false,
-      );
+      assert.equal(view.resources.find((r) => r.id === "employee-b").name, "");
       assert.equal(
         (
           await write(
@@ -2361,4 +2358,1464 @@ test("AD provisioning and manager ownership preserve authorization boundaries", 
       directory.setUnavailable(false);
     },
   );
+});
+
+test("permission revocation closes sessions, preserves business history and explicitly regrants same identity", async (t) => {
+  const { store, admin, user, request, state, write } = await setup(t);
+  const team = (await state()).data.teams.find((team) => team.lead);
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "p-revoke",
+          value: {
+            id: "p-revoke",
+            name: "Synthetic retained project",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        {
+          kind: "resource",
+          id: "r-revoke",
+          value: {
+            id: "r-revoke",
+            name: "Synthetic retained employee",
+            note: "",
+            versions: [
+              {
+                team: team.id,
+                lead: team.lead,
+                effective: "2026-01",
+                start: "2026-01-01",
+                end: "",
+                status: "Aktif Çalışan",
+                included: true,
+                amount: 1,
+              },
+            ],
+          },
+        },
+        { kind: "risk", id: "p-revoke", value: risk("p-revoke") },
+      ])
+    ).status,
+    200,
+  );
+  const target = await user("revoke-target", "normal", "r-revoke", [team.lead]);
+  const before = await state();
+  const old = await store.findUser({ id: "revoke-target" });
+  assert.equal(
+    (
+      await request(
+        "/users/revoke",
+        { id: old._id, revision: old.revision },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  const removed = await store.findUser({ id: old._id });
+  assert.equal(removed.active, false);
+  assert.equal(removed.resourceId, "");
+  assert.deepEqual(removed.leaders, []);
+  assert.equal(removed.version, old.version + 1);
+  assert.equal((await request("/data", undefined, target)).status, 401);
+  assert.equal(
+    (
+      await request("/auth/login", {
+        username: old.username,
+        password: "Record-access-test-only-284!",
+      })
+    ).status,
+    401,
+  );
+  const after = await state();
+  for (const key of [
+    "resources",
+    "projects",
+    "risks",
+    "actuals",
+    "allocations",
+  ])
+    assert.deepEqual(after.data[key], before.data[key]);
+  assert.equal(after.generation, before.generation + 1);
+  assert.equal(
+    (
+      await request(
+        "/users",
+        {
+          id: old._id,
+          revision: removed.revision,
+          role: old.role,
+          leaders: old.leaders,
+          resourceId: old.resourceId,
+        },
+        admin,
+      )
+    ).status,
+    409,
+  );
+  assert.equal(
+    (
+      await request(
+        "/users",
+        {
+          id: old._id,
+          revision: removed.revision,
+          role: old.role,
+          leaders: old.leaders,
+          resourceId: old.resourceId,
+          reactivate: true,
+        },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  const restored = await store.findUser({ id: old._id });
+  assert.equal(restored.active, true);
+  assert.equal(restored._id, old._id);
+  assert.equal(restored.resourceId, old.resourceId);
+  assert.equal((await request("/data", undefined, target)).status, 401);
+  assert.equal(
+    (
+      await request("/auth/login", {
+        username: old.username,
+        password: "Record-access-test-only-284!",
+      })
+    ).status,
+    200,
+  );
+});
+
+test("permission revocation enforces admin, CSRF, protected root and optimistic revision", async (t) => {
+  const { store, admin, user, request, state } = await setup(t);
+  const normal = await user("normal-revoke", "normal");
+  const manager = await user("manager-revoke", "manager");
+  await user("root-admin");
+  await user("target-revoke");
+  const before = await state();
+  const old = await store.findUser({ id: "target-revoke" });
+  const input = { id: old._id, revision: old.revision };
+  for (const [auth, body, expected] of [
+    [{}, input, 401],
+    [normal, input, 403],
+    [manager, input, 403],
+    [{ ...admin, csrf: "wrong" }, input, 403],
+    [admin, { ...input, revision: 0 }, 409],
+    [admin, { ...input, unexpected: true }, 400],
+    [admin, { id: "missing", revision: 1 }, 404],
+    [admin, { id: "root-admin", revision: 1 }, 403],
+  ])
+    assert.equal((await request("/users/revoke", body, auth)).status, expected);
+  assert.deepEqual(await store.findUser({ id: old._id }), old);
+  assert.deepEqual(await state(), before);
+  const results = await Promise.all([
+    request("/users/revoke", input, admin),
+    request(
+      "/users",
+      { ...input, role: "manager", leaders: [], resourceId: "" },
+      admin,
+    ),
+  ]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+});
+
+test("self revocation commits without returning privileged snapshot; failed write rolls back", async (t) => {
+  const { store, admin, user, request, state } = await setup(t);
+  const self = await user("self-revoke");
+  const result = await request(
+    "/users/revoke",
+    { id: "self-revoke", revision: 1 },
+    self,
+  );
+  assert.equal(result.status, 401);
+  assert.equal(result.json.data, undefined);
+  assert.equal((await store.findUser({ id: "self-revoke" })).active, false);
+  await user("rollback-revoke");
+  const before = await state();
+  const old = await store.findUser({ id: "rollback-revoke" });
+  const original = store.revokeUser;
+  store.revokeUser = async () => {
+    throw new Error("Synthetic revoke failure");
+  };
+  t.after(() => {
+    store.revokeUser = original;
+  });
+  assert.equal(
+    (await request("/users/revoke", { id: old._id, revision: 1 }, admin))
+      .status,
+    500,
+  );
+  store.revokeUser = original;
+  assert.deepEqual(await store.findUser({ id: old._id }), old);
+  assert.deepEqual(await state(), before);
+});
+
+test("revoked AD identity cannot reprovision or login; regrant preserves GUID and audit history", async (t) => {
+  const password = "Synthetic-AD-regrant-only-729!";
+  const directory = syntheticDirectory(password);
+  const person = {
+    id: "b".repeat(32),
+    username: "synthetic.ad.regrant",
+    name: "Synthetic AD Regrant",
+    email: "regrant@example.test",
+  };
+  directory.add(person);
+  const { store, admin, request, state, write } = await setup(t, { directory });
+  const team = (await state()).data.teams.find((t) => t.lead);
+  await write([
+    {
+      kind: "resource",
+      id: "r-ad-regrant",
+      value: {
+        id: "r-ad-regrant",
+        name: "Synthetic employee",
+        note: "",
+        versions: [
+          {
+            team: team.id,
+            lead: team.lead,
+            effective: "2026-01",
+            start: "2026-01-01",
+            end: "",
+            status: "Aktif Çalışan",
+            included: true,
+            amount: 1,
+          },
+        ],
+      },
+    },
+  ]);
+  const input = {
+    directoryId: person.id,
+    role: "normal",
+    leaders: [team.lead],
+    resourceId: "r-ad-regrant",
+  };
+  assert.equal((await request("/users/create", input, admin)).status, 200);
+  const old = await store.findUser({ directoryId: person.id });
+  const login = () =>
+    request("/auth/login", { username: person.username, password });
+  assert.equal((await login()).status, 200);
+  assert.equal(
+    (
+      await request(
+        "/users/revoke",
+        { id: old._id, revision: old.revision },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await login()).status, 401);
+  assert.equal((await request("/users/create", input, admin)).status, 409);
+  const removed = await store.findUser({ id: old._id });
+  assert.equal(
+    (
+      await request(
+        "/users",
+        {
+          id: old._id,
+          revision: removed.revision,
+          role: "normal",
+          leaders: [team.lead],
+          resourceId: "r-ad-regrant",
+          reactivate: true,
+        },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  assert.equal((await login()).status, 200);
+  const restored = await store.findUser({ directoryId: person.id });
+  assert.equal(restored._id, old._id);
+  assert.equal(restored.authSource, "ldap");
+  const history = (await request("/audit?limit=100", undefined, admin)).json;
+  assert(JSON.stringify(history).includes(old._id));
+  assert(!JSON.stringify(history).includes(password));
+});
+
+test("leadership hierarchy persists, rejects cycles and protected deletion, renames links and restores backup", async (t) => {
+  const { store, request, admin, state } = await setup(t);
+  async function change(input) {
+    const current = await state();
+    return request(
+      "/leaders/change",
+      { ...input, catalogRevision: directoryRevision(current.data) },
+      admin,
+    );
+  }
+  for (const name of ["QA Root", "QA Child", "QA Grandchild"])
+    assert.equal((await change({ action: "create", name })).status, 200);
+  assert.equal(
+    (
+      await change({
+        action: "update",
+        name: "QA Child",
+        parentName: "QA Root",
+      })
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await change({
+        action: "update",
+        name: "QA Grandchild",
+        parentName: "QA Child",
+      })
+    ).status,
+    200,
+  );
+  const before = await state();
+  for (const input of [
+    { action: "update", name: "QA Root", parentName: "QA Grandchild" },
+    { action: "update", name: "QA Child", parentName: "QA Child" },
+    { action: "update", name: "QA Child", parentName: "Missing" },
+  ])
+    assert.equal((await change(input)).status, 400);
+  assert.deepEqual(await state(), before);
+  assert.equal(
+    (await change({ action: "delete", name: "QA Root" })).status,
+    409,
+  );
+  assert.equal(
+    (await change({ action: "update", name: "QA Root", newName: "QA Renamed" }))
+      .status,
+    200,
+  );
+  assert.equal((await state()).data.leaderParents["QA Child"], "QA Renamed");
+  assert.equal(
+    (await change({ action: "update", name: "QA Child", newName: "__proto__" }))
+      .status,
+    200,
+  );
+  assert.equal(
+    (await state()).data.leaderParents["QA Grandchild"],
+    "__proto__",
+  );
+  assert.equal((await state()).data.leaderParents["__proto__"], "QA Renamed");
+  const backup = await request("/backup", undefined, admin);
+  assert.equal(backup.status, 200);
+  assert.equal(
+    (await change({ action: "update", name: "QA Grandchild", parentName: "" }))
+      .status,
+    200,
+  );
+  const restore = await request(
+    "/restore",
+    { data: backup.json.data, generation: (await state()).generation },
+    admin,
+  );
+  assert.equal(restore.status, 200);
+  assert.equal(
+    (await state()).data.leaderParents["QA Grandchild"],
+    "__proto__",
+  );
+  const dbParents = JSON.parse(
+    (await store.db.query("SELECT leader_parents FROM kp_settings WHERE id=1"))
+      .rows[0].leader_parents,
+  );
+  assert.equal(dbParents["__proto__"], "QA Renamed");
+});
+
+test("activity API shares only current team's aggregate cells, manager descendants, and preserves private write scopes", async (t) => {
+  const { request, admin, user, state, write } = await setup(t);
+  const d = (await state()).data;
+  const teamA = d.teams.find((team) => team.lead),
+    teamB = d.teams.find((team) => team.lead && team.lead !== teamA.lead);
+  const sibling = d.teams.find(
+    (team) => team.id !== teamA.id && team.lead === teamA.lead,
+  );
+  const resources = [
+    ["activity-own", teamA],
+    ["activity-peer", teamA],
+    ["activity-manager", teamA],
+    ["activity-child", teamB],
+    ["activity-sibling", sibling],
+  ].map(([id, team]) => ({
+    id,
+    name: "Synthetic " + id,
+    note: "PRIVATE_ACTIVITY_HR",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: team.id,
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+      },
+    ],
+  }));
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "activity-project",
+          value: {
+            id: "activity-project",
+            name: "Synthetic",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        ...resources.map((value) => ({
+          kind: "resource",
+          id: value.id,
+          value,
+        })),
+        {
+          kind: "actual",
+          id: "activity-peer|activity-project|2026-01",
+          value: 0.5,
+        },
+        {
+          kind: "personDay",
+          id: "activity-peer|2026-01-05|leave",
+          value: { type: "leave", hours: 9, label: "PRIVATE_ACTIVITY_LEAVE" },
+        },
+      ])
+    ).status,
+    200,
+  );
+  const own = await user("activity-normal", "normal", "activity-own", [
+    teamB.lead,
+  ]);
+  const manager = await user("activity-leader", "manager", "activity-manager", [
+    teamB.lead,
+  ]);
+  const unmapped = await user("activity-unmapped", "manager", "", [teamA.lead]);
+  const url = "/activity-report?start=2026-01&count=12&projects=[]";
+  assert.equal((await request(url)).status, 401);
+  const report = await request(url, undefined, own);
+  assert.equal(report.status, 200);
+  assert.deepEqual(
+    new Set(report.json.rows.map((row) => row.resourceId)),
+    new Set(["activity-own", "activity-peer", "activity-manager"]),
+  );
+  assert(!JSON.stringify(report.json).includes("PRIVATE_ACTIVITY"));
+  assert.equal(
+    report.json.rows.find((row) => row.resourceId === "activity-peer").cells[0]
+      .projectFte,
+    0.5,
+  );
+  const privateView = await request("/data", undefined, own);
+  assert(
+    !Object.keys(privateView.json.data.actualAllocations).some((key) =>
+      key.startsWith("activity-peer|"),
+    ),
+  );
+  assert.equal(
+    (
+      await write(
+        [
+          {
+            kind: "actual",
+            id: "activity-peer|activity-project|2026-01",
+            value: 1,
+          },
+        ],
+        own,
+      )
+    ).status,
+    403,
+  );
+  assert.deepEqual((await request(url, undefined, unmapped)).json.rows, []);
+  const beforeHierarchy = await request(url, undefined, manager);
+  assert(
+    beforeHierarchy.json.rows.some(
+      (row) => row.resourceId === "activity-sibling",
+    ),
+  );
+  assert(
+    !beforeHierarchy.json.rows.some(
+      (row) => row.resourceId === "activity-child",
+    ),
+  );
+  const current = await state();
+  assert.equal(
+    (
+      await request(
+        "/leaders/change",
+        {
+          action: "update",
+          name: teamB.lead,
+          parentName: teamA.lead,
+          catalogRevision: directoryRevision(current.data),
+        },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  const afterHierarchy = await request(url, undefined, manager);
+  assert(
+    afterHierarchy.json.rows.some((row) => row.resourceId === "activity-child"),
+  );
+  const adminReport = await request(url, undefined, admin);
+  assert(adminReport.json.rows.length >= afterHierarchy.json.rows.length);
+  for (const suffix of [
+    "?start=bad&count=12",
+    "?start=2026-01&count=100000",
+    "?start=2026-01&count=12&projects=bad",
+    "?start=2026-01&count=12&leaders=all",
+  ])
+    assert.equal(
+      (await request("/activity-report" + suffix, undefined, own)).status,
+      400,
+    );
+});
+
+test("direct leadership resource planning is independent from team capacity and keeps FK, permission and revision guards", async (t) => {
+  const { request, admin, user, state, write, store } = await setup(t);
+  const { buildCapacityIndex, sumCapacityMetrics } =
+    await import("../shared/metrics.ts");
+  const d = (await state()).data,
+    team = d.teams.find((team) => team.lead && team.kind !== "leadership");
+  const unit = d.leadershipUnits[team.lead];
+  assert(unit);
+  assert.equal(d.teams.find((team) => team.id === unit).kind, "leadership");
+  const resource = (id, owner) => ({
+    id,
+    name: "Synthetic " + id,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: owner,
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+      },
+    ],
+  });
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "direct-project",
+          value: {
+            id: "direct-project",
+            name: "Synthetic direct project",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        {
+          kind: "resource",
+          id: "direct-leader",
+          value: resource("direct-leader", unit),
+        },
+        {
+          kind: "resource",
+          id: "direct-member",
+          value: resource("direct-member", team.id),
+        },
+        {
+          kind: "allocation",
+          id: unit + "|direct-project|2026-01",
+          value: 0.4,
+        },
+        {
+          kind: "allocation",
+          id: team.id + "|direct-project|2026-01",
+          value: 0.6,
+        },
+      ])
+    ).status,
+    200,
+  );
+  const current = (await state()).data;
+  const cache = buildCapacityIndex(current, ["2026-01"]);
+  assert.deepEqual(cache[unit + "|2026-01"], { current: 1, total: 0.4 });
+  assert.deepEqual(cache[team.id + "|2026-01"], { current: 1, total: 0.6 });
+  assert.deepEqual(sumCapacityMetrics(cache, [unit, team.id], "2026-01"), {
+    current: 2,
+    total: 1,
+  });
+  const normal = await user("direct-normal", "normal", "direct-member", [
+    team.lead,
+  ]);
+  const manager = await user("direct-manager", "manager", "direct-leader", [
+    team.lead,
+  ]);
+  assert.equal(
+    (
+      await write(
+        [
+          {
+            kind: "allocation",
+            id: unit + "|direct-project|2026-01",
+            value: 0.5,
+          },
+        ],
+        normal,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await write(
+        [
+          {
+            kind: "allocation",
+            id: unit + "|direct-project|2026-01",
+            value: 0.5,
+          },
+        ],
+        manager,
+      )
+    ).status,
+    200,
+  );
+  assert.equal(
+    (
+      await write([
+        { kind: "team", id: unit, operation: "delete", value: null },
+      ])
+    ).status,
+    403,
+  );
+  const catalog = await state();
+  assert.equal(
+    (
+      await request(
+        "/leaders/change",
+        {
+          action: "update",
+          name: team.lead,
+          newName: "QA Renamed Direct Leader",
+          catalogRevision: directoryRevision(catalog.data),
+        },
+        admin,
+      )
+    ).status,
+    200,
+  );
+  const renamed = (await state()).data;
+  assert.equal(renamed.leadershipUnits["QA Renamed Direct Leader"], unit);
+  assert.equal(
+    renamed.teams.find((team) => team.id === unit).name,
+    "QA Renamed Direct Leader",
+  );
+  assert.equal(renamed.allocations[unit + "|direct-project|2026-01"], 0.5);
+  const version = (await store.findUser({ id: "direct-manager" })).version;
+  assert(version >= 1);
+});
+
+test("Product Owner roles persist; concurrent claims commit one owner and expose a safe named conflict without extra audit writes", async (t) => {
+  const f = await setup(t),
+    data = (await f.state()).data,
+    team = data.teams.find((t) => t.lead && t.kind !== "leadership");
+  const value = (id) => ({
+    id,
+    name: "Synthetic PO " + id,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: team.id,
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: false,
+        amount: 1,
+        assignmentRole: "productOwner",
+      },
+    ],
+  });
+  const prior = await f.store.auditLog(await f.store.findUser({ id: "admin" }));
+  const claims = await Promise.all(
+    ["first", "second"].map((id) =>
+      f.request(
+        "/changes",
+        { changes: [{ kind: "resource", id, value: value(id), revision: 0 }] },
+        f.admin,
+      ),
+    ),
+  );
+  assert.deepEqual(claims.map((r) => r.status).sort(), [200, 400]);
+  const winner = claims
+    .find((r) => r.status === 200)
+    .json.data.resources.find((r) =>
+      r.versions.some((v) => v.assignmentRole === "productOwner"),
+    );
+  const denied = claims.find((r) => r.status === 400);
+  assert.equal(denied.json.code, "PRODUCT_OWNER_CONFLICT");
+  assert.equal(
+    denied.json.error,
+    `Bu birimde ${winner.name} kişisi Product Owner olarak atanmış durumdadır. Bu kişi Product Owner olarak atanamaz.`,
+  );
+  const saved = (await f.state()).data;
+  assert.equal(saved.resources.length, 1);
+  assert.equal(saved.resources[0].versions[0].assignmentRole, "productOwner");
+  const audit = await f.store.auditLog(await f.store.findUser({ id: "admin" }));
+  assert.equal(audit.total, prior.total + 1);
+  const normal = await f.user("normal", "normal");
+  assert.equal(
+    (
+      await f.write(
+        [
+          {
+            kind: "resource",
+            id: "unauthorized",
+            value: value("unauthorized"),
+          },
+        ],
+        normal,
+      )
+    ).status,
+    403,
+  );
+  await f.store.close();
+  await f.store.connect();
+  assert.deepEqual((await f.state()).data.resources, saved.resources);
+  const malformed = await f.write([
+    {
+      kind: "resource",
+      id: "bad",
+      value: {
+        ...value("bad"),
+        versions: [
+          {
+            ...value("bad").versions[0],
+            team: data.leadershipUnits[team.lead],
+          },
+        ],
+      },
+    },
+  ]);
+  assert.equal(malformed.status, 400);
+  assert.deepEqual((await f.state()).data.resources, saved.resources);
+});
+
+test("employee/account atomic save: authorization, rollback, linkage, revisions and sessions", async (t) => {
+  const directory = syntheticDirectory("Synthetic-AD-test-only-735!");
+  const person = {
+    id: "e".repeat(32),
+    username: "atomic.employee",
+    name: "Synthetic AD Employee",
+    email: "atomic@example.invalid",
+  };
+  directory.add(person);
+  const f = await setup(t, { directory }),
+    { store, admin, request, state, user } = f;
+  const team = (await state()).data.teams.find(
+    (t) => t.lead && t.kind !== "leadership",
+  );
+  const resource = (id, name = "Synthetic Employee") => ({
+    id,
+    name,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        team: team.id,
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: true,
+        start: "2026-01-01",
+        end: "",
+        amount: 1,
+        assignmentRole: "member",
+      },
+    ],
+  });
+  const create = (id, patch = {}) => ({
+    changes: [{ kind: "resource", id, value: resource(id), revision: 0 }],
+    permission: {
+      action: "create",
+      directoryId: person.id,
+      role: "normal",
+      leaders: [team.lead],
+      resourceId: id,
+      ...patch,
+    },
+  });
+  const send = (body, auth = admin) => request("/employees/save", body, auth);
+  const before = await state();
+  await t.test(
+    "only admin and valid CSRF can save; malformed or mismatched records leave no data",
+    async () => {
+      assert.equal((await send(create("atomic-a"), {})).status, 401);
+      for (const role of ["normal", "manager"])
+        assert.equal(
+          (await send(create("atomic-a"), await user("atomic-" + role, role)))
+            .status,
+          403,
+        );
+      assert.equal(
+        (await send(create("atomic-a"), { ...admin, csrf: "invalid" })).status,
+        403,
+      );
+      assert.equal(
+        (await send(create("atomic-a", { resourceId: "different" }))).status,
+        400,
+      );
+      const bad = create("atomic-a");
+      bad.changes.push({ kind: "project", id: "p", value: {}, revision: 0 });
+      assert.equal((await send(bad)).status, 400);
+      const adminRole = create("atomic-a", { role: "admin" });
+      assert.equal((await send(adminRole)).status, 400);
+      assert.equal((await state()).generation, before.generation);
+    },
+  );
+  let account;
+  await t.test(
+    "new employee FK and authoritative AD account commit together and appear in response",
+    async () => {
+      const saved = await send(create("atomic-a"));
+      assert.equal(saved.status, 200, JSON.stringify(saved.json));
+      account = saved.json.data.users.find((u) => u.directoryId === person.id);
+      assert.equal(account.resourceId, "atomic-a");
+      assert.equal(account.name, person.name);
+      assert(saved.json.data.resources.some((r) => r.id === "atomic-a"));
+      const stored = await store.findUser({ id: account.id });
+      assert.equal(stored.authSource, "ldap");
+      const audit = await store.auditLog(
+        await store.findUser({ id: "admin" }),
+        { offset: 0, limit: 10 },
+      );
+      assert(audit.entries.some((e) => JSON.stringify(e).includes("atomic-a")));
+    },
+  );
+  await t.test(
+    "directory duplicate/failure and stale resource revisions roll back employee changes",
+    async () => {
+      const snapshot = await state();
+      assert.equal((await send(create("atomic-duplicate"))).status, 409);
+      directory.setUnavailable(true);
+      assert.equal((await send(create("atomic-unavailable"))).status, 503);
+      directory.setUnavailable(false);
+      const stale = {
+        changes: [
+          {
+            kind: "resource",
+            id: "atomic-a",
+            value: resource("atomic-a", "Uncommitted"),
+            revision: 0,
+          },
+        ],
+        permission: {
+          action: "update",
+          id: account.id,
+          role: "manager",
+          resourceId: "atomic-a",
+          leaders: [team.lead],
+          revision: snapshot.data.revisions["user:" + account.id],
+        },
+      };
+      assert.equal((await send(stale)).status, 409);
+      assert.equal((await state()).generation, snapshot.generation);
+      assert.equal((await store.findUser({ id: account.id })).role, "normal");
+    },
+  );
+  await t.test(
+    "stale account revision after resource persistence rolls back the entire SQL transaction",
+    async () => {
+      const snapshot = await state();
+      const edit = {
+        changes: [
+          {
+            kind: "resource",
+            id: "atomic-a",
+            value: resource("atomic-a", "Must Roll Back"),
+            revision: snapshot.data.revisions["resource:atomic-a"],
+          },
+        ],
+        permission: {
+          action: "update",
+          id: account.id,
+          role: "manager",
+          resourceId: "atomic-a",
+          leaders: [team.lead],
+          revision: 0,
+        },
+      };
+      assert.equal((await send(edit)).status, 409);
+      const after = await state();
+      assert.equal(after.generation, snapshot.generation);
+      assert.equal(
+        after.data.resources.find((r) => r.id === "atomic-a").name,
+        "Synthetic Employee",
+      );
+    },
+  );
+  await t.test(
+    "failure during session revocation rolls back saved identity, employee and generation",
+    async () => {
+      const snapshot = await state(),
+        old = await store.findUser({ id: account.id });
+      const original = store.revokeUser;
+      store.revokeUser = async () => {
+        throw Error("Synthetic combined session revoke failure");
+      };
+      try {
+        const saved = await send({
+          changes: [
+            {
+              kind: "resource",
+              id: "atomic-a",
+              value: resource("atomic-a", "Rollback After Account"),
+              revision: snapshot.data.revisions["resource:atomic-a"],
+            },
+          ],
+          permission: {
+            action: "update",
+            id: account.id,
+            role: "manager",
+            leaders: [team.lead],
+            resourceId: "atomic-a",
+            revision: snapshot.data.revisions["user:" + account.id],
+          },
+        });
+        assert.equal(saved.status, 500);
+      } finally {
+        store.revokeUser = original;
+      }
+      assert.deepEqual(await state(), snapshot);
+      assert.deepEqual(await store.findUser({ id: account.id }), old);
+    },
+  );
+  await t.test(
+    "successful account change revokes prior sessions; revoke and regrant preserve employee",
+    async () => {
+      const login = await request("/auth/login", {
+        username: person.username,
+        password: "Synthetic-AD-test-only-735!",
+      });
+      assert.equal(login.status, 200);
+      const auth = {
+        cookie: login.response.headers.get("set-cookie").split(";")[0],
+        csrf: login.json.csrf,
+      };
+      async function update(permission, name = "Updated Employee") {
+        const snap = await state();
+        return send({
+          changes: [
+            {
+              kind: "resource",
+              id: "atomic-a",
+              value: resource("atomic-a", name),
+              revision: snap.data.revisions["resource:atomic-a"],
+            },
+          ],
+          permission: {
+            id: account.id,
+            revision: snap.data.revisions["user:" + account.id],
+            ...permission,
+          },
+        });
+      }
+      assert.equal(
+        (
+          await update({
+            action: "update",
+            role: "manager",
+            resourceId: "atomic-a",
+            leaders: [team.lead],
+          })
+        ).status,
+        200,
+      );
+      assert.equal((await request("/data", undefined, auth)).status, 401);
+      assert.equal((await update({ action: "revoke" })).status, 200);
+      assert.equal((await store.findUser({ id: account.id })).active, false);
+      assert((await state()).data.resources.some((r) => r.id === "atomic-a"));
+      assert.equal(
+        (
+          await update({
+            action: "update",
+            role: "normal",
+            resourceId: "atomic-a",
+            leaders: [team.lead],
+            reactivate: true,
+          })
+        ).status,
+        200,
+      );
+    },
+  );
+  await t.test(
+    "existing accounts cannot be stolen, admin accounts cannot be demoted here and concurrent linking has one winner",
+    async () => {
+      const snap = await state();
+      const steal = create("atomic-steal");
+      steal.permission = {
+        action: "update",
+        id: account.id,
+        revision: snap.data.revisions["user:" + account.id],
+        role: "normal",
+        leaders: [],
+        resourceId: "atomic-steal",
+      };
+      assert.equal((await send(steal)).status, 403);
+      steal.permission.id = "admin";
+      steal.permission.revision = 1;
+      assert.equal((await send(steal)).status, 403);
+      await user("atomic-unlinked", "normal");
+      const link = (id) => ({
+        changes: [{ kind: "resource", id, value: resource(id), revision: 0 }],
+        permission: {
+          action: "update",
+          id: "atomic-unlinked",
+          revision: 1,
+          role: "normal",
+          resourceId: id,
+          leaders: [team.lead],
+        },
+      });
+      const results = await Promise.all([
+        send(link("atomic-race-a")),
+        send(link("atomic-race-b")),
+      ]);
+      assert.deepEqual(results.map((r) => r.status).sort(), [200, 403]);
+      const final = (await state()).data;
+      assert.equal(
+        final.resources.filter((r) => r.id.startsWith("atomic-race-")).length,
+        1,
+      );
+    },
+  );
+});
+
+test("Leader roles persist; concurrent claims commit one owner and expose a safe named conflict without extra audit writes", async (t) => {
+  const f = await setup(t),
+    data = (await f.state()).data,
+    team = data.teams.find((t) => t.lead && t.kind !== "leadership");
+  const value = (id) => ({
+    id,
+    name: "Synthetic Leader " + id,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: data.leadershipUnits[team.lead],
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: false,
+        amount: 1,
+        assignmentRole: "leader",
+      },
+    ],
+  });
+  const prior = await f.store.auditLog(await f.store.findUser({ id: "admin" }));
+  const claims = await Promise.all(
+    ["first", "second"].map((id) =>
+      f.request(
+        "/changes",
+        { changes: [{ kind: "resource", id, value: value(id), revision: 0 }] },
+        f.admin,
+      ),
+    ),
+  );
+  assert.deepEqual(claims.map((r) => r.status).sort(), [200, 400]);
+  const winner = claims
+    .find((r) => r.status === 200)
+    .json.data.resources.find((r) =>
+      r.versions.some((v) => v.assignmentRole === "leader"),
+    );
+  const denied = claims.find((r) => r.status === 400);
+  assert.equal(denied.json.code, "LEADER_CONFLICT");
+  assert.equal(
+    denied.json.error,
+    `Bu liderlikte ${winner.name} kişisi Lider olarak atanmış durumdadır. Bu kişi Lider olarak atanamaz.`,
+  );
+  const saved = (await f.state()).data;
+  assert.equal(saved.resources.length, 1);
+  assert.equal(saved.resources[0].versions[0].assignmentRole, "leader");
+  const audit = await f.store.auditLog(await f.store.findUser({ id: "admin" }));
+  assert.equal(audit.total, prior.total + 1);
+  const normal = await f.user("normal", "normal");
+  assert.equal(
+    (
+      await f.write(
+        [
+          {
+            kind: "resource",
+            id: "unauthorized",
+            value: value("unauthorized"),
+          },
+        ],
+        normal,
+      )
+    ).status,
+    403,
+  );
+  await f.store.close();
+  await f.store.connect();
+  assert.deepEqual((await f.state()).data.resources, saved.resources);
+  const malformed = await f.write([
+    {
+      kind: "resource",
+      id: "bad",
+      value: {
+        ...value("bad"),
+        versions: [
+          {
+            ...value("bad").versions[0],
+            team: team.id,
+          },
+        ],
+      },
+    },
+  ]);
+  assert.equal(malformed.status, 400);
+  assert.deepEqual((await f.state()).data.resources, saved.resources);
+});
+
+test("leader conflict rolls back the combined AD employee/account save without creating an account", async (t) => {
+  const directory = syntheticDirectory("Leader-atomic-synthetic-only-492!");
+  const directoryId = "a".repeat(32);
+  directory.add({
+    id: directoryId,
+    username: "synthetic.leader",
+    name: "Synthetic New Leader",
+    email: "leader@example.invalid",
+  });
+  const f = await setup(t, { directory });
+  const data = (await f.state()).data,
+    team = data.teams.find((t) => t.lead && t.kind !== "leadership");
+  const value = (id) => ({
+    id,
+    name: "Synthetic " + id,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        team: data.leadershipUnits[team.lead],
+        lead: team.lead,
+        assignmentRole: "leader",
+        status: "Aktif Çalışan",
+        included: false,
+        start: "2026-01-01",
+        end: "",
+        amount: 1,
+      },
+    ],
+  });
+  assert.equal(
+    (
+      await f.write([
+        { kind: "resource", id: "existing", value: value("existing") },
+      ])
+    ).status,
+    200,
+  );
+  const before = await f.state(),
+    audit = await f.store.auditLog(await f.store.findUser({ id: "admin" }));
+  const denied = await f.request(
+    "/employees/save",
+    {
+      changes: [
+        {
+          kind: "resource",
+          id: "candidate",
+          revision: 0,
+          value: value("candidate"),
+        },
+      ],
+      permission: {
+        action: "create",
+        directoryId,
+        role: "manager",
+        resourceId: "candidate",
+        leaders: [team.lead],
+      },
+    },
+    f.admin,
+  );
+  assert.equal(denied.status, 400);
+  assert.equal(denied.json.code, "LEADER_CONFLICT");
+  assert.match(denied.json.error, /Synthetic existing/);
+  assert.deepEqual(await f.state(), before);
+  assert.equal(await f.store.findUser({ directoryId }), null);
+  assert.equal(
+    (await f.store.auditLog(await f.store.findUser({ id: "admin" }))).total,
+    audit.total,
+  );
+});
+
+test("actual peer read endpoint is authenticated, sanitized and never widens write authorization", async (t) => {
+  const { request, user, state, write } = await setup(t);
+  const d = (await state()).data;
+  const team = d.teams.find((t) => t.lead);
+  const other = d.teams.find((t) => t.lead && t.lead !== team.lead);
+  const resources = [
+    ["actual-own", team],
+    ["actual-peer", team],
+    ["actual-other", other],
+  ].map(([id, team]) => ({
+    id,
+    name: id,
+    note: "PRIVATE_HR",
+    code: "PRIVATE_CODE",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: team.id,
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+        assignmentRole: id === "actual-peer" ? "productOwner" : "member",
+      },
+    ],
+  }));
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "actual-p",
+          value: {
+            id: "actual-p",
+            name: "Synthetic",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        ...resources.map((value) => ({
+          kind: "resource",
+          id: value.id,
+          value,
+        })),
+        { kind: "actual", id: "actual-peer|actual-p|2026-09", value: 0.25 },
+        {
+          kind: "personDay",
+          id: "actual-peer|2026-09-01|training",
+          value: { type: "training", hours: 9, label: "PRIVATE_TRAINING" },
+        },
+      ])
+    ).status,
+    200,
+  );
+  const auth = await user("actual-member", "normal", "actual-own", [
+    other.lead,
+  ]);
+  const url = "/actual-view?start=2026-09&count=3";
+  assert.equal((await request(url)).status, 401);
+  for (const suffix of [
+    "?start=bad&count=3",
+    "?start=2026-01&count=61",
+    "?start=2026-09&count=3&leaders=all",
+  ])
+    assert.equal(
+      (await request("/actual-view" + suffix, undefined, auth)).status,
+      400,
+    );
+  const result = await request(url, undefined, auth);
+  assert.equal(result.status, 200);
+  assert.match(result.response.headers.get("cache-control"), /no-store/);
+  assert(result.json.data.resources.some((r) => r.id === "actual-peer"));
+  assert(!result.json.data.resources.some((r) => r.id === "actual-other"));
+  assert.equal(
+    result.json.data.actualAllocations["actual-peer|actual-p|2026-09"],
+    0.25,
+  );
+  assert.equal(
+    result.json.monthSummaries["actual-peer|2026-09"].trainingHours,
+    9,
+  );
+  assert(!JSON.stringify(result.json).includes("PRIVATE_"));
+  assert.equal(
+    (await request("/data", undefined, auth)).json.data.actualAllocations[
+      "actual-peer|actual-p|2026-09"
+    ],
+    undefined,
+  );
+  assert.equal(
+    (
+      await write(
+        [{ kind: "actual", id: "actual-peer|actual-p|2026-09", value: 0.3 }],
+        auth,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await write(
+        [{ kind: "workedHours", id: "actual-peer|2026-09", value: 100 }],
+        auth,
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await write(
+        [{ kind: "actual", id: "actual-own|actual-p|2026-09", value: 0.1 }],
+        auth,
+      )
+    ).status,
+    200,
+  );
+});
+
+test("manager planning visibility is global, inherited write grants stay narrow and atomic", async (t) => {
+  const { store, state, user, request, write } = await setup(t);
+  const admin = await store.findUser({ id: "admin" });
+  const initial = (await state()).data;
+  const root = initial.teams.find((t) => t.lead).lead;
+  const outsider = initial.teams.find((t) => t.lead && t.lead !== root);
+  for (const [name, parentName] of [
+    ["Planning Child", root],
+    ["Planning Grandchild", "Planning Child"],
+  ]) {
+    await store.mutate(admin, (d, u, c, g) =>
+      applyLeaderChange(
+        d,
+        u,
+        {
+          action: "create",
+          name,
+          parentName,
+          catalogRevision: directoryRevision(d),
+        },
+        c,
+        g,
+      ),
+    );
+  }
+  const team = {
+    id: "planning-child-team",
+    name: "Synthetic Child Team",
+    lead: "Planning Grandchild",
+    excelCapacity: 0,
+  };
+  await store.mutate(admin, (d) => {
+    d.teams.push(team);
+    return d;
+  });
+  const manager = await user("planning-manager", "manager", "", [root]);
+  const unassigned = await user("planning-no-grant", "manager");
+  const normal = await user("planning-normal", "normal", "", [root]);
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "planning-p",
+          value: {
+            id: "planning-p",
+            name: "Synthetic Plan",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+            milestones: [],
+          },
+        },
+      ])
+    ).status,
+    200,
+  );
+  const full = (await state()).data;
+  const owners = [
+    full.leadershipUnits[root],
+    full.leadershipUnits["Planning Child"],
+    full.leadershipUnits["Planning Grandchild"],
+    team.id,
+  ];
+  const key = (id) => id + "|planning-p|2026-01";
+  assert.equal(
+    (await write([{ kind: "allocation", id: key(outsider.id), value: 0.75 }]))
+      .status,
+    200,
+  );
+  for (const auth of [manager, unassigned]) {
+    const view = (await request("/data", undefined, auth)).json.data;
+    assert.deepEqual(
+      view.teams.map((t) => t.id).sort(),
+      (await state()).data.teams.map((t) => t.id).sort(),
+    );
+    assert.equal(view.allocations[key(outsider.id)], 0.75);
+    assert.equal(view.revisions["allocation:" + key(outsider.id)], 1);
+  }
+  // Every one-cell call runs narrow SQL preflight followed by full validation.
+  for (const owner of owners) {
+    const saved = await write(
+      [{ kind: "allocation", id: key(owner), value: 0.5 }],
+      manager,
+    );
+    assert.equal(saved.status, 200, owner);
+    assert.equal(saved.json.data.allocations[key(owner)], 0.5);
+  }
+  const before = await state();
+  for (const [auth, owner] of [
+    [manager, outsider.id],
+    [unassigned, team.id],
+    [normal, team.id],
+  ])
+    assert.equal(
+      (await write([{ kind: "allocation", id: key(owner), value: 1 }], auth))
+        .status,
+      403,
+    );
+  assert.equal(
+    (
+      await write(
+        [
+          { kind: "allocation", id: key(team.id), value: 1 },
+          { kind: "allocation", id: key(outsider.id), value: 1 },
+        ],
+        manager,
+      )
+    ).status,
+    403,
+  );
+  assert.deepEqual(await state(), before);
+  const changes = owners.map((id) => ({
+    kind: "allocation",
+    id: key(id),
+    value: 0.6,
+    revision: 1,
+  }));
+  const saved = await request(
+    "/changes",
+    {
+      changes,
+      responseMode: "planning-delta-v1",
+      baseGeneration: before.generation,
+    },
+    manager,
+  );
+  assert.equal(saved.status, 200);
+  assert.equal(saved.json.responseMode, "planning-delta-v1");
+  assert.equal(saved.json.allocations.length, owners.length);
+  assert(
+    saved.json.allocations.every((a) => a.value === 0.6 && a.revision === 2),
+  );
+  assert.equal(
+    (await request("/changes", { changes: [changes[0]] }, manager)).status,
+    409,
+  );
+  const deleted = await write(
+    [{ kind: "allocation", id: key(team.id), operation: "delete" }],
+    manager,
+  );
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.json.data.allocations[key(team.id)], undefined);
+  assert.equal(deleted.json.data.revisions["allocation:" + key(team.id)], 3);
 });

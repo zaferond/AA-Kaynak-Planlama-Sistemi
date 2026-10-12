@@ -148,17 +148,52 @@ test("report months retain order, all-project metrics and shortage classes inclu
     { remaining: -0.5, status: "over-critical" },
   ]);
 });
-test("report managers distinguish leader and team owners; missing and inherited names use the existing fallback", () => {
+test("report managers derive only current employee responsibilities, never legacy manager names", (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-10-12T09:00:00Z"),
+  });
   const data = fixture();
   assert.deepEqual(
     rows(data).map((g) => g.manager),
-    ["Synthetic leader", "—"],
+    ["—", "—"],
   );
   assert.deepEqual(
     rows(data, "2026-01", zeroMetric, true).map((g) => g.manager),
-    ["Synthetic team", "—"],
+    ["—", "—"],
   );
-  data.leaderManagers = Object.create({ A: "Inherited owner" });
+  data.teams.push({
+    id: "leader-unit",
+    name: "A",
+    lead: "A",
+    kind: "leadership",
+  });
+  data.resources.push({
+    id: "leader",
+    name: "Assigned Leader",
+    note: "",
+    versions: [
+      v({ team: "leader-unit", assignmentRole: "leader", included: false }),
+    ],
+  });
+  data.resources[0].versions[0].assignmentRole = "productOwner";
+  assert.equal(rows(data)[0].manager, "Assigned Leader");
+  assert.equal(rows(data, "2026-01", zeroMetric, true)[0].manager, "Active");
+  const direct = buildResourceReportGroups(
+    data,
+    data.teams,
+    [{ name: "A", ids: ["leader-unit"] }],
+    "2026-01",
+    [],
+    zeroMetric,
+    true,
+  );
+  assert.equal(direct[0].manager, "Assigned Leader");
+  data.resources[0].versions.push(
+    v({ effective: "2026-10", assignmentRole: "member" }),
+  );
+  assert.equal(rows(data, "2026-01", zeroMetric, true)[0].manager, "—");
+  data.resources.at(-1).versions[0].end = "2026-10-11";
   assert.equal(rows(data)[0].manager, "—");
   assert.deepEqual(
     buildResourceReportGroups(
@@ -173,7 +208,35 @@ test("report managers distinguish leader and team owners; missing and inherited 
     [],
   );
 });
-test("a manager's scoped snapshot only supplies that leadership's personnel and groups", () => {
+test("root leadership does not borrow its child's leader or legacy manager", (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-10-12T09:00:00Z"),
+  });
+  const data = fixture();
+  data.leaderParents = { B: "A" };
+  data.teams.push({
+    id: "child-unit",
+    name: "B",
+    lead: "B",
+    kind: "leadership",
+  });
+  data.resources.push({
+    id: "child",
+    name: "Child Leader",
+    note: "",
+    versions: [v({ team: "child-unit", lead: "B", assignmentRole: "leader" })],
+  });
+  assert.equal(rows(data)[0].manager, "—");
+  assert.equal(rows(data)[1].manager, "Child Leader");
+  const scoped = scopeData(data, {
+    role: "manager",
+    leaders: ["A"],
+    resourceId: "",
+  });
+  assert.equal(rows(scoped)[0].manager, "—");
+});
+test("a manager sees all planning groups with personnel identities still scoped", () => {
   const full = fixture(),
     user = {
       id: "m",
@@ -199,10 +262,10 @@ test("a manager's scoped snapshot only supplies that leadership's personnel and 
   );
   assert.deepEqual(
     result.map((r) => r.name),
-    ["Team A"],
+    ["Team A", "Team B"],
   );
   assert.equal(result[0].personnel, 4);
-  assert(!data.teams.some((t) => t.id === "b"));
+  assert(data.teams.some((t) => t.id === "b"));
 });
 test("resource report filter text preserves all/selection counts without mutating filters", () => {
   const leads = ["A", "B"],
@@ -217,4 +280,42 @@ test("resource report filter text preserves all/selection counts without mutatin
     "Liderlik: 2 seçili · Takım: 1 seçili",
   );
   assert.deepEqual({ leads, teams }, before);
+});
+
+test("independent units derive the Product Owner from employees in the Excel payload", (t) => {
+  t.mock.timers.enable({
+    apis: ["Date"],
+    now: new Date("2026-10-12T09:00:00Z"),
+  });
+  const d = fixture();
+  d.teams.push({
+    id: "po",
+    name: "Standalone PO",
+    lead: "",
+    managerName: "Synthetic PO",
+  });
+  d.resources.push({
+    id: "po-worker",
+    name: "Standalone worker",
+    note: "",
+    versions: [v({ team: "po", lead: "", assignmentRole: "productOwner" })],
+  });
+  const result = buildResourceReportGroups(
+    d,
+    d.teams,
+    [
+      { name: "Standalone PO", unitId: "po", ids: ["po"] },
+      { name: "Same name", unitId: "missing", ids: ["missing"] },
+    ],
+    "2026-01",
+    ["2026-01"],
+    (ids) => (ids[0] === "po" ? { current: 1, total: 0.25 } : zeroMetric()),
+    false,
+  );
+  assert.equal(result[0].manager, "Standalone worker");
+  assert.equal(result[0].personnel, 1);
+  assert.deepEqual(result[0].months, [
+    { remaining: 0.75, status: "within-capacity" },
+  ]);
+  assert.equal(result[1].manager, "—");
 });

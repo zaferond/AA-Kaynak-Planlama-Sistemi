@@ -1,3 +1,4 @@
+import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
 import path from "node:path";
 import { applyChanges } from "../../backend/operations.mjs";
@@ -6,9 +7,7 @@ import { workbook, download, zipEntries, validateXml } from "./files.mjs";
 export async function checkImportRestore(f) {
   const { page } = await f.client("root-admin");
   try {
-    await page
-      .getByRole("tab", { name: "Çalışan & Kaynak", exact: true })
-      .click();
+    await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
     await page
       .getByRole("button", { name: "Excel İçe Aktar", exact: true })
       .click();

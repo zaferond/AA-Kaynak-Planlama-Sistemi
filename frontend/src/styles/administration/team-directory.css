@@ -65,7 +65,7 @@
   max-width: 320px;
 }
 .team-directory .directory-team td:first-child {
-  padding-left: 22px !important;
+  padding-left: calc(22px + var(--directory-indent, 0px)) !important;
 }
 .team-directory .directory-actions {
   display: flex;
@@ -86,13 +86,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .team-directory .directory-management-actions {
   display: inline-flex;
   flex: none;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 .team-directory .directory-management-actions .button {
   white-space: nowrap;
@@ -173,6 +173,7 @@
   width: 100%;
 }
 .directory-manager-records {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -296,4 +297,98 @@
   .directory-manager-records {
     max-height: 180px;
   }
+}
+
+:is(.directory-employees, .directory-teams) {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #cdd7c8;
+}
+:is(.directory-employees-heading, .directory-teams-heading) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+:is(.directory-employees-heading, .directory-teams-heading) span,
+:is(.directory-employees, .directory-teams) p {
+  font-size: 11px;
+  color: #5d6b58;
+}
+:is(.directory-employees, .directory-teams) ul {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 210px;
+  overflow: auto;
+  border: 1px solid #d9e1d5;
+  border-radius: 6px;
+  background: #f6f8f3;
+}
+:is(.directory-employees, .directory-teams) li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 10px;
+  border-bottom: 1px solid #e0e6dc;
+  overflow-wrap: anywhere;
+}
+:is(.directory-employees, .directory-teams) li:last-child {
+  border-bottom: none;
+}
+:is(.directory-employees, .directory-teams) li strong {
+  font-size: 12px;
+}
+:is(.directory-employees, .directory-teams) li small {
+  font-size: 10px;
+  color: #65735f;
+}
+
+.team-directory .directory-child-leadership td {
+  background: #f5f7f1;
+  border-top: 1px solid #d7dfce;
+  color: #405334;
+}
+.directory-indent {
+  display: inline-block;
+  overflow-wrap: anywhere;
+}
+
+.team-directory .directory-group.directory-child-leadership td {
+  background: #eaf0e2;
+  border-top: 1px solid #c8d4bb;
+  border-bottom: 1px solid #c8d4bb;
+}
+.team-directory .directory-team.directory-nested-team td {
+  background: #f7f9f3;
+}
+.team-directory .directory-team.directory-nested-team td:nth-child(2) {
+  box-shadow: inset 2px 0 #cbd8bd;
+}
+
+.directory-manager-details input.directory-derived-manager[readonly] {
+  background: #edf1e7;
+  border-color: #d2dbc8;
+  color: #526447;
+  cursor: default;
+}
+
+.directory-linked-name {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.directory-linked-type {
+  flex-shrink: 0;
+  padding: 2px 6px;
+  border: 1px solid #d1dbc8;
+  border-radius: 4px;
+  color: #53644a;
+  background: #edf2e6;
+  font-size: 9px;
+  line-height: 1.3;
+}
+.directory-teams li[data-directory-kind="leader"] {
+  background: #eaf0e2;
 }

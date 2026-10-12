@@ -6,6 +6,8 @@ const fields = [
   ["legacy_archive", "legacyArchive", "null"],
   ["calendar_days", "workCalendar", "{}"],
   ["person_calendar", "personCalendar", "{}"],
+  ["leader_parents", "leaderParents", "{}"],
+  ["leadership_units", "leadershipUnits", "{}"],
 ];
 
 export function prepareMutationSettings(

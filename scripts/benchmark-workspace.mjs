@@ -82,9 +82,7 @@ try {
       })
       .waitFor();
     // One synthetic team keeps planned data representative and ensures all projects are reachable.
-    await page
-      .getByRole("button", { name: "Takım / Birim", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Takım", exact: true }).click();
     const panel = page.locator('.pickerpanel[data-state="open"]');
     await panel
       .getByRole("button", { name: "Seçimleri Kaldır", exact: true })

@@ -1,3 +1,4 @@
+import { selectedLeadershipScope } from "./leadership-planning.ts";
 import type { Data, Version } from "./model.ts";
 import { resourceMonthFraction } from "./resource-dates.ts";
 
@@ -28,7 +29,7 @@ export function buildHeadcountTrend(
   asOfMonth = localMonth(),
 ): HeadcountPoint[] {
   const selectedTeams = new Set(teamIds),
-    selectedLeads = new Set(leads);
+    selectedLeads = selectedLeadershipScope(data, leads, true);
   const teamLeads = new Map(data.teams.map((team) => [team.id, team.lead]));
   const resources = data.resources.map((resource) => ({
     versions: [...resource.versions].sort((a, b) =>

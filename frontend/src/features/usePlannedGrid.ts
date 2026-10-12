@@ -7,7 +7,7 @@ import {
   type RefObject,
   type SetStateAction,
 } from "react";
-import type { Principal } from "../access";
+import { allowedPlanningTeam, type Principal } from "../access";
 import type { Data } from "../model";
 import {
   copyPlanCells,
@@ -147,7 +147,9 @@ export function usePlannedGrid({
       !saving &&
       !readOnlyAllLeaders &&
       !!team &&
-      (!!isAdmin || !!user?.leaders.includes(team.lead)) &&
+      !!data &&
+      !!user &&
+      allowedPlanningTeam(data, user, team.id) &&
       planCellAvailable(key)
     );
   }

@@ -10,8 +10,13 @@ export const permissionInput = z
     leaders: z.array(z.string()).max(100),
     resourceId: z.string().max(120).default(""),
     revision: z.number().int().nonnegative(),
+    reactivate: z.boolean().optional(),
   })
   .strict();
+export const revokePermissionInput = permissionInput.pick({
+  id: true,
+  revision: true,
+});
 export const accountInput = z
   .object({
     directoryId: z.string().regex(/^[a-f0-9]{32}$/),
@@ -49,13 +54,41 @@ export async function updatePermissions(store, d, u, session, input) {
   if (!old) fail(404, "Kullanıcı bulunamadı.");
   if (old.revision !== input.revision)
     fail(409, "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.");
+  if (!old.active && !input.reactivate)
+    fail(
+      409,
+      "Yetki kaldırılmış. Yeniden yetki vermek için hesabı tekrar seçin.",
+    );
   const { resourceId } = await checkScope(d, session, input, input.id);
   await store.saveUser(
     {
       ...old,
+      active: input.reactivate ? true : old.active,
       role: input.role,
       leaders: input.role === "admin" ? [] : input.leaders,
       resourceId,
+      revision: old.revision + 1,
+      version: old.version + 1,
+    },
+    session,
+  );
+  await store.revokeUser(input.id, session);
+}
+
+export async function revokePermissions(store, u, session, input) {
+  admin(u);
+  if (input.id === ROOT_ADMIN_ID)
+    fail(403, "Ana yönetici yetkileri kaldırılamaz.");
+  const old = await store.findUser({ id: input.id }, session);
+  if (!old) fail(404, "Kullanıcı bulunamadı.");
+  if (old.revision !== input.revision || !old.active)
+    fail(409, "Yetkiler başka kullanıcı tarafından değiştirildi. Yenileyin.");
+  await store.saveUser(
+    {
+      ...old,
+      active: false,
+      leaders: [],
+      resourceId: "",
       revision: old.revision + 1,
       version: old.version + 1,
     },

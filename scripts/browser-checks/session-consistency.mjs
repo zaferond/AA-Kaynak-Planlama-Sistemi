@@ -55,7 +55,10 @@ export async function checkSessionConsistency(f) {
     if (id !== "root-admin") {
       assert.equal(
         await page
-          .getByRole("tab", { name: "Yetki Kontrol Ekranı", exact: true })
+          .getByRole("tab", {
+            name: "Organizasyon & Çalışan & Yetki",
+            exact: true,
+          })
           .count(),
         0,
       );

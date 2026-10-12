@@ -1,3 +1,13 @@
+import {
+  resourceRole,
+  resourceRoleLabels,
+} from "../../../shared/resource-roles";
+import { ROOT_ADMIN_ID } from "../access";
+import type { AccessControls } from "./access/access-controls";
+import {
+  employeeAccountRows,
+  accountRoleLabels,
+} from "./access/employee-account-rows";
 import type { Dispatch, SetStateAction } from "react";
 import { Info, Plus } from "lucide-react";
 import {
@@ -9,13 +19,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Data, Resource } from "../model";
-import { fold, versionAt } from "../model";
+import { versionAt } from "../model";
 import { fullDateLabel } from "../format";
 import Pager from "../Pager";
 import ResourceImportPanel from "../ResourceImportPanel";
-import { TAB_LABELS } from "../settings";
 
 type Props = {
+  access: AccessControls;
   data: Data;
   start: string;
   ids: string[];
@@ -36,6 +46,7 @@ type Props = {
   onImported: (data: Data, message: string) => void;
 };
 export default function ResourcesPanel({
+  access,
   data,
   start,
   ids,
@@ -55,32 +66,37 @@ export default function ResourcesPanel({
   onDelete: deleteResources,
   onImported,
 }: Props) {
-  const visibleResources = data.resources.filter((r) => {
-    const v = versionAt(r, start) || r.versions[0];
-    return (
-      (ids.includes(v.team) || (!v.team && !teamIds.length)) &&
-      (!leads.length ||
-        leads.includes(
-          v.lead || data.teams.find((t) => t.id === v.team)?.lead || "",
-        )) &&
-      fold(r.name + " " + v.status + " " + (v.lead || "")).includes(
-        fold(search),
-      )
-    );
+  const rows = employeeAccountRows(data, {
+    start,
+    ids,
+    teamIds,
+    leads,
+    search,
   });
+  const visibleResources = [
+    ...new Map(
+      rows.flatMap((row) =>
+        row.resource ? [[row.resource.id, row.resource] as const] : [],
+      ),
+    ).values(),
+  ];
+  const busy = saving || access.busy;
   const effectiveResourcePage = Math.min(
     resourcePage,
-    Math.max(0, Math.ceil(visibleResources.length / 50) - 1),
+    Math.max(0, Math.ceil(rows.length / 50) - 1),
   );
   return (
-    <section className="panel">
+    <section className="panel employee-access-panel">
       <div className="panelhead">
         <div>
-          <h2>{TAB_LABELS.resources}</h2>
+          <h2>Çalışan & Yetki Tanımlama</h2>
+          <span className="employee-access-count">
+            {data.resources.length} kaynak · {data.users?.length || 0} hesap
+          </span>
         </div>
         <div className="actions resource-toolbar">
           <input
-            placeholder="İsim, statü veya liderlik ara…"
+            placeholder="Çalışan, kullanıcı adı, statü veya liderlik ara…"
             aria-label="Kaynak ara"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -88,9 +104,16 @@ export default function ResourcesPanel({
           <button className="button" onClick={() => setShowImport((v) => !v)}>
             Excel İçe Aktar
           </button>
-          <button className="button primary" onClick={() => openResource()}>
+          <button className="button" disabled={busy} onClick={access.onAudit}>
+            Değişiklik Geçmişi
+          </button>
+          <button
+            className="button primary"
+            disabled={busy}
+            onClick={() => openResource()}
+          >
             <Plus size={17} />
-            Kaynak Ekle
+            Kaynak Ekle / Yetki Tanımla
           </button>
         </div>
       </div>
@@ -138,14 +161,14 @@ export default function ResourcesPanel({
         <span>{resourceIds.length} kayıt seçildi</span>
         <button
           className="button primary"
-          disabled={saving || !resourceIds.length}
+          disabled={busy || !resourceIds.length}
           onClick={openBulk}
         >
           Seçilenleri Toplu Düzenle
         </button>
         <button
           className="button deletebutton"
-          disabled={saving || !resourceIds.length}
+          disabled={busy || !resourceIds.length}
           onClick={() => deleteResources(resourceIds)}
         >
           Seçilenleri Sil
@@ -154,107 +177,243 @@ export default function ResourcesPanel({
           Seçimi Temizle
         </button>
       </div>
-      <Table className="resource-table">
-        <TableHeader>
-          <TableRow>
-            {[
-              "Seç",
-              "Ad Soyad",
-              "Liderlik",
-              "Takım",
-              "Statü",
-              "Dahil",
-              "İşbaşı Tarihi",
-              "İşten Ayrılış Tarihi",
-              "",
-            ].map((h, i) => (
-              <TableHead key={i}>{h}</TableHead>
+      {access.notice && (
+        <p className="access-notice employee-access-message" role="status">
+          {access.notice}
+        </p>
+      )}
+      {access.error && (
+        <p className="negative employee-access-message" role="alert">
+          {access.error}
+        </p>
+      )}
+      <div className="employee-access-table-wrap accesstable">
+        <Table className="resource-table employee-access-table">
+          <colgroup>
+            {[3, 12, 11, 10, 8, 4, 7, 7, 10, 8, 9, 11].map((width, index) => (
+              <col key={index} style={{ width: width + "%" }} />
             ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {visibleResources
-            .slice(effectiveResourcePage * 50, (effectiveResourcePage + 1) * 50)
-            .map((r) => {
-              const v = versionAt(r, start) || r.versions[0];
-              return (
-                <TableRow key={r.id}>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      aria-label={r.name + " seç"}
-                      checked={resourceIds.includes(r.id)}
-                      onChange={(e) =>
-                        setResourceIds((old) =>
-                          e.target.checked
-                            ? [...old, r.id]
-                            : old.filter((id) => id !== r.id),
-                        )
-                      }
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <strong>{r.name}</strong>
-                    {!versionAt(r, start) && (
-                      <small className="subline">
-                        İlk kayıt ayı: {v.effective}
-                      </small>
-                    )}
-                  </TableCell>
-                  <TableCell className="resourceteam">
-                    {v.lead ||
-                      data.teams.find((t) => t.id === v.team)?.lead ||
-                      "Eşleştirilmemiş"}
-                  </TableCell>
-                  <TableCell className="resourceteam">
-                    {data.teams.find((t) => t.id === v.team)?.name ||
-                      "Takım ataması bekliyor"}
-                  </TableCell>
-                  <TableCell>
-                    <span
-                      className={
-                        "badge " + (v.status.includes("İlan") ? "amber" : "")
-                      }
-                    >
-                      {v.status}
-                    </span>
-                  </TableCell>
-                  <TableCell>{v.included ? "Evet" : "Hayır"}</TableCell>
-                  <TableCell>{fullDateLabel(v.start)}</TableCell>
-                  <TableCell>{fullDateLabel(v.end)}</TableCell>
-                  <TableCell>
-                    <div className="resourceactions">
-                      <button
-                        className="textbutton"
-                        disabled={saving}
-                        onClick={() => openResource(r)}
-                      >
-                        Düzenle
-                      </button>
-                      <button
-                        className="textbutton deletebutton"
-                        disabled={saving}
-                        aria-label={r.name + " kaydını sil"}
-                        onClick={() => deleteResources([r.id])}
-                      >
-                        Sil
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-        </TableBody>
-      </Table>
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              {[
+                "Seç",
+                "Ad Soyad",
+                "Liderlik",
+                "Takım",
+                "Statü",
+                "Dahil",
+                "İşbaşı Tarihi",
+                "İşten Ayrılış Tarihi",
+                "Hesap",
+                "Rol / Yetki",
+                "Yetki Kapsamı",
+                "İşlemler",
+              ].map((h) => (
+                <TableHead key={h}>{h}</TableHead>
+              ))}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows
+              .slice(
+                effectiveResourcePage * 50,
+                (effectiveResourcePage + 1) * 50,
+              )
+              .map(({ key, resource: r, account }) => {
+                const v = r && (versionAt(r, start) || r.versions[0]);
+                const root = account?.id === ROOT_ADMIN_ID;
+                return (
+                  <TableRow
+                    key={key}
+                    data-resource-id={r?.id}
+                    data-account-id={account?.id}
+                    className={
+                      (root
+                        ? "system-account-row "
+                        : !r
+                          ? "account-only-row "
+                          : "") +
+                      (account && account.id === access.selectedId
+                        ? "access-selected-row"
+                        : "")
+                    }
+                  >
+                    <TableCell>
+                      {r ? (
+                        <input
+                          type="checkbox"
+                          aria-label={r.name + " seç"}
+                          checked={resourceIds.includes(r.id)}
+                          onChange={(e) =>
+                            setResourceIds((old) =>
+                              e.target.checked
+                                ? [...new Set([...old, r.id])]
+                                : old.filter((id) => id !== r.id),
+                            )
+                          }
+                        />
+                      ) : (
+                        <span aria-label="Kaynak kaydı olmayan hesap">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <strong>{r?.name || account?.name}</strong>
+                      {root ? (
+                        <small className="subline">
+                          Ana yönetici · Korumalı hesap
+                        </small>
+                      ) : r && v ? (
+                        <small className="subline">
+                          {resourceRoleLabels[resourceRole(data, v)]}
+                        </small>
+                      ) : (
+                        <small className="subline">
+                          Çalışan kaydı eşleştirilmedi
+                        </small>
+                      )}
+                      {r && v && !versionAt(r, start) && (
+                        <small className="subline">
+                          İlk kayıt ayı: {v.effective}
+                        </small>
+                      )}
+                    </TableCell>
+                    <TableCell className="resourceteam">
+                      {v
+                        ? v.lead ||
+                          data.teams.find((t) => t.id === v.team)?.lead ||
+                          "Eşleştirilmemiş"
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="resourceteam">
+                      {v
+                        ? data.teams.find((t) => t.id === v.team)?.name ||
+                          "Takım ataması bekliyor"
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      {v ? (
+                        <span
+                          className={
+                            "badge " +
+                            (v.status.includes("İlan") ? "amber" : "")
+                          }
+                        >
+                          {v.status}
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {v ? (v.included ? "Evet" : "Hayır") : "—"}
+                    </TableCell>
+                    <TableCell>{v ? fullDateLabel(v.start) : "—"}</TableCell>
+                    <TableCell>{v ? fullDateLabel(v.end) : "—"}</TableCell>
+                    <TableCell>
+                      {account ? (
+                        <>
+                          <strong>{account.username}</strong>
+                          <small className="subline">
+                            {account.authSource === "ldap"
+                              ? "Active Directory"
+                              : "Yerel Hesap"}
+                          </small>
+                          {account.email && (
+                            <small className="subline">{account.email}</small>
+                          )}
+                        </>
+                      ) : (
+                        <span className="account-missing">Hesap yok</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {account ? (
+                        <>
+                          <span
+                            className={"access-role-badge role-" + account.role}
+                          >
+                            {accountRoleLabels[account.role]}
+                          </span>
+                          <small
+                            className={
+                              "subline account-state " +
+                              (account.active ? "is-active" : "is-inactive")
+                            }
+                          >
+                            {account.active ? "Aktif" : "Yetki Kaldırıldı"}
+                          </small>
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </TableCell>
+                    <TableCell className="account-scope">
+                      {account
+                        ? account.role === "admin" ||
+                          (!!data.leaders?.length &&
+                            data.leaders.every((leader) =>
+                              account.leaders.includes(leader),
+                            ))
+                          ? "Tüm Liderlikler"
+                          : account.leaders.length
+                            ? account.leaders.join(", ")
+                            : "Tüm Liderlikler · Plan salt okunur"
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="employee-row-actions">
+                        {r && (
+                          <div className="resourceactions">
+                            <button
+                              className="textbutton"
+                              disabled={busy}
+                              onClick={() => openResource(r)}
+                            >
+                              Düzenle
+                            </button>
+                            <button
+                              className="textbutton deletebutton"
+                              disabled={busy}
+                              aria-label={r.name + " kaydını sil"}
+                              onClick={() => deleteResources([r.id])}
+                            >
+                              Sil
+                            </button>
+                          </div>
+                        )}
+                        {!r && account && !root && (
+                          <button
+                            type="button"
+                            className="textbutton"
+                            disabled={busy}
+                            onClick={() => access.onEdit(account)}
+                          >
+                            Düzenle
+                          </button>
+                        )}
+                        {root && (
+                          <span className="protected-account-label">
+                            Ana yönetici
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+          </TableBody>
+        </Table>
+      </div>
       <Pager
-        total={visibleResources.length}
+        total={rows.length}
         page={effectiveResourcePage}
         size={50}
         onChange={setResourcePage}
-        label="Kaynak"
+        label="Kayıt"
       />
-      {!visibleResources.length && (
-        <p className="emptymsg">Bu filtrelere uygun kaynak yok.</p>
+      {!rows.length && (
+        <p className="emptymsg">Bu filtrelere uygun çalışan veya hesap yok.</p>
       )}
     </section>
   );

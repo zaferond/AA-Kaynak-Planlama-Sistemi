@@ -29,8 +29,10 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { ClipboardPaste, Copy, Info } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import AbsenceReport from "./AbsenceReport";
+import { useActualView } from "./features/actual-allocation/useActualView";
+import { useActivityReport } from "./features/activity-report/useActivityReport";
 import MonthlyActivityReport from "./features/activity-report/MonthlyActivityReport";
 import WorkspaceReports from "./features/workspace/WorkspaceReports";
 import AccessPanel from "./AccessPanel";
@@ -56,6 +58,8 @@ const fullPlan = openingOptions.fullPlan;
 export default function Portal() {
   const assertSessionRef = useRef(captureSessionGuard());
   const [directoryEditing, setDirectoryEditing] = useState(false);
+  const [accountEditing, setAccountEditing] = useState(false);
+  const [organizationView, setOrganizationView] = useState("employees");
   const mainTabsRef = useRef<HTMLDivElement>(null),
     capacityTableRef = useRef<HTMLTableElement>(null),
     planTableRef = useRef<HTMLTableElement>(null);
@@ -83,6 +87,7 @@ export default function Portal() {
     reload,
     save,
     batch,
+    saveEmployee,
     change,
   } = usePortalData(assertSessionRef);
   const isAdmin = user?.role === "admin";
@@ -152,6 +157,35 @@ export default function Portal() {
     currentMonth,
     months,
   } = useWorkspaceFilters(openingOptions, tab, setNotice);
+  const activity = useActivityReport(
+    tab === "activity" && !!data,
+    data,
+    start,
+    count,
+    projectIds,
+    currentMonth,
+  );
+  const actualView = useActualView(
+    tab === "actual" && !!data && !isAdmin,
+    data,
+    start,
+    count,
+    currentMonth,
+  );
+  const viewData = useMemo(
+    () =>
+      tab === "activity" && data
+        ? {
+            ...data,
+            teams: activity.catalog?.teams || [],
+            leaders: activity.catalog?.leaders || [],
+            leaderParents: activity.catalog?.leaderParents || {},
+          }
+        : tab === "actual" && !isAdmin && data
+          ? actualView.value?.data || { ...data, teams: [], resources: [] }
+          : data,
+    [tab, data, activity.catalog, actualView.value, isAdmin],
+  );
   const monthWidth =
     density === "overview" ? 24 : density === "compact" ? 68 : 150;
   const planMonthWidth =
@@ -180,6 +214,7 @@ export default function Portal() {
     leads,
     resourceIds,
     batch,
+    saveEmployee,
     setError,
     setNotice,
     onProjectDeleted: (id) => {
@@ -193,7 +228,7 @@ export default function Portal() {
   }
   usePortalRefresh({
     load,
-    editing: !!editor || directoryEditing,
+    editing: !!editor || directoryEditing || accountEditing,
     saving,
     riskEditing,
     riskEditingRef,
@@ -239,6 +274,7 @@ export default function Portal() {
   });
   const {
     leaderItems,
+    leaderFilterItems,
     availableTeams,
     teams,
     projects,
@@ -257,7 +293,7 @@ export default function Portal() {
     planGroups,
     effectiveProjectPage,
     visiblePlanRows,
-  } = useWorkspaceView(data, user, {
+  } = useWorkspaceView(viewData, user, {
     leads,
     teamIds,
     projectIds,
@@ -346,7 +382,8 @@ export default function Portal() {
     isAdmin: !!isAdmin,
   });
   const { exportCurrentTab } = createWorkspaceExports({
-    data,
+    data: viewData,
+    actualMonthSummaries: actualView.value?.monthSummaries,
     user,
     tab,
     teams,
@@ -393,7 +430,7 @@ export default function Portal() {
   const editTeams = data?.teams || [];
   const workspaceFilters = data && (
     <WorkspaceFilters
-      data={data}
+      data={viewData || data}
       user={user}
       tab={tab}
       leads={leads}
@@ -404,7 +441,7 @@ export default function Portal() {
       setProjectIds={setProjectIds}
       personIds={personIds}
       setPersonIds={setPersonIds}
-      leaderItems={leaderItems}
+      leaderItems={leaderFilterItems}
       availableTeams={availableTeams}
       availablePeople={availablePeople}
       start={start}
@@ -479,9 +516,13 @@ export default function Portal() {
             setView={setView}
             openProject={() => openProject()}
             onExport={exportCurrentTab}
-            dataLoaded={!!data}
+            dataLoaded={
+              !!data && (tab !== "actual" || !!isAdmin || !!actualView.value)
+            }
             hasTeams={!!teams.length}
             hasProjects={!!projects.length}
+            organizationView={organizationView}
+            setOrganizationView={setOrganizationView}
           />
           {!data ? (
             <div className="loading">
@@ -519,9 +560,9 @@ export default function Portal() {
                     ]}
                   />
                 </div>
-              ) : (
+              ) : tab !== "resources" || organizationView === "employees" ? (
                 workspaceFilters
-              )}
+              ) : null}
               {(isAdmin || isManager) && tab === "plan" && (
                 <TabsContent value="plan">
                   <PlannedAllocationPanel
@@ -667,44 +708,31 @@ export default function Portal() {
                   />
                 </TabsContent>
               )}
-              {isAdmin && tab === "teams" && (
-                <TabsContent value="teams">
-                  <TeamDirectory
-                    data={data}
-                    canEdit={!!isAdmin}
-                    onEditingChange={setDirectoryEditing}
-                    onSaved={(next, message) => {
-                      setData(next);
-                      setLeads((old) =>
-                        old.filter((lead) => next.leaders?.includes(lead)),
-                      );
-                      setTeamIds((old) =>
-                        old.filter((id) =>
-                          next.teams.some((team) => team.id === id),
-                        ),
-                      );
-                      setNotice(message);
-                    }}
-                  />
-                </TabsContent>
-              )}
               {tab === "actual" && (
                 <TabsContent value="actual">
+                  {actualView.busy && (
+                    <p role="status">Gerçekleşen kaynak verileri yükleniyor…</p>
+                  )}
+                  {actualView.error && (
+                    <p role="alert">
+                      {actualView.error}{" "}
+                      <button onClick={actualView.reload}>Tekrar Dene</button>
+                    </p>
+                  )}
                   {isAdmin ||
                   (isManager && !!user?.leaders.length) ||
                   user?.resourceId ? (
                     <PersonAllocationPanel
-                      data={data}
+                      loading={actualView.busy}
+                      user={user!}
+                      monthSummaries={actualView.value?.monthSummaries}
+                      data={viewData || data}
                       teams={teams}
                       projects={projects}
                       months={months}
                       currentMonth={currentMonth}
                       todayDate={todayDate}
-                      selectedPersonIds={
-                        isAdmin || isManager
-                          ? personIds
-                          : [user?.resourceId || ""]
-                      }
+                      selectedPersonIds={personIds}
                       canEditCalendar={!!isAdmin}
                       ownResourceId={
                         user?.role !== "admin" ? user?.resourceId : undefined
@@ -732,59 +760,95 @@ export default function Portal() {
               )}
               {tab === "activity" && (
                 <TabsContent value="activity">
+                  {activity.busy && (
+                    <p role="status">Aktivite raporu yükleniyor…</p>
+                  )}
+                  {activity.error && (
+                    <div className="alert" role="alert">
+                      {activity.error}{" "}
+                      <button onClick={activity.reload}>Tekrar Dene</button>
+                    </div>
+                  )}
                   <MonthlyActivityReport
-                    data={data}
+                    rows={activity.value?.rows || []}
                     teams={teams}
-                    projects={projects}
                     months={months}
-                    currentMonth={currentMonth}
                     todayDate={todayDate}
-                    ownResourceId={
-                      user?.role === "normal"
-                        ? user.resourceId || ""
-                        : undefined
-                    }
                   />
                 </TabsContent>
               )}
               {isAdmin && tab === "resources" && (
                 <TabsContent value="resources">
-                  <ResourcesPanel
-                    data={data}
-                    start={start}
-                    ids={ids}
-                    teamIds={teamIds}
-                    leads={leads}
-                    search={search}
-                    onSearchChange={setSearch}
-                    page={resourcePage}
-                    onPageChange={setResourcePage}
-                    resourceIds={resourceIds}
-                    onSelectionChange={setResourceIds}
-                    showImport={showImport}
-                    onImportVisibilityChange={setShowImport}
-                    saving={saving}
-                    onEdit={openResource}
-                    onBulkEdit={openBulk}
-                    onDelete={deleteResources}
-                    onImported={(d, message) => {
-                      setData(d);
-                      setNotice(message);
-                      setError("");
-                      setResourceIds([]);
-                    }}
-                  />
-                  <AbsenceReport
-                    data={data}
-                    teamIds={ids}
-                    months={months}
-                    canEdit={!!isAdmin}
-                    onSaved={(next) => {
-                      setData(next);
-                      setNotice("İzin / eğitim kayıtları güncellendi.");
-                      setError("");
-                    }}
-                  />
+                  {organizationView === "teams" ? (
+                    <TeamDirectory
+                      data={data}
+                      canEdit={!!isAdmin}
+                      onEditingChange={setDirectoryEditing}
+                      onSaved={(next, message) => {
+                        setData(next);
+                        setLeads((old) =>
+                          old.filter((lead) => next.leaders?.includes(lead)),
+                        );
+                        setTeamIds((old) =>
+                          old.filter((id) =>
+                            next.teams.some((team) => team.id === id),
+                          ),
+                        );
+                        setNotice(message);
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <AccessPanel
+                        data={data}
+                        onEditingChange={setAccountEditing}
+                        onSaved={(d) => {
+                          setData(d);
+                          setUser(currentUser());
+                        }}
+                      >
+                        {(access) => (
+                          <ResourcesPanel
+                            access={access}
+                            data={data}
+                            start={start}
+                            ids={ids}
+                            teamIds={teamIds}
+                            leads={leads}
+                            search={search}
+                            onSearchChange={setSearch}
+                            page={resourcePage}
+                            onPageChange={setResourcePage}
+                            resourceIds={resourceIds}
+                            onSelectionChange={setResourceIds}
+                            showImport={showImport}
+                            onImportVisibilityChange={setShowImport}
+                            saving={saving}
+                            onEdit={openResource}
+                            onBulkEdit={openBulk}
+                            onDelete={deleteResources}
+                            onImported={(d, message) => {
+                              setData(d);
+                              setNotice(message);
+                              setError("");
+                              setResourceIds([]);
+                            }}
+                          />
+                        )}
+                      </AccessPanel>
+                      <AbsenceReport
+                        data={data}
+                        teamIds={ids}
+                        months={months}
+                        canEdit={!!isAdmin}
+                        onSaved={(next) => {
+                          setData(next);
+                          setNotice("İzin / eğitim kayıtları güncellendi.");
+                          setError("");
+                        }}
+                      />
+                    </>
+                  )}
                 </TabsContent>
               )}
               {(isAdmin || isManager) && tab === "critical" && (
@@ -821,17 +885,6 @@ export default function Portal() {
                     teamIds={ids}
                     selectedTeamIds={teamIds}
                     leads={leads}
-                  />
-                </TabsContent>
-              )}
-              {isAdmin && tab === "access" && (
-                <TabsContent value="access">
-                  <AccessPanel
-                    data={data}
-                    onSaved={(d) => {
-                      setData(d);
-                      setUser(currentUser());
-                    }}
                   />
                 </TabsContent>
               )}

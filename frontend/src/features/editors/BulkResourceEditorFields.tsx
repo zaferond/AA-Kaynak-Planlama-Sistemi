@@ -41,10 +41,13 @@ export default function BulkResourceEditorFields({
             })
           }
           items={editTeams
-            .filter((t) => !editor.lead || !t.lead || t.lead === editor.lead)
+            .filter((t) => !editor.lead || t.lead === editor.lead)
             .map((t) => ({
               ...t,
-              name: t.name + (!t.lead ? " (liderlik seçilmeli)" : ""),
+              name:
+                t.kind === "leadership"
+                  ? "Doğrudan Liderlik · " + t.name
+                  : t.name + (!t.lead ? " (liderlik seçilmeli)" : ""),
             }))}
           empty="Takımı değiştirme"
         />

@@ -20,9 +20,9 @@ export type DirectoryKind = "leader" | "team" | "riskSystem";
 type LeaderDraft = {
   kind: "leader";
   originalName: string | null;
-  originalManager: string;
+  originalParent: string;
+  parentName: string;
   name: string;
-  managerName: string;
   generation: number;
   catalogRevision: number;
 };
@@ -42,13 +42,12 @@ type Draft = LeaderDraft | TeamDraft | RiskSystemDraft;
 
 function startDraft(data: Data, kind: DirectoryKind, id?: string): Draft {
   if (kind === "leader") {
-    const managerName = id ? ownValue(data.leaderManagers, id) || "" : "";
     return {
       kind,
       originalName: id ?? null,
-      originalManager: managerName,
+      originalParent: id ? ownValue(data.leaderParents, id) || "" : "",
+      parentName: id ? ownValue(data.leaderParents, id) || "" : "",
       name: id || "",
-      managerName,
       generation: currentGeneration(),
       catalogRevision: directoryRevision(data),
     };
@@ -101,13 +100,11 @@ export function useDirectoryEditor({
     !!draft &&
     (draft.kind === "leader"
       ? draft.name !== (draft.originalName || "") ||
-        draft.managerName !== draft.originalManager
+        draft.parentName !== draft.originalParent
       : draft.kind === "riskSystem"
         ? draft.value.name !== (draft.original?.name || "")
         : draft.value.name !== (draft.original?.name || "") ||
-          draft.value.lead !== (draft.original?.lead || "") ||
-          (draft.value.managerName || "") !==
-            (draft.original?.managerName || ""));
+          draft.value.lead !== (draft.original?.lead || ""));
   const selectedId =
     draft?.kind === "leader" ? draft.originalName : draft?.original?.id;
 
@@ -144,7 +141,7 @@ export function useDirectoryEditor({
     setDraft(null);
     setError("");
   }
-  function update(field: "name" | "managerName" | "lead", value: string) {
+  function update(field: "name" | "lead" | "parentName", value: string) {
     if (saving.current) return;
     setDraft((previous) => {
       if (!previous) return previous;
@@ -190,7 +187,7 @@ export function useDirectoryEditor({
           action: current.originalName === null ? "create" : "update",
           name: current.originalName ?? name,
           newName: current.originalName === null ? undefined : name,
-          managerName: current.managerName.trim(),
+          parentName: current.parentName,
           generation: current.generation,
           catalogRevision: current.catalogRevision,
         });
@@ -211,7 +208,6 @@ export function useDirectoryEditor({
         const value = {
           ...current.value,
           name: current.value.name.trim(),
-          managerName: (current.value.managerName || "").trim(),
         };
         if (!value.name) throw Error("Takım adı boş olamaz.");
         if (value.lead && !data.leaders?.includes(value.lead))

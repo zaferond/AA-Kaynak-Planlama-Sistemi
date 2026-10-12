@@ -1,4 +1,11 @@
-import type { Project, Milestone, Resource, Version } from "../model";
+import type { EmployeeAccessDraft } from "./access/employee-access-draft";
+import type {
+  Project,
+  Milestone,
+  Resource,
+  Version,
+  ResourceRole,
+} from "../model";
 export type EditorRevisions = Readonly<Record<string, number>>;
 export type PortalEditor = (
   | { kind: "project"; value: Project; isNew: boolean }
@@ -10,7 +17,14 @@ export type PortalEditor = (
       isNew: boolean;
       draftEmpty: boolean;
     }
-  | { kind: "resource"; value: Resource; version: Version; isNew: boolean }
+  | {
+      kind: "resource";
+      value: Resource;
+      version: Version;
+      isNew: boolean;
+      assignmentKind?: ResourceRole;
+      account?: EmployeeAccessDraft;
+    }
   | {
       kind: "bulkResources";
       effective: string;

@@ -194,3 +194,8 @@
 .app.tab-actual .allocation-grid .yearrow th:not(:first-child) {
   border-left-color: var(--table-year-divider);
 }
+
+/* Keep read-only peer cells selectable for their monthly hours context. */
+.person-allocation .actual-cell-readonly .person-amount input:disabled {
+  pointer-events: none;
+}

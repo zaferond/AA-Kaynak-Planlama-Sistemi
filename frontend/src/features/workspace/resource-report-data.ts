@@ -1,4 +1,5 @@
-import { ownValue } from "../../../../shared/records.ts";
+import { directoryResponsibilityIndex } from "../../../../shared/resource-roles.ts";
+import { reportGroupManager } from "../resource-report-groups.ts";
 import {
   isWorkingStatus,
   versionAt,
@@ -29,11 +30,10 @@ export function buildResourceReportGroups(
   metric: (ids: string[], month: string) => Metric,
   teamReport: boolean,
 ): ResourceReportGroup[] {
+  const responsibility = directoryResponsibilityIndex(data);
   return groups.map((group) => ({
     name: group.name,
-    manager: teamReport
-      ? teams.find((t) => t.id === group.ids[0])?.managerName || "—"
-      : ownValue(data.leaderManagers, group.leader || "") || "—",
+    manager: reportGroupManager(responsibility, teams, group, teamReport),
     personnel: data.resources.filter((r) => {
       const v = versionAt(r, start);
       return (

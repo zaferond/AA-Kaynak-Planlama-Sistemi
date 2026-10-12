@@ -1,3 +1,4 @@
+import { planningUnitHierarchy } from "../../../../shared/leadership-planning";
 import { Fragment } from "react";
 import { TableRow, TableCell } from "@/components/ui/table";
 import type { Team, Project } from "../../model";
@@ -9,6 +10,7 @@ import {
   actualRowsVisible,
   PlannedActualToggle,
   PlannedTeamBadge,
+  PlannedUnitName,
 } from "./PlannedTeamLabels";
 import type { PlannedAllocationProps } from "./types";
 export type PlannedRowProps = Pick<
@@ -76,11 +78,13 @@ export default function PlannedAllocationRow({
   team: t,
   project: p,
   cellSet,
+  managerName,
   ...props
 }: PlannedRowProps & {
   team: Team;
   project: Project;
   cellSet: ReadonlySet<string>;
+  managerName: string;
 }) {
   const { view, months, data, cells, grid, onSaveAllocation } = props;
   const {
@@ -93,7 +97,15 @@ export default function PlannedAllocationRow({
   } = grid;
   return (
     <Fragment key={t.id + p.id}>
-      <TableRow>
+      <TableRow
+        className={
+          t.kind === "leadership" && !planningUnitHierarchy(data, t).parent
+            ? "leadership-planning-row"
+            : undefined
+        }
+        data-planning-owner={t.id}
+        data-hierarchy-depth={planningUnitHierarchy(data, t).depth}
+      >
         <TableCell className="rowname">
           {view === "project" && <PlannedActualToggle team={t} {...props} />}
           {view === "team" && <span className="indent">↳</span>}
@@ -105,12 +117,10 @@ export default function PlannedAllocationRow({
           ) : (
             <span className="team-row-block">
               <span className="team-row-title">
-                <span>{t.name}</span>
+                <PlannedUnitName data={data} team={t} />
                 <PlannedTeamBadge team={t} {...props} />
               </span>
-              <span className="team-manager">
-                Yönetici: {t.managerName || "Atanmamış"}
-              </span>
+              <span className="team-manager">Yönetici: {managerName}</span>
             </span>
           )}
         </TableCell>

@@ -5,12 +5,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { Dispatch, SetStateAction } from "react";
+import { useEffect, useRef, type Dispatch, type SetStateAction } from "react";
 import type { Data, Team } from "../model";
 import type { PortalEditor } from "./editor-state";
 import ProjectEditorFields from "./editors/ProjectEditorFields";
 import ProjectPhaseEditorFields from "./editors/ProjectPhaseEditorFields";
 import MilestoneEditorFields from "./editors/MilestoneEditorFields";
+import ResourceAccessFields from "./access/ResourceAccessFields";
 import ResourceEditorFields from "./editors/ResourceEditorFields";
 import BulkResourceEditorFields from "./editors/BulkResourceEditorFields";
 type Props = {
@@ -43,6 +44,23 @@ export default function PortalEditorDialog({
   submit,
   deleteProject,
 }: Props) {
+  const returnFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (editor) return;
+    const remember = (target: EventTarget | null) => {
+      if (
+        target instanceof HTMLElement &&
+        target !== document.body &&
+        target !== document.documentElement &&
+        !target.closest('[role="dialog"]')
+      )
+        returnFocus.current = target;
+    };
+    remember(document.activeElement);
+    const capture = (event: FocusEvent) => remember(event.target);
+    document.addEventListener("focusin", capture);
+    return () => document.removeEventListener("focusin", capture);
+  }, [!!editor]);
   return (
     <Dialog
       open={!!editor}
@@ -51,12 +69,24 @@ export default function PortalEditorDialog({
       }}
     >
       <DialogContent
+        showCloseButton={!saving}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          if (returnFocus.current?.isConnected) returnFocus.current.focus();
+        }}
+        onEscapeKeyDown={(event) => {
+          if (saving) event.preventDefault();
+        }}
+        onPointerDownOutside={(event) => {
+          if (saving) event.preventDefault();
+        }}
         className={
           "editor" +
           (editor?.kind === "projectPhase" || editor?.kind === "milestone"
             ? " timeline-editor"
             : "") +
-          (editor?.kind === "bulkResources" ? " bulk-resource-editor" : "")
+          (editor?.kind === "bulkResources" ? " bulk-resource-editor" : "") +
+          (editor?.kind === "resource" ? " employee-access-editor" : "")
         }
       >
         <DialogHeader>
@@ -85,7 +115,7 @@ export default function PortalEditorDialog({
                 : editor?.kind === "milestone"
                   ? "Kritik detay konulara tarih aralığı veya tek tarihli Milestone ekleyin."
                   : editor?.kind === "resource"
-                    ? "Çalışan bilgilerini ve işbaşı / ayrılış tarihlerini gün bazında girin."
+                    ? "Çalışan bilgilerini, kurumsal hesabını ve uygulama yetkilerini birlikte yönetin."
                     : editor?.kind === "bulkResources"
                       ? "Seçili kayıtların takımını, statüsünü ve planlama durumunu birlikte güncelleyin."
                       : "Düzenlemeler seçili planlama ayından itibaren uygulanır."}
@@ -117,14 +147,27 @@ export default function PortalEditorDialog({
               />
             )}
             {editor.kind === "resource" && (
-              <ResourceEditorFields
-                editor={editor}
-                setEditor={setEditor}
-                data={data}
-                leaderItems={leaderItems}
-                editTeams={editTeams}
-                chooseResourceStatus={chooseResourceStatus}
-              />
+              <>
+                <div className="employee-resource-fields">
+                  <ResourceEditorFields
+                    editor={editor}
+                    setEditor={setEditor}
+                    data={data}
+                    leaderItems={leaderItems}
+                    editTeams={editTeams}
+                    chooseResourceStatus={chooseResourceStatus}
+                  />
+                </div>
+                {data && (
+                  <ResourceAccessFields
+                    key={editor.value.id}
+                    data={data}
+                    editor={editor}
+                    setEditor={setEditor}
+                    busy={saving}
+                  />
+                )}
+              </>
             )}
             {editor.kind === "bulkResources" && (
               <BulkResourceEditorFields
@@ -166,6 +209,25 @@ export default function PortalEditorDialog({
                     Kritik Konuyu Sil
                   </button>
                 )}
+                <button
+                  type="button"
+                  className="button"
+                  disabled={saving}
+                  onClick={() => setEditor(null)}
+                >
+                  Vazgeç
+                </button>
+                <button
+                  type="button"
+                  className="button primary"
+                  disabled={saving}
+                  onClick={submit}
+                >
+                  {saving ? "Kaydediliyor…" : "Kaydet"}
+                </button>
+              </div>
+            ) : editor.kind === "resource" ? (
+              <div className="resource-editor-actions">
                 <button
                   type="button"
                   className="button"

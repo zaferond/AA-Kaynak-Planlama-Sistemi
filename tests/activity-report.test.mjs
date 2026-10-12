@@ -192,3 +192,178 @@ test("API-scoped manager and normal snapshots retain only permitted named rows a
     0,
   );
 });
+
+test("activity visibility includes only current employee statuses, independent of inclusion or old actuals", () => {
+  const data = fixture();
+  const allowed = [
+    "Aktif Çalışan",
+    "Gear Up",
+    "SAAT Ücretli Ofis Ç.",
+    "İşten Ayrıldı",
+  ];
+  data.resources = allowed.map((status, i) =>
+    person("allowed-" + i, "Worker " + i, [
+      version("t-a1", {
+        status,
+        included: false,
+        ...(status === "İşten Ayrıldı" ? { end: "2026-04-15" } : {}),
+      }),
+    ]),
+  );
+  for (const [i, status] of ["Aktif İlan", "Pasif İlan"].entries()) {
+    const id = "listing-" + i;
+    data.resources.push(
+      person(id, "Listing " + i, [
+        version(),
+        version("t-a1", {
+          effective: "2026-06",
+          status,
+          start: "2026-06-01",
+          included: true,
+        }),
+      ]),
+    );
+    data.actualAllocations[id + "|p1|2026-01"] = 0.5;
+  }
+  data.actualAllocations["allowed-3|p1|2026-01"] = 0.25;
+  const before = structuredClone(data);
+  assert.deepEqual(
+    rows(data)
+      .map((r) => r.resourceId)
+      .sort(),
+    allowed.map((_, i) => "allowed-" + i),
+  );
+  assert.equal(
+    activityValue(
+      rows(data).find((r) => r.resourceId === "allowed-3").cells[0],
+      "hours",
+    ),
+    45,
+  );
+  assert.deepEqual(
+    data,
+    before,
+    "visibility must not modify or delete historical records",
+  );
+});
+
+test("activity status uses the current month, not the report period or a scheduled future version", () => {
+  const data = fixture();
+  data.resources[0].versions.push(
+    version("t-a1", {
+      effective: "2026-11",
+      status: "Pasif İlan",
+      included: false,
+    }),
+  );
+  assert.equal(rows(data, ["2026-01"]).length, 1);
+  data.resources[0].versions.push(
+    version("t-a1", {
+      effective: "2026-09",
+      status: "Aktif İlan",
+      included: false,
+    }),
+  );
+  assert.equal(rows(data, ["2026-01"]).length, 0);
+  assert.equal(rows(data, ["2026-11"]).length, 0);
+});
+
+test("team activity scope ignores granted leaderships, limits peers and follows descendant leaders", async () => {
+  const { activityReport } = await import("../backend/activity-report.mjs");
+  const { directoryEmployees } =
+    await import("../shared/employee-directory.ts");
+  const data = fixture();
+  data.leaderParents = { "B Liderliği": "A Liderliği" };
+  data.resources.push(
+    person("peer", "Team Peer", [version()]),
+    person("sibling", "Sibling Team", [version("t-a2")]),
+    person("child", "Child Leadership", [version("t-b")]),
+  );
+  data.personCalendar = {
+    "peer|2026-01-05|leave": {
+      type: "leave",
+      hours: 9,
+      label: "PRIVATE_PEER_LEAVE",
+    },
+  };
+  data.resources[1].note = "PRIVATE_PEER_HR";
+  const query = { start: "2026-01", count: 12, projects: [] };
+  const own = {
+    id: "own",
+    role: "normal",
+    leaders: ["B Liderliği"],
+    resourceId: "a",
+  };
+  const peerReport = activityReport(data, own, query, "2026-10");
+  assert.deepEqual(
+    new Set(peerReport.rows.map((row) => row.resourceId)),
+    new Set(["a", "peer"]),
+  );
+  assert(!JSON.stringify(peerReport).includes("PRIVATE_PEER"));
+  assert.deepEqual(
+    new Set(
+      activityReport(
+        data,
+        { ...own, role: "manager" },
+        query,
+        "2026-10",
+      ).rows.map((row) => row.resourceId),
+    ),
+    new Set(["a", "peer", "sibling", "child"]),
+  );
+  assert.deepEqual(
+    activityReport(data, { ...own, resourceId: "" }, query, "2026-10").rows,
+    [],
+  );
+  assert.deepEqual(
+    activityReport(
+      data,
+      { ...own, role: "manager", resourceId: "" },
+      query,
+      "2026-10",
+    ).rows,
+    [],
+  );
+  assert.equal(
+    directoryEmployees(data, "leader", "A Liderliği", "2026-10").length,
+    4,
+  );
+  assert.equal(directoryEmployees(data, "team", "t-a1", "2026-10").length, 2);
+});
+
+test("hierarchy validation prevents self/cyclic/missing links and remaining report groups only top leaders", async () => {
+  const { validateLeaderParents, topLeader } =
+    await import("../shared/leadership-hierarchy.ts");
+  const { selectWorkspaceScope } =
+    await import("../frontend/src/features/workspace/workspace-selectors.ts");
+  const data = fixture();
+  data.leaderParents = { "B Liderliği": "A Liderliği" };
+  assert.doesNotThrow(() => validateLeaderParents(data));
+  assert.equal(topLeader(data, "B Liderliği"), "A Liderliği");
+  const scope = selectWorkspaceScope(
+    data,
+    { role: "admin", leaders: [] },
+    {
+      leads: [],
+      teamIds: [],
+      projectIds: [],
+      start: "2026-01",
+      months: ["2026-01"],
+      currentMonth: "2026-10",
+    },
+  );
+  assert.equal(scope.leaderReportGroups.length, 1);
+  assert.equal(scope.leaderReportGroups[0].name, "A Liderliği");
+  assert.deepEqual(
+    new Set(scope.leaderReportGroups[0].ids),
+    new Set(teams.map((team) => team.id)),
+  );
+  for (const parents of [
+    { "A Liderliği": "A Liderliği" },
+    { "A Liderliği": "B Liderliği", "B Liderliği": "A Liderliği" },
+    { "A Liderliği": "Missing" },
+  ])
+    assert.throws(() =>
+      validateLeaderParents({ ...data, leaderParents: parents }),
+    );
+});

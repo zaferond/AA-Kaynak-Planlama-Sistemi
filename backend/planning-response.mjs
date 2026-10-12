@@ -1,6 +1,9 @@
 import { ownValue } from "../shared/records.ts";
 import { publicUser } from "./auth.mjs";
-import { canSeePlanningRevision, visibleTeamScope } from "./domain/index.mjs";
+import {
+  canSeePlanningRevision,
+  visiblePlanningTeamScope,
+} from "./domain/index.mjs";
 
 // Build an opt-in patch from the fully validated transaction result. The same
 // planning revision policy is used by full views; no user/actual projection is
@@ -30,7 +33,7 @@ export function planningDeltaView({
   )
     return null;
   const principal = publicUser(active);
-  const teams = visibleTeamScope(valid, principal).ids;
+  const teams = visiblePlanningTeamScope(valid, principal).ids;
   const ids = new Set([
     ...planningDelta.ids,
     ...changeSet.allocation.map((change) => change.id),

@@ -1,9 +1,10 @@
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Resource } from "../../model";
 import type { ActualCellSelection } from "./types";
 
 export function useActualCellSelection({
   scopeKey,
+  loading = false,
   visiblePage,
   eligible,
   months,
@@ -12,6 +13,7 @@ export function useActualCellSelection({
   limitOpenRef,
 }: {
   scopeKey: string;
+  loading?: boolean;
   visiblePage: number;
   eligible: ReadonlySet<string>;
   months: string[];
@@ -22,7 +24,12 @@ export function useActualCellSelection({
   const [selectedCell, setSelectedCell] = useState<ActualCellSelection | null>(
     null,
   );
-  useEffect(() => setSelectedCell(null), [scopeKey]);
+  const settledScope = useRef(scopeKey);
+  useEffect(() => {
+    if (loading) return;
+    if (settledScope.current !== scopeKey) setSelectedCell(null);
+    settledScope.current = scopeKey;
+  }, [scopeKey, loading]);
   useEffect(() => setSelectedCell(null), [visiblePage]);
   useEffect(() => {
     const withinSelection = (target: EventTarget | null) =>

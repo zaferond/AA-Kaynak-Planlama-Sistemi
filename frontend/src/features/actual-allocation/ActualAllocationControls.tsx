@@ -16,6 +16,7 @@ export default function ActualAllocationControls({
   onOpenSharedCalendar,
   actualMonths,
   saveHours,
+  canEditPersonMonth,
 }: {
   data: Data;
   unit: ActualUnit;
@@ -26,6 +27,7 @@ export default function ActualAllocationControls({
   onOpenSharedCalendar: () => void;
   actualMonths: ActualAllocationView["actualMonths"];
   saveHours: WorkedHoursSave;
+  canEditPersonMonth: (id: string, month: string) => boolean;
 }) {
   const effectiveHours = (resourceId: string, month: string) =>
     actualMonths.get(resourceId, month).effectiveHours;
@@ -112,7 +114,12 @@ export default function ActualAllocationControls({
                   actualMonths.get(selectedHoursPerson.id, selectedHoursMonth)
                     .maxEffectiveHours
                 }
-                disabled={false}
+                disabled={
+                  !canEditPersonMonth(
+                    selectedHoursPerson.id,
+                    selectedHoursMonth,
+                  )
+                }
                 onSave={(hours, input) =>
                   saveHours(
                     selectedHoursPerson,
@@ -144,7 +151,6 @@ export default function ActualAllocationControls({
               }
             >
               <option value="percent">Yüzde (%)</option>
-              <option value="days">Gün</option>
               <option value="hours">Saat</option>
             </select>
           </label>

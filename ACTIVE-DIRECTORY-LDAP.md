@@ -2,7 +2,7 @@
 
 ## Kullanım
 
-Yetki Kontrol Ekranı → **AD Kullanıcısına Yetki Tanımla** ile kurumsal dizinden kullanıcı seçilir. Kullanıcı adı, ad soyad ve e-posta salt okunurdur. Admin uygulamadaki çalışan kaydını, Normal Kullanıcı/Yönetici rolünü ve liderlik kapsamını eşleştirir. Yöneticinin kendi gerçekleşen dağılımı, izin ve eğitim kayıtları çalışan eşleştirmesiyle korunur. Yeni yetkilendirme yalnız admin tarafından yapılabilir; mevcut yetkiler revision denetimiyle güncellenir.
+Çalışan & Yetki Tanımlama → **AD Kullanıcısına Yetki Tanımla** ile kurumsal dizinden kullanıcı seçilir. Kullanıcı adı, ad soyad ve e-posta salt okunurdur. Admin uygulamadaki çalışan kaydını, Normal Kullanıcı/Yönetici rolünü ve liderlik kapsamını eşleştirir. Yöneticinin kendi gerçekleşen dağılımı, izin ve eğitim kayıtları çalışan eşleştirmesiyle korunur. Yeni yetkilendirme yalnız admin tarafından yapılabilir; mevcut yetkiler revision denetimiyle güncellenir.
 
 AD bağlantısı tanımlı değilken kullanıcı listesi ve yeni yetkilendirme kapalıdır. Sahte/örnek dizin kullanıcıları uygulamada gösterilmez. Arama ilk 50 uygun sonucu getirir; daha fazla sonuç varsa ad, kullanıcı adı veya e-posta ile daraltılır. Kontrol karakterleri, geçersiz kimlik/e-posta veya uygulamanın 150 karakterlik ad sınırını aşan AD kayıtları listelenmez. Çalışan kaydı ayrıca seçilir; isim eşitliğiyle otomatik eşleştirme yapılmaz.
 
@@ -44,3 +44,35 @@ Bu sürüm **şema 32** ile `directory_id`, `email`, `auth_source` ve tekil dizi
 IT, mevcut yedek/doğrulama prosedürünü uygulayıp servisi durdurduktan sonra yeni paket ve bağımlılıklarla, doğru test veritabanında `npm run db:migrate` / `npm run db:check` adımlarını doğrulamalıdır. MSSQL'de `DB_AUTO_MIGRATE=false` bırakılır. Eski şema 31 tam yedeği yeni şema 32 olarak kabul edilmez; gerektiğinde eski sürümün doğrulanmış paketiyle izole ortamda geri yüklenip ardından yükseltilir. AD ayarları servis yeniden başlatılınca okunur.
 
 Otomatik testler geçici SQL.js/MSSQL veritabanları ve sentetik dizin kullanır. LDAP istemcisinin sözleşmesi, filtre değerlerinin ayrılması ve ikili GUID/Türkçe karakter kodlaması, parola bind hataları, pasif hesap, timeout/erişilememe davranışı, yetki kapsamı, çakışmalar ve tarayıcı akışı test edilir. Gerçek kurum AD sunucusu, CA zinciri, OU/grup izinleri, ağ/firewall, hesap kilitleme politikası ve gerçek yük IT ortamında ayrıca doğrulanmalıdır. Kurumsal bağlantı bilgileri sağlanmadan gerçek AD bağlantısının çalıştığı iddia edilmez.
+
+## Uygulama yetkisini kaldırma ve yeniden verme
+
+Admin, Çalışan & Yetki Tanımlama'nda ana yönetici dışındaki aktif hesaplarda **Yetkiyi Sil** işlemini kullanabilir. Bu işlem AD hesabını silmez: uygulama erişimini kapatır, açık oturumları sonlandırır, liderlik yetkilerini ve çalışan eşleştirmesini kaldırır. Çalışan, kaynak, izin, eğitim ve risk geçmişi korunur. Hesap kimliği ve AD kimliği korunarak **Yeniden Yetki Ver** ile rol, liderlikler ve çalışan eşleştirmesi tekrar tanımlanabilir. İşlem revision kontrolü ve işlem geçmişiyle aynı transaction içinde yürütülür.
+
+**Tüm Liderlikleri Seç**, arama filtresinden bağımsız olarak mevcut liderlik listesini seçer; daha sonra eklenen liderlikler otomatik olarak bu yetkiye eklenmez.
+
+## Organizasyon ve aylık aktivite görünürlüğü
+
+Liderlik yönetimindeki **Üst Liderlik** alanı organizasyon hiyerarşisini tanımlar. Döngüler ve kendine bağlama reddedilir; bağlı alt liderliği bulunan üst liderlik silinemez. Bağlantı, katalog sürümü, işlem geçmişi ve JSON yedeği ile birlikte korunur. Şema 33 bu bağlantılar için `kp_settings.leader_parents` alanını ekler. MSSQL üretim geçişinde kurum yedeği alındıktan sonra IT mevcut `npm run db:migrate` sürecini uygulamalıdır.
+
+**AA Aylık Aktivite Raporu** için normal kullanıcı eşleştirilmiş çalışanının güncel takımını, yönetici ise eşleştirilmiş çalışanının güncel liderliği ve alt liderliklerinin takımlarını görür. Admin tüm takımları görür. Çalışan eşleştirmesi bulunmayan kullanıcıya bu raporda çalışan satırı açılmaz. Planlama için verilen manuel liderlik erişimi bu raporun görünürlüğünü genişletmez. Geçmiş aylarda başka bir takımda yapılan çalışmalar yetki kapsamı dışında kalır. Raporda yalnız aylık toplamlar bulunur; takım arkadaşlarının izin açıklamaları ve kişisel kayıtları paylaşılmaz, gerçekleşen giriş yetkileri genişletilmez.
+
+**Liderlik Bazında Kalan Kaynak** ve Excel çıktısı, filtreye giren takımları en üst liderliğin altında birleştirir.
+
+### Liderin doğrudan kaynağı
+
+Kaynak girişindeki **Kaynak Rolü**: Lider için yalnız liderlik seçilir; Takım Üyesi için liderlik ve takım seçilir. Lider kaydı, liderliğin ayrı kaynak birimine bağlanır; otomatik oluşturulan bu birim takım yönetiminde gösterilmez. Planlanan dağılımda **Liderlik · Doğrudan Kaynak** satırı kendi kaynak ve dağılım değerlerini tutar; alt takımların toplamı bu satıra eklenmez. Bu bağlantılar da şema 33'teki `leadership_units` alanı, yedek, işlem geçmişi ve katalog revision kontrolüyle korunur. Mevcut takımlar ve çalışan bağlantıları otomatik taşınmaz; daha önce takım olarak girilmiş lider kaydı kaynak düzenlemesinden Lider olarak seçilerek taşınabilir. Bu kaynak rolü uygulama hesabına yönetici yetkisi vermez.
+
+### Çalışan kaynak rolleri (şema 34)
+
+- Kaynak Rolü: Lider, Product Owner, Team Member. Lider doğrudan liderlik birimine; diğer iki rol gerçek takıma atanır.
+- Liderlik ve Takımlar ekranının Yönetici sütunu güncel çalışan kayıtlarından üretilir: liderlik için Lider, takım için Product Owner. Birden fazla Lider ataması varsa tüm isimler gösterilir. Aynı takımda kesişen çalışma / görevlendirme dönemlerinde birden fazla Product Owner atanamaz; sunucu mevcut sorumlunun adını içeren hata döndürür, kaynak formu taslağı koruyarak uyarı penceresi gösterir. İlan, gelecekte başlayacak ve ayrılış tarihi geçmiş kayıtlar yönetici olarak gösterilmez. Kaynak planlamasına dahil seçimi bu gösterimi etkilemez.
+- Eski doğrudan liderlik kayıtları Lider olarak tanınır. Diğer eski kayıtlar Team Member kabul edilir; Product Owner atamaları çalışan kaydı düzenlenerek yapılır. Eski serbest yönetici adları veritabanında korunur fakat bu ekranda kaynak olarak kullanılmaz.
+- Bu roller AD / hesap yetkisini otomatik değiştirmez. Yerel SQL.js açılışta şema 34'e geçer; üretim MSSQL geçişini IT yedek sonrası `npm run db:migrate` ile yapar.
+
+### Birleşik çalışan ve yetki yönetimi
+
+- **Çalışan & Yetki Tanımlama** sekmesindeki Kaynak Ekle / Düzenle formunda çalışan bilgileri ve isteğe bağlı hesap yetkileri birlikte yönetilir. Yeni hesap kimliği AD'den seçilir; eşleştirilmemiş normal kullanıcı / yönetici hesapları da bağlanabilir. Admin hesapları Hesaplar ve Yetkiler bölümünden yönetilir.
+- `POST /api/employees/save` yalnız admin tarafından oturum, CSRF, admission ve yetki düzenleme hız sınırı ile kullanılabilir. Bir çalışan ve gerekirse onun eşleştirilmemiş takımına liderlik ataması kabul edilir. Çalışan ve hesap sürümleri, eşleştirme, oturum iptali ve işlem geçmişi aynı SQL transaction içindedir; hata olursa tamamı geri alınır.
+- AD sorgusu SQL kilidi alınmadan yapılır. AD kimliğinin tekilliği, çalışan bağlantısı, liderlik kapsamı ve kayıt sürümleri işlem içinde yeniden denetlenir. Başka çalışana bağlı hesap bu formdan taşınamaz.
+- Bağlı liderlikler üst liderliğin altında girintili gösterilir; görsel değişiklik erişim kapsamını veya kapasite hesabını değiştirmez.

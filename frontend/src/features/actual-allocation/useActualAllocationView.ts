@@ -1,3 +1,4 @@
+import { ownValue } from "../../../../shared/records";
 import { useMemo } from "react";
 import { visibleActualInScope } from "../../../../shared/actual-visibility.ts";
 import { createActualMonthIndex } from "../../../../shared/actual-months.ts";
@@ -13,6 +14,7 @@ type Scope = Pick<
   | "currentMonth"
   | "selectedPersonIds"
   | "ownResourceId"
+  | "monthSummaries"
 >;
 
 /** Derives a view of the snapshot; project filters never reduce capacity totals. */
@@ -25,6 +27,7 @@ export function useActualAllocationView(
     currentMonth,
     selectedPersonIds,
     ownResourceId,
+    monthSummaries,
   }: Scope,
   page: number,
 ) {
@@ -79,7 +82,14 @@ export function useActualAllocationView(
     visiblePage,
     pageSize,
   );
-  const actualMonths = useMemo(() => createActualMonthIndex(data), [data]);
+  const actualMonths = useMemo(() => {
+    const index = createActualMonthIndex(data);
+    return {
+      ...index,
+      get: (id: string, month: string) =>
+        ownValue(monthSummaries, id + "|" + month) || index.get(id, month),
+    };
+  }, [data, monthSummaries]);
   const personMonthTotals: Record<string, number> = {};
   for (const resource of people)
     for (const month of months)

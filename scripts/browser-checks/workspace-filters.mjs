@@ -202,9 +202,14 @@ export async function checkWorkspaceFilters(f) {
         );
         assert.equal(await summaryValue(2), fmt(0.5));
         await page.goto(f.origin);
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         await choose(page, "Liderlik", [f.teamA.lead]);
-        await choose(page, "Takım / Birim", [f.teamA.name]);
+        await choose(page, "Takım", [f.teamA.name]);
         const reports = page.locator(".remaining-report");
         assert.equal(await reports.count(), 2);
         for (const table of await reports.all()) {
@@ -236,7 +241,12 @@ export async function checkWorkspaceFilters(f) {
         await periodInput(page).selectOption("24");
         await assertScrollPair(f, page, pair());
         await page.goto(f.origin);
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         await assertScrollPair(
           f,
           page,
@@ -262,7 +272,12 @@ export async function checkWorkspaceFilters(f) {
             })
             .isChecked()),
         );
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         await assertScrollPair(
           f,
           page,

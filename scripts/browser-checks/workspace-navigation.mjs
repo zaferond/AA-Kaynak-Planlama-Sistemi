@@ -84,7 +84,12 @@ export async function checkWorkspaceNavigation(f) {
           .getAttribute("data-risk-id");
         const before = await f.state();
         await page.route("**/api/changes", hold, { times: 1 });
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         await f.wait(() => writes === 1, "draft save held");
         await page
           .getByRole("tab", {

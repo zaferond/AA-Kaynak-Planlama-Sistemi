@@ -347,7 +347,8 @@ test("restore preserves account permissions and reports linked-leadership confli
     const conflicting = structuredClone(state.data);
     conflicting.leaders = [];
     conflicting.leaderManagers = {};
-    conflicting.teams[0].lead = "";
+    conflicting.leadershipUnits = {};
+    for (const team of conflicting.teams) team.lead = "";
     await assert.rejects(
       () => store.mutate(actor, (d, u) => restore(d, u, conflicting)),
       (error) =>

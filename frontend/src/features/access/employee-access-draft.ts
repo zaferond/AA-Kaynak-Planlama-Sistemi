@@ -1,0 +1,54 @@
+import type { Data } from "../../model";
+import type { UserInput } from "../../storage";
+import type { DirectoryUser } from "../../../../shared/directory-identity";
+import type { EmployeePermission } from "../../../../shared/employee-account";
+export type PermissionForm = UserInput & { directoryUser?: DirectoryUser };
+export type EmployeeAccessDraft = {
+  form: PermissionForm | null;
+  changed: boolean;
+  revoke?: boolean;
+};
+export function accountForm(data: Data, id: string): PermissionForm | null {
+  const user = data.users?.find((u) => u.id === id);
+  return user
+    ? {
+        id: user.id,
+        role: user.role,
+        leaders: [...user.leaders],
+        resourceId: user.resourceId || "",
+        revision: data.revisions["user:" + user.id] || 0,
+      }
+    : null;
+}
+export function employeePermission(
+  draft: EmployeeAccessDraft | undefined,
+  resourceId: string,
+  data: Data,
+): EmployeePermission | undefined {
+  if (!draft?.changed || !draft.form) return;
+  const form = draft.form;
+  if (draft.revoke)
+    return { action: "revoke", id: form.id, revision: form.revision };
+  if (form.role === "admin")
+    throw Error("Admin hesaplarını ilgili kaydın Düzenle ekranından yönetin.");
+  if (!form.id) {
+    if (!form.directoryUser) throw Error("Active Directory kullanıcısı seçin.");
+    return {
+      action: "create",
+      directoryId: form.directoryUser.id,
+      role: form.role,
+      leaders: form.leaders,
+      resourceId,
+    };
+  }
+  const user = data.users?.find((u) => u.id === form.id);
+  return {
+    action: "update",
+    id: form.id,
+    role: form.role,
+    leaders: form.leaders,
+    resourceId,
+    revision: form.revision,
+    ...(!user?.active ? { reactivate: true } : {}),
+  };
+}

@@ -410,3 +410,53 @@ test("resource drafts also keep the opening revision of a previously unassigned 
   );
   assert.equal(data.resources.length, 1);
 });
+
+test("leader resource selects a direct leadership owner without a team; member still requires a real team", async () => {
+  const { ensureLeadershipUnits } =
+    await import("../shared/leadership-units.ts");
+  const data = fixture();
+  ensureLeadershipUnits(data);
+  const editor = {
+    kind: "resource",
+    value: structuredClone(data.resources[0]),
+    version: { ...version, team: "", lead: "A" },
+    isNew: false,
+    assignmentKind: "leader",
+    baseRevisions: captureEditorRevisions(data),
+  };
+  const changes = prepareEditorChanges(data, editor, context);
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].value.versions.at(-1).team, data.leadershipUnits.A);
+  assert.equal(changes[0].value.versions.at(-1).lead, "A");
+  assert.throws(
+    () =>
+      prepareEditorChanges(
+        data,
+        { ...editor, assignmentKind: "member" },
+        context,
+      ),
+    /Liderlik ve takım/,
+  );
+  assert.throws(
+    () =>
+      prepareEditorChanges(
+        data,
+        {
+          ...editor,
+          assignmentKind: "member",
+          version: { ...editor.version, team: data.leadershipUnits.A },
+        },
+        context,
+      ),
+    /Product Owner ve Team Member/,
+  );
+  assert.throws(
+    () =>
+      prepareEditorChanges(
+        data,
+        { ...editor, version: { ...editor.version, lead: "" } },
+        context,
+      ),
+    /Liderlik seçin/,
+  );
+});

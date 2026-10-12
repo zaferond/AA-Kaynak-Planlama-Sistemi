@@ -163,7 +163,12 @@ export async function checkRiskSaveConfirmation(f) {
         assert.equal(await editing().getAttribute("data-risk-id"), ids[0]);
         await respond(
           () =>
-            page.getByRole("tab", { name: "Raporlar", exact: true }).click(),
+            page
+              .getByRole("tab", {
+                name: "AA Kaynak Planlama Raporları",
+                exact: true,
+              })
+              .click(),
           false,
         );
         assert.equal(dialogs, prompts + 2);

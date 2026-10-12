@@ -220,7 +220,12 @@ export async function checkRisks(f) {
             }),
           { times: 1 },
         );
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         await page
           .locator(".risk-inline-error")
           .filter({ hasText: "Synthetic risk save failure" })
@@ -239,7 +244,12 @@ export async function checkRisks(f) {
           (await f.state()).risks.find((r) => r.id === first).description,
           "Risk preserved after failure",
         );
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).click();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .click();
         await page
           .getByRole("heading", {
             name: "Aylık Eksik Kaynak Sayısı",
@@ -292,7 +302,12 @@ export async function checkRisks(f) {
           .locator('[data-risk-column="description"]')
           .click();
         await field(page, "description").fill("");
-        await page.getByRole("tab", { name: "Raporlar", exact: true }).focus();
+        await page
+          .getByRole("tab", {
+            name: "AA Kaynak Planlama Raporları",
+            exact: true,
+          })
+          .focus();
         await page.keyboard.press("Enter");
         assert.equal(
           await page
@@ -329,7 +344,10 @@ export async function checkRisks(f) {
           assert(await field(page, "description").isDisabled());
           assert(await field(page, "impact").isDisabled());
           await page
-            .getByRole("tab", { name: "Raporlar", exact: true })
+            .getByRole("tab", {
+              name: "AA Kaynak Planlama Raporları",
+              exact: true,
+            })
             .click();
           await page
             .getByRole("tab", {

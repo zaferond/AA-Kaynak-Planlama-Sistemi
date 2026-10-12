@@ -238,3 +238,48 @@ test("forecast postings retain effective status, team and leadership filters", (
     [0, 0, 0, 0, 0],
   );
 });
+
+test("forecast leadership scope includes child teams but never teams absent from the authorized selection", () => {
+  const resource = (id, team, lead) => ({
+    id,
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team,
+        lead,
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+      },
+    ],
+  });
+  const d = {
+    leaders: ["Root", "Child", "Other"],
+    leaderParents: { Child: "Root" },
+    teams: [
+      { id: "child", lead: "Child" },
+      { id: "other", lead: "Other" },
+    ],
+    resources: [
+      resource("a", "child", "Child"),
+      resource("b", "other", "Other"),
+    ],
+  };
+  assert.equal(
+    buildHeadcountTrend(
+      d,
+      ["child", "other"],
+      ["Root"],
+      ["2026-01"],
+      "2026-01",
+    )[0].actualCount,
+    1,
+  );
+  assert.equal(
+    buildHeadcountTrend(d, ["other"], ["Root"], ["2026-01"], "2026-01")[0]
+      .actualCount,
+    0,
+  );
+});

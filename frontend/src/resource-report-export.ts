@@ -268,13 +268,13 @@ export function resourceReportWorkbook(
   const sheets = [
     {
       name: "Liderlik Bazında",
-      title: "Liderlik Bazında Kalan Kaynak",
-      unit: "Liderlik",
+      title: "Liderlik Bazında Eksik Raporu",
+      unit: "En Üst Birim",
       groups: leaders,
     },
     {
       name: "Takım Bazında",
-      title: "Takım Bazında Kalan Kaynak",
+      title: "Takım Bazında Eksik Kaynak Raporu",
       unit: "Takım",
       groups: teams,
     },

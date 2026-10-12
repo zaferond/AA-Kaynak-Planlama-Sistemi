@@ -63,6 +63,58 @@ export async function checkViewportScroll(f) {
   async function checkScroll() {
     const panel = page.locator(".workspace-dock");
     const table = panel.locator(':scope > [data-slot="table-container"]');
+    if (await page.locator(".app.tab-plan").count()) {
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await f.wait(
+        async () =>
+          panel.evaluate((el) => {
+            const app = el.closest(".app");
+            const grid = el.querySelector(
+              ':scope > [data-slot="table-container"]',
+            );
+            const zoom =
+              Number.parseFloat(
+                getComputedStyle(document.documentElement).zoom,
+              ) || 1;
+            const tail = Math.max(
+              0,
+              app.getBoundingClientRect().bottom -
+                el.getBoundingClientRect().bottom,
+            );
+            const chrome = el.offsetHeight - grid.offsetHeight;
+            const base = (window.innerHeight - tail) / zoom - chrome;
+            return base > 0 && Math.abs(grid.offsetHeight - 3 * base) < 4;
+          }),
+        "planning table is three times its original available height",
+      );
+      await table.evaluate((el) => {
+        el.scrollTop = 0;
+        window.scrollTo(0, scrollY + el.getBoundingClientRect().top - 8);
+      });
+      await checkHeaders(table);
+      const box = await table.boundingBox();
+      await page.mouse.move(box.x + 100, box.y + 100);
+      await page.mouse.wheel(0, 400);
+      await f.wait(
+        async () => await table.evaluate((el) => el.scrollTop > 0),
+        "enlarged planning table scrolls internally",
+      );
+      await checkHeaders(table);
+      await page.waitForTimeout(300);
+      await table.evaluate((el) => {
+        el.scrollTop = 0;
+      });
+      await checkHeaders(table);
+      const outer = await page.evaluate(() => scrollY);
+      await page.mouse.wheel(0, -400);
+      await f.wait(
+        async () => (await page.evaluate(() => scrollY)) < outer - 20,
+        "enlarged table top allows returning up the page",
+      );
+      await page.waitForTimeout(300);
+      await page.evaluate(() => window.scrollTo(0, 0));
+      return;
+    }
     await page.evaluate(() => window.scrollTo(0, 1e8));
     await f.wait(async () => {
       const top = await panel
@@ -142,7 +194,9 @@ export async function checkViewportScroll(f) {
       await f.check(
         "viewport: " +
           screenshot +
-          " page bounds and table scrolling at 90 percent scale",
+          (screenshot === "plan"
+            ? " threefold table height and scrolling at 90 percent scale"
+            : " page bounds and table scrolling at 90 percent scale"),
         async () => {
           await checkScroll();
           // Let the compositor finish the native wheel gesture before visual capture.
@@ -212,7 +266,7 @@ export async function checkViewportScroll(f) {
           },
         );
         await f.check(
-          "viewport: summary disclosure and grouping retain the page boundary",
+          "viewport: summary disclosure and grouping preserve threefold planning table height",
           async () => {
             await page.locator(".capacitystrip > summary").click();
             await checkScroll();

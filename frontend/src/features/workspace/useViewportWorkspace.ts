@@ -1,14 +1,17 @@
 import { useLayoutEffect, useRef } from "react";
 
-/** The page ends one viewport below this panel's filter summary.
- * The remaining rows scroll inside its tables; no wheel/key events are intercepted.
+/** Size the table relative to its available viewport, keeping panel controls fixed.
+ * Larger multipliers extend page scrolling; wheel/key events are not intercepted.
  */
-export function useViewportWorkspace() {
+export function useViewportWorkspace(tableHeightMultiplier = 1) {
   const ref = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const panel = ref.current;
     const app = panel?.closest<HTMLElement>(".app");
     if (!panel || !app) return;
+    const table = panel.querySelector<HTMLElement>(
+      ':scope > [data-slot="table-container"]',
+    );
     let frame = 0;
     const update = () => {
       const zoom =
@@ -18,7 +21,12 @@ export function useViewportWorkspace() {
         app.getBoundingClientRect().bottom -
           panel.getBoundingClientRect().bottom,
       );
-      const height = Math.max(1, (window.innerHeight - tail) / zoom);
+      const baseHeight = Math.max(1, (window.innerHeight - tail) / zoom);
+      const controlsHeight = table
+        ? panel.offsetHeight - table.offsetHeight
+        : 0;
+      const baseTableHeight = Math.max(0, baseHeight - controlsHeight);
+      const height = baseHeight + (tableHeightMultiplier - 1) * baseTableHeight;
       const value = height.toFixed(2) + "px";
       if (panel.style.getPropertyValue("--workspace-height") !== value)
         panel.style.setProperty("--workspace-height", value);
@@ -30,6 +38,7 @@ export function useViewportWorkspace() {
     update();
     const observer = new ResizeObserver(schedule);
     observer.observe(panel);
+    if (table) observer.observe(table);
     observer.observe(app);
     window.addEventListener("resize", schedule);
     return () => {
@@ -37,6 +46,6 @@ export function useViewportWorkspace() {
       observer.disconnect();
       window.removeEventListener("resize", schedule);
     };
-  }, []);
+  }, [tableHeightMultiplier]);
   return ref;
 }

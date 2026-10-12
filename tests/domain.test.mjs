@@ -60,7 +60,7 @@ test("Leadership scope, manager write restrictions and stale version", () => {
       ]),
     (e) => e.status === 409,
   );
-  assert.equal(scopeData(d, { ...u, id: "n" }).teams.length, 1);
+  assert.equal(scopeData(d, { ...u, id: "n" }).teams.length, 2);
 });
 test("A normal user with no selected leadership can view every leadership but cannot allocate", () => {
   const d = fixture();
@@ -810,8 +810,8 @@ test("Manager actual permissions follow leadership rather than planning status",
     "Yetkili Çalışan",
   );
   assert.equal(
-    scoped.resources.some((resource) => resource.id === "other"),
-    false,
+    scoped.resources.find((resource) => resource.id === "other").name,
+    "",
   );
   assert.equal(
     scoped.actualAllocations[`assigned|p|${month}`],

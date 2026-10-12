@@ -4,13 +4,11 @@ export const TAB_LABELS = {
   plan: "AA Planlanan Kaynak Dağılımı",
   projects: "AA Mühendislik Liderliği Projeler",
   risk: "AA Risk Yönetimi",
-  resources: "Çalışan & Kaynak",
-  teams: "Liderlik ve Takımlar",
+  resources: "Organizasyon & Çalışan & Yetki",
   actual: "AA Gerçekleşen Kaynak Dağılımı",
-  activity: "Aylık Aktivite Raporu",
-  critical: "Kritik Proje Konuları",
-  overview: "Raporlar",
-  access: "Yetki Kontrol Ekranı",
+  activity: "AA Aylık Aktivite Raporu",
+  critical: "AA Kritik Proje Konuları",
+  overview: "AA Kaynak Planlama Raporları",
 };
 export const DEFAULT_FILTERS = {
   start: currentPlanningMonth().slice(0, 4) + "-01",

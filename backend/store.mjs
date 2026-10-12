@@ -1,3 +1,6 @@
+import { planningUnitManagerIndex } from "../shared/resource-roles.ts";
+import { actualView } from "./actual-view.mjs";
+import { activityReport } from "./activity-report.mjs";
 import * as identity from "./identity-repository.mjs";
 import { readPlanningSnapshot } from "./planning-reader.mjs";
 import { persistPlanningSnapshot } from "./planning-writer.mjs";
@@ -115,6 +118,24 @@ export class Store {
       return this.projectView(data, generation, active, c);
     }, true);
   }
+  async actualView(u, query) {
+    return this.transaction(async (c) => {
+      const active = await this.findUser({ id: u._id }, c);
+      if (!active?.active || active.version !== u.version)
+        fail(401, "Oturum yenilenmeli.");
+      const { data } = await this.read(c);
+      return actualView(data, publicUser(active), query);
+    }, true);
+  }
+  async activityReport(u, query) {
+    return this.transaction(async (c) => {
+      const active = await this.findUser({ id: u._id }, c);
+      if (!active?.active || active.version !== u.version)
+        fail(401, "Oturum yenilenmeli.");
+      const { data } = await this.read(c);
+      return activityReport(data, publicUser(active), query);
+    }, true);
+  }
   async projectView(data, generation, active, c) {
     if (active.role === "admin") {
       const users = await this.users(c);
@@ -122,7 +143,20 @@ export class Store {
       for (const x of users) data.revisions["user:" + x._id] = x.revision;
     }
     const principal = publicUser(active);
-    return { data: scopeData(data, principal), generation, user: principal };
+    const scoped = scopeData(data, principal);
+    return {
+      data:
+        principal.role === "normal"
+          ? scoped
+          : {
+              ...scoped,
+              // Only names of assigned organisational owners; no employee records,
+              // calendars or personal actuals are exposed through these labels.
+              planningUnitManagers: planningUnitManagerIndex(data),
+            },
+      generation,
+      user: principal,
+    };
   }
   async auditLog(u, { offset = 0, limit = 50 } = {}) {
     if (
@@ -224,6 +258,7 @@ export class Store {
       returnView = false,
       returnResult = false,
       planningDelta,
+      afterPersist,
     } = {},
   ) {
     return this.transaction(async (c) => {
@@ -255,6 +290,9 @@ export class Store {
       // The validated pair stays stable throughout persistence and projection.
       const settings = this.prepareMutationSettings(before, valid);
       const changeSet = await this.persist(before, valid, c, { settings });
+      // Server-owned hook runs after resource FKs exist, still under the same
+      // transaction. Any account/audit/projection failure rolls back every write.
+      if (afterPersist) await afterPersist(valid, active, c);
       const afterUsers = auditUsers ? await this.users(c) : [];
       await c.upsert(
         "audit_events",

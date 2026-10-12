@@ -1,3 +1,9 @@
+import {
+  accountForm,
+  employeePermission,
+} from "./access/employee-access-draft";
+import type { EmployeePermission } from "../../../shared/employee-account";
+import { isResponsibilityConflict } from "../../../shared/resource-roles";
 import { useMemo, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { Change } from "../../../shared/commands";
@@ -25,6 +31,10 @@ type Props = {
   leads: string[];
   resourceIds: string[];
   batch: (changes: Change[]) => Promise<void>;
+  saveEmployee: (
+    changes: Change[],
+    permission: EmployeePermission,
+  ) => Promise<void>;
   onProjectDeleted: (id: string) => void;
   onSubmitted: () => void;
   setError: Dispatch<SetStateAction<string>>;
@@ -41,6 +51,7 @@ export function usePortalEditor({
   leads,
   resourceIds,
   batch,
+  saveEmployee,
   onProjectDeleted,
   onSubmitted,
   setError,
@@ -234,6 +245,15 @@ export function usePortalEditor({
       !v.start && isWorkingStatus(v.status) ? currentYearStartDate() : v.start;
     setEditor({
       kind: "resource",
+      account: {
+        form: r
+          ? accountForm(
+              data,
+              data.users?.find((u) => u.resourceId === r.id)?.id || "",
+            )
+          : null,
+        changed: false,
+      },
       baseRevisions: captureEditorRevisions(data),
       isNew: !r,
       value: r
@@ -294,11 +314,17 @@ export function usePortalEditor({
         start,
         resourceIds,
       });
-      await batch(changes);
+      const permission =
+        editor.kind === "resource"
+          ? employeePermission(editor.account, editor.value.id, data)
+          : undefined;
+      if (permission) await saveEmployee(changes, permission);
+      else await batch(changes);
       setEditor(null);
       onSubmitted();
     } catch (e) {
       setFormError((e as Error).message);
+      if (isResponsibilityConflict(e)) window.alert(e.message);
     }
   }
   return {
