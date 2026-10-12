@@ -5,7 +5,7 @@ import type { PlannedAllocationProps } from "./planned-allocation/types";
 import { useViewportWorkspace } from "./workspace/useViewportWorkspace";
 export default function PlannedAllocationPanel(props: PlannedAllocationProps) {
   const { teams, projects } = props;
-  const viewportRef = useViewportWorkspace(3);
+  const viewportRef = useViewportWorkspace();
   return (
     <section className="panel workspace-dock" ref={viewportRef}>
       <PlannedCapacitySummary {...props} />
