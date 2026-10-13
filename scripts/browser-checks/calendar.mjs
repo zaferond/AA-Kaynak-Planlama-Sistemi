@@ -519,7 +519,7 @@ export async function checkCalendar(f) {
       },
     );
     await f.check(
-      "calendar: reports reflect saved labels/dates; manager and unmapped user cannot edit personal records",
+      "calendar: admin reports reflect saved labels/dates; manager and unmapped user cannot read personal records",
       async () => {
         await page.reload();
         await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
@@ -531,21 +531,34 @@ export async function checkCalendar(f) {
         await f.capture(page, "calendar-report");
         await actualTab(manager.page).click();
         await manager.page
-          .getByRole("button", {
-            name: "Browser Employee izin ve eğitim takvimini aç",
+          .getByRole("textbox", {
+            name: "Browser Employee / Browser Project A / 2026-01 / %",
             exact: true,
           })
-          .first()
-          .click();
+          .waitFor();
         assert.equal(
-          await dialog(manager.page)
-            .getByRole("button", { name: "Kaydet", exact: true })
+          await manager.page
+            .getByRole("button", {
+              name: "Browser Employee izin ve eğitim takvimini aç",
+              exact: true,
+            })
             .count(),
           0,
         );
-        await dialog(manager.page)
-          .getByRole("button", { name: "Kapat", exact: true })
-          .click();
+        const response = await manager.context.request.get(
+          f.origin + "/api/actual-view?start=2026-01&count=1",
+        );
+        assert.equal(response.status(), 200);
+        const scoped = await response.json();
+        assert.deepEqual(scoped.data.personCalendar, {});
+        assert(
+          !Object.keys(scoped.data.revisions).some((key) =>
+            key.startsWith("personDay:"),
+          ),
+        );
+        assert(scoped.monthSummaries["r-own|2026-01"]);
+        assert(!JSON.stringify(scoped).includes("PRIVATE_LEAVE_LABEL"));
+        assert(!JSON.stringify(scoped).includes("Training label"));
         await actualTab(other.page).click();
         assert.equal(
           await other.page
