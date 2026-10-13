@@ -42,3 +42,7 @@ Kuyruk sonrası ve gövde alındıktan sonra oturum yeniden doğrulanır; Store 
 ### Tek hücre planlanan dağılım ön kontrolü
 
 Uygulamanın oluşturduğu tek hücrelik planlanan dağılım komutları, mevcut Exclusive transaction içinde hedef takım/proje/hücre/revision için sabit ve parametreli bir ön okuma kullanır. Aynı komut kodu yetki ve revision hatalarını tam snapshot yüklenmeden reddeder. Ön kontrolü geçen istekler tam snapshot doğrulaması, persist, audit ve yanıt üretiminden geçmeye devam eder. Bu kısmi bağlam hiçbir zaman snapshot olarak yazılmaz veya istemciye dönülmez. Toplu/karma işlemler, key biçimi uygun olmayan eski veriler ve keyfî Store callback'leri mevcut tam okuma yolunu kullanır. Geçerli yazma başına bir ek hedef sorgusu vardır; üretim kapasitesi veya hız artışı garantisi değildir.
+
+## Kullanıcı manueli
+
+Güncel son kullanıcı ve IT rehberi: [Türkçe PDF manuel](docs/kullanici-manueli/AA-Kaynak-Planlama-Sistemi-Kullanici-Manueli.pdf). Düzenlenebilir Markdown, sentetik ekran görselleri ve PDF üretim adımları [manuel kaynakları](docs/kullanici-manueli/README.md) altında tutulur. Belgenin teyit listesi, gerçek AD/MSSQL ve kurum işletim kabulünden ayrı değerlendirilmelidir.
