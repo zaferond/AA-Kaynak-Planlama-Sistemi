@@ -3,7 +3,7 @@ import { parseAllocationKey } from "../shared/allocation-key.ts";
 import { z } from "zod";
 import { fail, publicUser } from "./auth.mjs";
 import {
-  allowedTeam,
+  allowedActualTeam,
   allowedPlanningTeam,
   validate,
   actualVersionAt,
@@ -126,7 +126,7 @@ function stageParsedChanges(d, u, changes) {
       u.role === "manager" &&
       actualKind &&
       !!assignment &&
-      allowedTeam(d, publicUser(u), assignment.team);
+      allowedActualTeam(d, publicUser(u), assignment.team);
     const ownActual =
       (u.role === "normal" || u.role === "manager") &&
       !!u.resourceId &&

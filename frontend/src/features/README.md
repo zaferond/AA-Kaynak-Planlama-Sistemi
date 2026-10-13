@@ -271,3 +271,13 @@ Team Member ve Product Owner kaydında takım zorunludur; liderlik seçimi iste�
 Çalışan tablosunda Active Directory hesabının mevcut `email` bilgisi ayrı **E-posta Adresi** sütununda, satır kaydırmalı metin olarak gösterilir. Arama mevcut e-posta değerini de kapsar. Altı kaynak statüsü okunabilir, farklı arka plan renkleri olan etiketlerle ayrılır.
 
 Kaynak giriş kutusunun odak katmanı `1`, sabit kimlik hücreleri `2` ve takvim/proje başlıkları daha üst katmandadır. Gerçekleşen hücrelerde iç odak/hata katmanları hücre bağlamında sınırlandırılır. Kaydırma odaktaki taslağı kaydetmez ya da silmez; kutu üst başlıkların arkasından geçer.
+
+## Takım → Projeler başlık özeti
+
+Bu görünümde `PlannedTeamHeader`, takım kimliği ve yönetici bilgisiyle birlikte her ayın Aktif Kaynak, Dağıtılan Kaynak ve Kalan Kaynak değerlerini tek sabit başlık satırında gösterir. Değerler ayrıntılı görünümde A / D / K işaretleriyle yatay gösterilir; dar görünümlerde kompakt üç satıra geçer. Tam anlam ve ay bilgisi değerlerin açıklama balonunda ve erişilebilir adında bulunur. Takım adının altına ek özet satırları konmaz. Proje satırlarının altındaki eski üç özet satırı kaldırılmıştır. Aylık değerler aynı `metric([team.id], month)` hesabını kullanır; proje filtresi olsa da takımın tüm projelere dağıttığı kaynak toplamı korunur. %10 aşım renkleri ortak `capacityStatus` kuralından alınır. Başlık mevcut pencereleme/sabitleme mekanizmasıyla sonraki takım başlığına kadar görünür kalır. Genel filtre özeti ve Proje → Takımlar görünümü aynı davranışı sürdürür.
+
+
+Gerçekleşen dağılımın kişi alt toplamı yüzde biriminde dağıtılan kaynak yüzdesini, saat biriminde **Kalan Aylık Çalışma Saati** değerini gösterir. Kalan saat, ortak takvim ve kişisel izin sonrası net aylık saatten tüm projelere ayrılan saat ve eğitim saatinin çıkarılmasıdır. Mevcut `actualMonths` toplamları kullanılır; proje filtresi görünmeyen projelerin süresini hesaptan çıkarmaz. Manuel net saat değişiklikleri de aynı hesaba yansır.
+
+
+Gerçekleşen dağılımda yönetici hesabının liderlik yetkisi, tüm alt liderliklerin doğrudan kaynak birimleri ve takımları için devralınır (`allowedActualTeam`). Ekran ve kayıt komutları aynı hiyerarşi kontrolünü kullanır; görünür olmak tek başına düzenleme hakkı vermez. Ayın çalışan ataması yetki kapsamına girmelidir. `actual-view` bu hücrelerin güncel revision değerlerini taşır. Yöneticinin diğer çalışanların izin/eğitim ikonu gizlidir; kendi eşleşmiş çalışan kaydının takvimi ve admin erişimi korunur. Kişisel takvim veri/yazma politikası genişletilmez.

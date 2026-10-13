@@ -40,6 +40,7 @@ export { buildCapacityIndex } from "./metrics.ts";
 export {
   scopeData,
   allowedTeam,
+  allowedActualTeam,
   allowedPlanningTeam,
   visiblePlanningTeamScope,
   visibleTeamScope,

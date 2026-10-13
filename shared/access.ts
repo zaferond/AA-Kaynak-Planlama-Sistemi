@@ -41,9 +41,9 @@ export function allowedTeam(d: Data, u: Principal, id: string) {
       ))
   );
 }
-// Planning grants are inherited by descendant leaderships. Keep actual-data
-// permissions separate: planning visibility must not grant personal-data access.
-export function allowedPlanningTeam(
+// Traverse hierarchy grants once; callers retain separate planning, actual and
+// personal-calendar policies. This function never grants normal users team writes.
+function allowedHierarchyTeam(
   d: Pick<Data, "teams" | "leaderParents">,
   u: Principal,
   id: string,
@@ -58,6 +58,20 @@ export function allowedPlanningTeam(
     lead = ownValue(d.leaderParents, lead);
   }
   return false;
+}
+export function allowedPlanningTeam(
+  d: Pick<Data, "teams" | "leaderParents">,
+  u: Principal,
+  id: string,
+) {
+  return allowedHierarchyTeam(d, u, id);
+}
+export function allowedActualTeam(
+  d: Pick<Data, "teams" | "leaderParents">,
+  u: Principal,
+  id: string,
+) {
+  return allowedHierarchyTeam(d, u, id);
 }
 export function visiblePlanningTeamScope(
   d: Pick<Data, "teams" | "leaders">,

@@ -1,22 +1,16 @@
 import { planningUnitManagerIndex } from "../../../../shared/resource-roles";
 import { ownValue } from "../../../../shared/records";
-import { planningUnitHierarchy } from "../../../../shared/leadership-planning";
 import { useMemo } from "react";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
 import { fmt, monthLabel } from "../../format";
 import ProjectResponsible from "../../ProjectResponsible";
 import PlannedTableHeaders from "./PlannedTableHeaders";
-import PlannedSummaryRows from "./PlannedSummaryRows";
+import PlannedTeamHeader from "./PlannedTeamHeader";
 import PlannedPhaseButton from "./PlannedPhaseButton";
 import PlannedAllocationRow, {
   type PlannedRowProps,
 } from "./PlannedAllocationRow";
-import {
-  actualRowsVisible,
-  PlannedActualToggle,
-  PlannedTeamBadge,
-  PlannedUnitName,
-} from "./PlannedTeamLabels";
+import { actualRowsVisible } from "./PlannedTeamLabels";
 import { useWindowedSections } from "../workspace/useWindowedSections";
 import type { WindowedSection } from "../workspace/useWindowedSections";
 import type { PlannedAllocationProps } from "./types";
@@ -63,16 +57,14 @@ export default function PlannedAllocationTable(
             { length: Math.ceil(g.inners.length / 20) },
             (_, part) => {
               const chunk = g.inners.slice(part * 20, (part + 1) * 20);
-              const first = part === 0,
-                last = (part + 1) * 20 >= g.inners.length;
+              const first = part === 0;
               const key = `${t.id}:${part}`;
               return {
                 key,
                 headingKey: `${t.id}:0`,
                 height:
-                  (first ? 76 : 0) +
-                  chunk.length * (actualRowsVisible(props, t.id) ? 100 : 60) +
-                  (last ? 126 : 0),
+                  (first ? 64 : 0) +
+                  chunk.length * (actualRowsVisible(props, t.id) ? 100 : 60),
                 render: () => (
                   <TableBody
                     key={key}
@@ -81,32 +73,13 @@ export default function PlannedAllocationTable(
                     data-project-group={`team:${t.id}`}
                   >
                     {first && (
-                      <TableRow
-                        className="group project-freeze-row"
-                        data-project-heading={`team:${t.id}`}
-                        data-planning-group={t.id}
-                        data-hierarchy-depth={
-                          planningUnitHierarchy(props.data, t).depth
+                      <PlannedTeamHeader
+                        team={t}
+                        managerName={
+                          ownValue(managerNames, t.id) || "Atanmamış"
                         }
-                      >
-                        <TableCell colSpan={months.length + 1}>
-                          <div className="team-group-label">
-                            <PlannedActualToggle team={t} {...props} />
-                            <div>
-                              <div className="team-heading">
-                                <strong>
-                                  <PlannedUnitName data={props.data} team={t} />
-                                </strong>
-                                <PlannedTeamBadge team={t} {...props} />
-                              </div>
-                              <span>
-                                Yönetici:{" "}
-                                {ownValue(managerNames, t.id) || "Atanmamış"}
-                              </span>
-                            </div>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+                        {...props}
+                      />
                     )}
                     {chunk.map((i) => (
                       <PlannedAllocationRow
@@ -120,7 +93,6 @@ export default function PlannedAllocationTable(
                         {...props}
                       />
                     ))}
-                    {last && <PlannedSummaryRows {...props} teams={[t]} />}
                   </TableBody>
                 ),
               };

@@ -1,3 +1,6 @@
+import { checkActualManagerHierarchy } from "./browser-checks/actual-manager-hierarchy.mjs";
+import { checkActualRemainingHours } from "./browser-checks/actual-remaining-hours.mjs";
+import { checkTeamCapacityHeader } from "./browser-checks/team-capacity-header.mjs";
 import { checkAllocationFocusLayers } from "./browser-checks/allocation-focus-layers.mjs";
 import { checkTeamOnlyResource } from "./browser-checks/team-only-resource.mjs";
 import { checkProjectCodes } from "./browser-checks/project-codes.mjs";
@@ -48,6 +51,9 @@ import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
 
 for (const check of [
+  checkActualManagerHierarchy,
+  checkActualRemainingHours,
+  checkTeamCapacityHeader,
   checkAllocationFocusLayers,
   checkTeamOnlyResource,
   checkProjectCodes,

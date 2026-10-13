@@ -1,5 +1,5 @@
 import { activityQuery } from "./activity-report.mjs";
-import { scopeData, visibleTeamScope } from "../shared/access.ts";
+import { scopeData, allowedActualTeam } from "../shared/access.ts";
 import { employeeAssignment } from "../shared/employee-directory.ts";
 import { selectedLeadershipScope } from "../shared/leadership-planning.ts";
 import { visibleLeaderParents } from "../shared/leadership-hierarchy.ts";
@@ -23,7 +23,11 @@ export function actualViewTeams(data, user, date = currentPlanningDate()) {
   if (user.role === "admin") return data.teams;
   const ids =
     user.role === "manager" && user.leaders.length
-      ? visibleTeamScope(data, user).ids
+      ? new Set(
+          data.teams
+            .filter((team) => allowedActualTeam(data, user, team.id))
+            .map((team) => team.id),
+        )
       : new Set();
   const own = employeeAssignment(data, user.resourceId || "", date.slice(0, 7));
   if (
@@ -119,6 +123,26 @@ export function actualView(data, user, query, date = currentPlanningDate()) {
               },
         ),
       })),
+      // Descendant edits need the current revision even when generic/private
+      // calendar scope is narrower. Keep optimistic locking authoritative.
+      revisions: {
+        ...base.revisions,
+        ...filterOwnRecords(data.revisions, (key) => {
+          if (user.role !== "manager") return false;
+          const actual = key.startsWith("actual:");
+          const hours = key.startsWith("workedHours:");
+          if (!actual && !hours) return false;
+          const parts = key.slice(actual ? 7 : 12).split("|");
+          const month = parts[actual ? 2 : 1];
+          const resource = byId.get(parts[0]);
+          const team = resource && actualVersionAt(resource, month)?.team;
+          return (
+            canRead(parts[0], month) &&
+            !!team &&
+            allowedActualTeam(data, user, team)
+          );
+        }),
+      },
       actualAllocations: entries(data.actualAllocations, 2),
       actualWorkedHours: entries(data.actualWorkedHours, 1),
       actualPercentEntries: entries(data.actualPercentEntries, 2),

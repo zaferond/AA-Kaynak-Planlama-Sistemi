@@ -13,7 +13,11 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
-import { workdaysInMonth, type ActualUnit } from "../../actual-units";
+import {
+  DEFAULT_MONTHLY_HOURS,
+  workdaysInMonth,
+  type ActualUnit,
+} from "../../actual-units";
 import { fullMonthFormat, numberFormat } from "./format";
 import type { ActualAllocationView } from "./useActualAllocationView";
 import type { ActualCapacityDialog } from "./useActualCapacityDialog";
@@ -280,17 +284,31 @@ export default function ActualAllocationTable({
                     <TableRow className="actual-person-total">
                       <TableCell
                         className="rowname"
-                        title={resource.name + " · projeler ve eğitim toplamı"}
+                        title={
+                          resource.name +
+                          (unit === "hours"
+                            ? " · aylık çalışma − tüm projeler ve eğitim süresi"
+                            : " · projeler ve eğitim toplamı")
+                        }
                       >
-                        <span className="indent">↳</span>Dağıtılan Kaynak %'si
+                        <span className="indent">↳</span>
+                        {unit === "hours"
+                          ? "Kalan Aylık Çalışma Saati"
+                          : "Dağıtılan Kaynak %'si"}
                       </TableCell>
                       {months.map((month) => {
                         const allocated =
                           personMonthTotals[resource.id + "|" + month] || 0;
-                        const monthlyCapacity = actualMonths.get(
-                          resource.id,
-                          month,
-                        ).capacityFte;
+                        const summary = actualMonths.get(resource.id, month);
+                        const monthlyCapacity = summary.capacityFte;
+                        const unallocatedHours =
+                          summary.effectiveHours -
+                          allocated * DEFAULT_MONTHLY_HOURS;
+                        const remainingHours =
+                          Math.abs(unallocatedHours) <
+                          ACTUAL_FTE_TOLERANCE * DEFAULT_MONTHLY_HOURS
+                            ? 0
+                            : unallocatedHours;
                         const percent =
                           monthlyCapacity > 0
                             ? (allocated / monthlyCapacity) * 100
@@ -320,18 +338,24 @@ export default function ActualAllocationTable({
                                 selectHoursContext(resource.id, month, key);
                             }}
                             title={
-                              resource.name +
-                              " · " +
-                              month +
-                              " · projeler ve " +
-                              numberFormat.format(
-                                calendarTotals(resource.id, month)
-                                  .trainingHours,
-                              ) +
-                              " saat eğitim"
+                              unit === "hours"
+                                ? `${resource.name} · ${month} · ${numberFormat.format(summary.effectiveHours)} saat aylık çalışma − ${numberFormat.format(summary.projectFte * DEFAULT_MONTHLY_HOURS)} saat proje dağılımı − ${numberFormat.format(summary.trainingHours)} saat eğitim = ${numberFormat.format(remainingHours)} saat kalan`
+                                : resource.name +
+                                  " · " +
+                                  month +
+                                  " · projeler ve " +
+                                  numberFormat.format(
+                                    calendarTotals(resource.id, month)
+                                      .trainingHours,
+                                  ) +
+                                  " saat eğitim"
                             }
                           >
-                            {visible ? "%" + numberFormat.format(percent) : "—"}
+                            {visible
+                              ? unit === "hours"
+                                ? numberFormat.format(remainingHours)
+                                : "%" + numberFormat.format(percent)
+                              : "—"}
                           </TableCell>
                         );
                       })}

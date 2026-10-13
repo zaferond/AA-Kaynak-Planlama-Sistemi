@@ -195,8 +195,9 @@ export async function checkWorkspaceFilters(f) {
           await page
             .locator("table.planning-grid")
             .filter({ has: page.getByText("Takım / Proje", { exact: true }) })
-            .locator(".summary.s2 td")
-            .nth(1)
+            .locator(
+              '[data-team-capacity-month="2026-01"] [data-team-capacity-kind="1"]',
+            )
             .textContent(),
           fmt(metric.total),
         );

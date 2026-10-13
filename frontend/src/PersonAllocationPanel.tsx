@@ -1,4 +1,4 @@
-import { allowedTeam } from "./access";
+import { allowedActualTeam } from "./access";
 import { actualVersionAt } from "./model";
 import { useEffect, useState } from "react";
 import type { Resource, Project } from "./model";
@@ -64,18 +64,11 @@ export default function PersonAllocationPanel(
     return (
       user.role === "manager" &&
       !!version &&
-      allowedTeam(data, user, version.team)
+      allowedActualTeam(data, user, version.team)
     );
   }
   function canViewPersonalCalendar(id: string) {
-    return (
-      user.role === "admin" ||
-      id === user.resourceId ||
-      (user.role === "manager" &&
-        !!data.resources
-          .find((person) => person.id === id)
-          ?.versions.some((version) => allowedTeam(data, user, version.team)))
-    );
+    return user.role === "admin" || id === user.resourceId;
   }
   async function save(
     resource: Resource,
