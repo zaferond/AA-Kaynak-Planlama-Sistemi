@@ -173,6 +173,7 @@ export default function Portal() {
     start,
     count,
     currentMonth,
+    user,
   );
   const viewData = useMemo(
     () =>
@@ -728,7 +729,7 @@ export default function Portal() {
                   (isManager && !!user?.leaders.length) ||
                   user?.resourceId ? (
                     <PersonAllocationPanel
-                      loading={actualView.busy}
+                      loading={actualView.busy || !!actualView.error}
                       user={user!}
                       monthSummaries={actualView.value?.monthSummaries}
                       data={viewData || data}

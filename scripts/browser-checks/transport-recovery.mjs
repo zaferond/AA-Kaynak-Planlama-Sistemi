@@ -347,7 +347,47 @@ export async function checkTransportRecovery(report) {
             },
           ]),
         );
-        await inspectGlobal(actual.page);
+        await actualInput.evaluate(
+          (element) => (window.__actualDraftElement = element),
+        );
+        await actual.page.evaluate(() => {
+          const fetch = window.fetch.bind(window);
+          let release;
+          const hold = new Promise((resolve) => (release = resolve));
+          window.__actualRefreshReady = false;
+          window.fetch = async (url, init) => {
+            if (String(url).startsWith("/api/actual-view?")) {
+              window.__actualRefreshReady = true;
+              await hold;
+            }
+            return fetch(url, init);
+          };
+          window.__releaseActualRefresh = () => {
+            window.fetch = fetch;
+            release();
+          };
+        });
+        try {
+          await inspectGlobal(actual.page);
+          await actual.page.waitForFunction(() => window.__actualRefreshReady);
+          assert.equal(await actualInput.inputValue(), "%25");
+          assert(
+            await actualInput.evaluate(
+              (element) => element === window.__actualDraftElement,
+            ),
+            "same-scope refresh must not remount the draft input",
+          );
+          await f.wait(
+            () => actualInput.isDisabled(),
+            "old view is read-only during refresh",
+          );
+        } finally {
+          await actual.page.evaluate(() => window.__releaseActualRefresh());
+        }
+        await f.wait(
+          async () => !(await actualInput.isDisabled()),
+          "actual refresh settled",
+        );
         assert.equal(await actualInput.inputValue(), "%25");
         assert.equal(await actual.page.evaluate(() => window.__posts), 1);
         const reply = actual.page.waitForResponse((r) =>

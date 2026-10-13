@@ -58,6 +58,7 @@ export default function PersonAllocationPanel(
   });
   const { selectedCell, selectedHoursMonth, selectedHoursPerson } = selection;
   function canEditPersonMonth(id: string, month: string) {
+    if (props.loading) return false;
     if (user.role === "admin" || id === user.resourceId) return true;
     const resource = data.resources.find((person) => person.id === id);
     const version = resource && actualVersionAt(resource, month);
