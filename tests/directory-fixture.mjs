@@ -15,6 +15,9 @@ export function syntheticDirectory(password) {
     disable(id) {
       disabled.add(id);
     },
+    enable(id) {
+      disabled.delete(id);
+    },
     update(id, patch) {
       entries.set(id, { ...entries.get(id), ...patch });
     },

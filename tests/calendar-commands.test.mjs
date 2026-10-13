@@ -62,6 +62,8 @@ const fixture = () => ({
   personCalendar: {},
   revisions: { "calendar:shared": 3 },
   leaders: ["A"],
+  leaderParents: {},
+  leadershipUnits: {},
   catalogVersion: 2,
 });
 const range = (from, to = "") => ({
@@ -780,7 +782,7 @@ test("absence range reports show one row and filter hours by month and historica
   );
 });
 
-test("manager calendar scope does not reveal range dates in another leadership; owners retain the full range", () => {
+test("manager calendar scope hides peer daily records and revisions; owners retain the full range", () => {
   const data = fixture();
   data.teams.push({ id: "t2", name: "Other", lead: "B", excelCapacity: 0 });
   data.leaders.push("B");
@@ -808,10 +810,9 @@ test("manager calendar scope does not reveal range dates in another leadership; 
     name: "Synthetic",
     username: "synthetic",
   });
-  assert.equal(Object.keys(scoped.personCalendar).length, 2);
-  assert(Object.values(scoped.personCalendar).every((entry) => !entry.range));
+  assert.deepEqual(scoped.personCalendar, {});
   assert(
-    Object.keys(scoped.personCalendar).every((key) => key.includes("2026-01")),
+    !Object.keys(scoped.revisions).some((key) => key.startsWith("personDay:")),
   );
   const own = scopeData(data, { ...owner, id: owner._id });
   assert.equal(Object.keys(own.personCalendar).length, 3);

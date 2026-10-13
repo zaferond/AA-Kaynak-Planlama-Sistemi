@@ -1,5 +1,13 @@
 name: Native MSSQL verification
 on:
+  workflow_call:
+    inputs:
+      size:
+        type: string
+        default: "1000"
+      contention:
+        type: boolean
+        default: false
   schedule:
     - cron: "20 2 * * 1"
   workflow_dispatch:
@@ -69,12 +77,17 @@ jobs:
           args=(--size "$TEST_SIZE" --samples 3 --report native-mssql-report.json)
           if [ "$TEST_CONTENTION" = "true" ]; then args+=(--contention); fi
           npm run test:db -- "${args[@]}"
+      - name: Verify native evidence against this commit and current sources
+        shell: bash
+        run: node scripts/verify-native-evidence.mjs --report native-mssql-report.json --commit "$GITHUB_SHA" > native-mssql-verification.json
       - uses: actions/upload-artifact@v4
         with:
           name: native-mssql-report
-          path: native-mssql-report.json
+          path: |
+            native-mssql-report.json
+            native-mssql-verification.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 90
       - name: Remove test container
         if: always()
         run: docker rm --force aa-native-sql >/dev/null 2>&1 || true

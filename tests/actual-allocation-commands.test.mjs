@@ -342,3 +342,84 @@ test("month index matches existing calendar rules across automatic/manual hours 
   assert.equal(createActualMonthIndex(changed).get("r", month).projectFte, 0.5);
   assert.equal(index.get("r", month).projectFte, 0.75);
 });
+
+test("private-calendar monthly summaries preserve peer entry limits and net-hour conversion", () => {
+  const complete = fixture();
+  addAbsences(complete);
+  complete.personCalendar["r|2026-09-04|training"] = {
+    type: "training",
+    hours: 4.5,
+    label: "PRIVATE_TRAINING",
+  };
+  complete.actualAllocations["r|q|" + month] = 0.5;
+  complete.revisions["actual:r|p|" + month] = 4;
+  const summary = createActualMonthIndex(complete).get("r", month);
+  const scoped = freeze({ ...structuredClone(complete), personCalendar: {} });
+  const before = structuredClone(complete);
+  for (const entry of [
+    { unit: "hours", value: 45 },
+    { unit: "percent", value: 25 },
+  ]) {
+    const expected = prepareActualAllocationChange(
+      complete,
+      "r",
+      "p",
+      month,
+      entry,
+    );
+    const command = prepareActualAllocationChange(
+      scoped,
+      "r",
+      "p",
+      month,
+      entry,
+      summary,
+    );
+    assert.deepEqual(command, expected);
+    const saved = structuredClone(complete);
+    applyChanges(saved, admin, [command]);
+    assert(
+      Math.abs(
+        saved.actualAllocations[command.id] -
+          (entry.unit === "hours" ? 45 : summary.effectiveHours / 4) / 180,
+      ) < 1e-9,
+    );
+  }
+  assert.throws(
+    () =>
+      prepareActualAllocationChange(
+        scoped,
+        "r",
+        "p",
+        month,
+        { unit: "hours", value: summary.effectiveHours - 90 },
+        summary,
+      ),
+    /%100/,
+  );
+  for (const hours of [null, 200]) {
+    const command = prepareWorkedHoursChange(
+      scoped,
+      "r",
+      month,
+      hours,
+      summary,
+    );
+    assert.deepEqual(
+      command,
+      prepareWorkedHoursChange(complete, "r", month, hours),
+    );
+    const saved = structuredClone(complete);
+    applyChanges(saved, admin, [command]);
+    assert.equal(
+      createActualMonthIndex(saved).get("r", month).effectiveHours,
+      hours ?? summary.autoHours,
+    );
+  }
+  assert.throws(
+    () => prepareWorkedHoursChange(scoped, "r", month, 94, summary),
+    /%100/,
+  );
+  assert.deepEqual(complete, before);
+  assert.deepEqual(scoped.personCalendar, {});
+});

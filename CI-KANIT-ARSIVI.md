@@ -1,5 +1,9 @@
 # CI kanıt arşivi
 
+## 13 Ekim 2026 — M1–M6 güncel sürüm kabulü
+
+[M6 kabul raporu](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md). Yerel 811/811 kontrol başarılı; aynı commit için güncel GitHub Ubuntu/Windows/native koşusu bekleniyor. Önceki native kayıtlar bu yeni kaynak için başarı kanıtı olarak kullanılmaz.
+
 ## 9 Ekim 2026 — N3 mutasyon aşamaları ve takvim JSON eşitliği
 
 Test edilen kaynak **`a5661f8d63cac67a5fd3ad0507eb4de9967d1a0b`**. [Aşama ölçümleri, transaction'a ait JSON eşitliği ve 38 yerel test](MIMARI-MUTASYON-ASAMALARI-2026-10-09.md).

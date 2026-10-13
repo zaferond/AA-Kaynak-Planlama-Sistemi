@@ -28,6 +28,14 @@ export function isEmployeeResource(resource: Resource) {
 }
 export const ROOT_ADMIN_ID = "root-admin";
 export type Principal = Omit<Account, "credential">;
+/** Daily leave/training details belong only to the employee and administrators.
+ * Leadership grants authorize actual work entries, never private calendars. */
+export function canReadPersonalCalendar(
+  u: Pick<Principal, "role" | "resourceId">,
+  resourceId: string,
+) {
+  return u.role === "admin" || (!!resourceId && resourceId === u.resourceId);
+}
 export function publicAccount(a: Account): Principal {
   const { credential, ...p } = a;
   return structuredClone(p);
@@ -149,8 +157,7 @@ export function scopeData(d: Data, u: Principal): Data {
     kind: "actual" | "workedHours",
   ) => filterOwnRecords(entries, (key) => canSeeActual(key, kind));
   const canSeePersonDay = (key: string) => {
-    const [resourceId, date] = key.split("|");
-    return canSeeResourceMonth(resourceId, date?.slice(0, 7));
+    return canReadPersonalCalendar(u, key.split("|")[0]);
   };
   // Keep the existing ordinary-then-risk revision order with one enumeration.
   const riskKeys: string[] = [];
@@ -172,35 +179,6 @@ export function scopeData(d: Data, u: Principal): Data {
   for (const key of riskKeys) revisions[key] = d.revisions[key];
 
   const personCalendar = filterOwnRecords(d.personCalendar, canSeePersonDay);
-  // A transferred employee's range must not reveal dates from another manager's months.
-  if (u.role === "manager")
-    for (const [key, entry] of Object.entries(personCalendar)) {
-      if (!entry.range) continue;
-      const resourceId = key.split("|")[0];
-      const from = entry.range.from;
-      const last = new Date(
-        Date.parse(entry.range.to + "T12:00:00Z") - 86400000,
-      ).toISOString();
-      const firstMonth =
-        Number(from.slice(0, 4)) * 12 + Number(from.slice(5, 7)) - 1;
-      const lastMonth =
-        Number(last.slice(0, 4)) * 12 + Number(last.slice(5, 7)) - 1;
-      let visible = true;
-      for (let index = firstMonth; index <= lastMonth; index++) {
-        const month =
-          Math.floor(index / 12) +
-          "-" +
-          String((index % 12) + 1).padStart(2, "0");
-        if (!canSeeResourceMonth(resourceId, month)) {
-          visible = false;
-          break;
-        }
-      }
-      if (!visible) {
-        const { range, ...day } = entry;
-        personCalendar[key] = day;
-      }
-    }
 
   return {
     ...d,

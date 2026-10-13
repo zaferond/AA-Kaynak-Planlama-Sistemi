@@ -16,12 +16,31 @@ const metadataQueries = Object.freeze({
     "SELECT * FROM kp_resource_versions ORDER BY effective_month",
 });
 
-export async function snapshotMetadataReader(c, { batch = false } = {}) {
+export async function snapshotMetadataReader(
+  c,
+  { batch = false, report } = {},
+) {
+  if (report !== undefined && !["actual", "activity"].includes(report))
+    throw Error("Unknown read-only report metadata.");
+  if (report && batch)
+    throw Error("Read-only report metadata cannot use the full batch.");
   const names = Object.keys(metadataQueries);
   if (!batch || typeof c.queryMany !== "function")
     return (name) => {
       if (!Object.hasOwn(metadataQueries, name))
         throw Error("Unknown snapshot metadata query.");
+      if (report && name === "risks") return Promise.resolve({ rows: [] });
+      if (
+        report === "activity" &&
+        ["riskSystems", "phases", "milestones"].includes(name)
+      )
+        return Promise.resolve({ rows: [] });
+      if (report && name === "settings")
+        return c.query(
+          "SELECT generation,calendar_days,person_calendar,leader_parents,leadership_units FROM kp_settings WHERE id=1",
+        );
+      if (report && name === "resources")
+        return c.query("SELECT id,name FROM kp_resources ORDER BY id");
       return c.query(metadataQueries[name]);
     };
   const parts = await c.queryMany(Object.values(metadataQueries));

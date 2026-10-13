@@ -293,3 +293,5 @@ Liderlik Bazında Eksik Raporu, üst birimlerin altında alt liderlikleri `expan
 
 
 Kaynak Ekle / Yetki Tanımla ekranında Active Directory seçilince kaynak Ad Soyad alanı salt okunur olur ve seçilen AD kullanıcısının adı gösterilir; kullanıcı seçilmeden kayıt tamamlanmaz. AD modundan çıkılırsa önceki manuel isim taslağı korunur. Aynı `directoryEmployeeName` seçicisi görüntüleme ve kayıt komutunda kullanılır. Birleşik hesap/çalışan kaydında sunucu yeni hesabın adını AD'den yeniden çözer ve gelen manuel kaynak adını dikkate almaz; mevcut AD hesabının yetki düzenlemesinde kaynak adı AD profilindeki hesap adıyla eşitlenir.
+
+Kişisel izin/eğitim ayrıntıları ve `personDay` revision'ları, ortak `canReadPersonalCalendar` politikasıyla yalnız Admin/kayıt sahibine projekte edilir. Yönetici liderlik grant'leri günlük takvimi açmaz. Gerçekleşen görünümde başkaları için gereken kapasite/eğitim toplamları `monthSummaries` üzerinden gelir; `PersonAllocationPanel` komut hazırlarken aynı aylık özeti kullanarak net saat ve kapasite sınırlarını korur. İlgili regresyonlar ve sınırlar [M1 düzeltme kaydında](../../../M1-KISISEL-TAKVIM-VERI-KAPSAMI-2026-10-13.md).

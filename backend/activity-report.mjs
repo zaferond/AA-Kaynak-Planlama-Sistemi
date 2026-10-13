@@ -2,7 +2,7 @@ import { z } from "zod";
 import { buildActivityRows } from "../shared/activity-report.ts";
 import {
   activityTeamScope,
-  employeeAssignment,
+  createEmployeeAssignmentIndex,
 } from "../shared/employee-directory.ts";
 import { visibleLeaderParents } from "../shared/leadership-hierarchy.ts";
 import { currentPlanningMonth } from "../shared/resource-dates.ts";
@@ -39,6 +39,14 @@ export const activityQuery = z
       }),
   })
   .strict();
+export function activityReportResources(data, permitted, currentMonth) {
+  const teamIds = new Set(permitted.map((team) => team.id));
+  const assignments = createEmployeeAssignmentIndex(data, currentMonth);
+  return data.resources.filter((resource) => {
+    const assignment = assignments.get(resource.id);
+    return assignment && teamIds.has(assignment.team.id);
+  });
+}
 export function activityReport(
   data,
   user,
@@ -46,11 +54,7 @@ export function activityReport(
   currentMonth = currentPlanningMonth(),
 ) {
   const permitted = activityTeamScope(data, user, currentMonth);
-  const teamIds = new Set(permitted.map((team) => team.id));
-  const resources = data.resources.filter((resource) => {
-    const assignment = employeeAssignment(data, resource.id, currentMonth);
-    return assignment && teamIds.has(assignment.team.id);
-  });
+  const resources = activityReportResources(data, permitted, currentMonth);
   const projects = data.projects.filter(
     (project) => !query.projects.length || query.projects.includes(project.id),
   );

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import http from "node:http";
+import initialCatalog from "../shared/catalog.json" with { type: "json" };
 
 import { syntheticDirectory } from "./directory-fixture.mjs";
 import { createApp } from "../backend/app.mjs";
@@ -76,7 +77,22 @@ export async function integrationSuite(store) {
     const get = async (auth) =>
       (await request("/data", undefined, 200, auth)).json;
     let state = await get();
-    assert.equal(state.data.teams.length, 54);
+    assert.equal(
+      state.data.teams.filter((team) => team.kind !== "leadership").length,
+      initialCatalog.teams.length,
+    );
+    const units = Object.entries(state.data.leadershipUnits);
+    assert.equal(units.length, initialCatalog.leaders.length);
+    assert.equal(new Set(units.map(([, id]) => id)).size, units.length);
+    for (const [leader, id] of units) {
+      const unit = state.data.teams.find((team) => team.id === id);
+      assert.equal(unit?.kind, "leadership");
+      assert.equal(unit.lead, leader);
+    }
+    assert.equal(
+      state.data.teams.length,
+      initialCatalog.teams.length + units.length,
+    );
     assert.equal(state.data.riskSystems.length, 75);
     const testSystem = {
       id: "native-system-test",
@@ -466,7 +482,7 @@ export async function integrationSuite(store) {
     };
     state = await get(normalAuth);
     assert.equal(state.data.users, undefined);
-    assert.ok(state.data.teams.every((t) => t.lead === team.lead));
+    assert.deepEqual(state.data.teams, (await get(root)).data.teams);
     assert.equal(state.data.resources[0].name, "Deneme");
     assert.equal(state.data.actualAllocations[actualKey], 0.75);
     assert.equal(state.data.actualTeamTotals[k], 0.75);

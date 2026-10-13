@@ -4056,3 +4056,200 @@ test("AD administrators: provisioning, linked role lifecycle, protected root and
   assert.equal(account.active, false);
   assert((await state()).data.resources.some((r) => r.id === resource.id));
 });
+
+test("private calendars remain own/admin-only across reads and mutation snapshots without losing monthly summaries", async (t) => {
+  const { admin, request, user, state, write } = await setup(t);
+  const initial = (await state()).data;
+  const team = initial.teams.find((item) => item.lead);
+  const other = initial.teams.find(
+    (item) => item.lead && item.lead !== team.lead,
+  );
+  const people = [
+    ["privacy-own", other],
+    ["privacy-normal-own", other],
+    ["privacy-peer", team],
+    ["privacy-outsider", other],
+  ].map(([id, unit]) => ({
+    id,
+    name: id,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: unit.id,
+        lead: unit.lead,
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+      },
+    ],
+  }));
+  const calendar = [
+    ["privacy-own|2026-09-01|leave", "leave", 4.5, "OWN_CALENDAR_DESCRIPTION"],
+    [
+      "privacy-normal-own|2026-09-01|leave",
+      "leave",
+      4.5,
+      "OWN_NORMAL_CALENDAR",
+    ],
+    ["privacy-peer|2026-09-01|leave", "leave", 9, "PRIVATE_PEER_LEAVE"],
+    [
+      "privacy-peer|2026-09-02|training",
+      "training",
+      4.5,
+      "PRIVATE_PEER_TRAINING",
+    ],
+    ["privacy-outsider|2026-09-01|leave", "leave", 9, "PRIVATE_OUTSIDE_LEAVE"],
+  ].map(([id, type, hours, label]) => ({
+    kind: "personDay",
+    id,
+    value: {
+      type,
+      hours,
+      label,
+      range: {
+        from: id.split("|")[1],
+        to: id.includes("09-02") ? "2026-09-03" : "2026-09-02",
+        hours,
+      },
+    },
+  }));
+  assert.equal(
+    (
+      await write([
+        {
+          kind: "project",
+          id: "privacy-p",
+          value: {
+            id: "privacy-p",
+            name: "Synthetic Privacy Project",
+            start: "2026-01",
+            end: "2026-12",
+            phases: {},
+          },
+        },
+        ...people.map((value) => ({ kind: "resource", id: value.id, value })),
+        ...calendar,
+        {
+          kind: "actual",
+          id: "privacy-peer|privacy-p|2026-09",
+          value: { unit: "hours", value: 18 },
+        },
+      ])
+    ).status,
+    200,
+  );
+  const before = (await state()).data;
+  const accounts = [
+    [
+      "manager",
+      await user("privacy-manager", "manager", "privacy-own", [team.lead]),
+      "privacy-own",
+    ],
+    [
+      "unlinked-manager",
+      await user("privacy-unlinked-manager", "manager", "", [
+        team.lead,
+        other.lead,
+      ]),
+      "",
+    ],
+    [
+      "normal",
+      await user("privacy-normal", "normal", "privacy-normal-own", [team.lead]),
+      "privacy-normal-own",
+    ],
+    [
+      "unlinked-normal",
+      await user("privacy-unlinked-normal", "normal", "", [team.lead]),
+      "",
+    ],
+    ["admin", admin, null],
+  ];
+  function assertCalendarScope(view, ownId) {
+    const expected = Object.fromEntries(
+      Object.entries(before.personCalendar).filter(
+        ([key]) => ownId === null || key.startsWith(ownId + "|"),
+      ),
+    );
+    assert.deepEqual(view.personCalendar, expected);
+    for (const [key, revision] of Object.entries(before.revisions).filter(
+      ([key]) => key.startsWith("personDay:"),
+    )) {
+      const visible =
+        ownId === null || key.startsWith("personDay:" + ownId + "|");
+      assert.equal(view.revisions[key], visible ? revision : undefined, key);
+    }
+    if (ownId !== null) assert(!JSON.stringify(view).includes("PRIVATE_"));
+  }
+  for (const [label, auth, ownId] of accounts) {
+    await t.test(label + " reads", async () => {
+      for (const url of ["/data", "/actual-view?start=2026-09&count=1"]) {
+        const result = await request(url, undefined, auth);
+        assert.equal(result.status, 200);
+        assertCalendarScope(result.json.data, ownId);
+        if (label === "manager" && url.startsWith("/actual-view")) {
+          const summary = result.json.monthSummaries["privacy-peer|2026-09"];
+          assert.equal(summary.leaveHours, 9);
+          assert.equal(summary.trainingHours, 4.5);
+          assert.equal(summary.effectiveHours, 189);
+          assert.equal(summary.projectFte, 0.1);
+          assert.equal(summary.totalFte, 0.125);
+          assert.equal(
+            result.json.data.actualAllocations[
+              "privacy-peer|privacy-p|2026-09"
+            ],
+            0.1,
+          );
+        }
+      }
+    });
+  }
+  const manager = accounts[0][1];
+  const saved = await write(
+    [
+      {
+        kind: "actual",
+        id: "privacy-peer|privacy-p|2026-09",
+        value: { unit: "hours", value: 27 },
+      },
+    ],
+    manager,
+  );
+  assert.equal(saved.status, 200);
+  assertCalendarScope(saved.json.data, "privacy-own");
+  assert.equal(
+    saved.json.data.actualAllocations["privacy-peer|privacy-p|2026-09"],
+    0.15,
+  );
+  const refreshed = await request(
+    "/actual-view?start=2026-09&count=1",
+    undefined,
+    manager,
+  );
+  assert.equal(refreshed.status, 200);
+  assertCalendarScope(refreshed.json.data, "privacy-own");
+  assert.equal(
+    refreshed.json.monthSummaries["privacy-peer|2026-09"].totalFte,
+    0.175,
+  );
+  const prohibited = await write(
+    [
+      {
+        kind: "personDay",
+        id: calendar[2].id,
+        value: { ...calendar[2].value, label: "ATTEMPTED_CHANGE" },
+      },
+    ],
+    manager,
+  );
+  assert.equal(prohibited.status, 403);
+  const after = (await state()).data;
+  assert.deepEqual(after.personCalendar, before.personCalendar);
+  assert.equal(
+    after.revisions["personDay:" + calendar[2].id],
+    before.revisions["personDay:" + calendar[2].id],
+  );
+});

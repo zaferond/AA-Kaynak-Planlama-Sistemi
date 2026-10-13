@@ -78,6 +78,15 @@ export async function checkActualManagerHierarchy(f) {
         value: 200,
         revision: 0,
       },
+      ...[
+        ["2026-01-07", "leave", 9],
+        ["2026-01-08", "training", 4.5],
+      ].map(([date, type, hours]) => ({
+        kind: "personDay",
+        id: `qa-grand-member|${date}|${type}`,
+        revision: 0,
+        value: { type, hours, label: "PRIVATE_MANAGER_PEER_CALENDAR" },
+      })),
     ]),
   );
   const { page, context } = await f.client("manager");
@@ -91,6 +100,20 @@ export async function checkActualManagerHierarchy(f) {
       .getByRole("tab", { name: "AA Gerçekleşen Kaynak Dağılımı", exact: true })
       .click();
     await page.locator("#actual-entry-unit").selectOption("hours");
+    for (const url of ["/api/data", "/api/actual-view?start=2026-01&count=1"]) {
+      const response = await context.request.get(f.origin + url);
+      assert.equal(response.status(), 200);
+      const payload = await response.json();
+      assert.deepEqual(payload.data.personCalendar, {});
+      assert(
+        !JSON.stringify(payload).includes("PRIVATE_MANAGER_PEER_CALENDAR"),
+      );
+      if (payload.monthSummaries) {
+        const summary = payload.monthSummaries["qa-grand-member|2026-01"];
+        assert.equal(summary.effectiveHours, 191);
+        assert.equal(summary.trainingHours, 4.5);
+      }
+    }
     await f.check(
       "manager actual hierarchy: root grant edits existing child leader and grandchild member records; peer calendars hidden",
       async () => {
@@ -131,12 +154,13 @@ export async function checkActualManagerHierarchy(f) {
           exact: true,
         });
         assert(await hours.isEnabled());
+        assert.equal(await hours.inputValue(), "191");
         await hours.fill("210");
         await hours.press("Enter");
         await f.wait(
           async () =>
             (await f.state()).actualWorkedHours["qa-grand-member|2026-01"] ===
-            210,
+            219,
           "descendant existing hours updated",
         );
         await page.reload();

@@ -1,12 +1,19 @@
 import test from "node:test";
-import { compareSnapshotValidation } from "./snapshot-validation-suite.mjs";
+import {
+  compareSnapshotValidation,
+  legacyValidationProjection,
+} from "./snapshot-validation-suite.mjs";
 import { createPersonMonthHoursIndex } from "../shared/actual-units.ts";
 import { referencePersonMonthHours } from "./person-month-reference.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
-import { deploymentSources } from "../scripts/deployment-manifest.mjs";
+import {
+  nativeSourceHashes,
+  installedSqlDrivers,
+} from "../scripts/native-evidence.mjs";
+import { validate } from "../shared/server-domain.ts";
+import { nativeReleaseSuite } from "./native-release-suite.mjs";
 import { Store } from "../backend/store.mjs";
 import { schemaVersion } from "../backend/migration-catalog.mjs";
 import {
@@ -115,9 +122,16 @@ test(
           true,
         );
         await checked.test(
-          "native persisted full snapshot matches frozen validation and rejection behavior",
+          "native current snapshot validates completely; legacy fields match the frozen oracle",
           () => {
-            const d = before.data;
+            const complete = validate(before.data, {
+              previousResources: before.data.resources,
+            });
+            assert.deepEqual(
+              validate(complete, { previousResources: complete.resources }),
+              complete,
+            );
+            const d = legacyValidationProjection(before.data);
             assert(
               compareSnapshotValidation(d, { previousResources: d.resources })
                 .data,
@@ -160,22 +174,11 @@ test(
           await stores[1].transaction((c) => stores[1].read(c), true),
           before,
         );
-        // Identify the full application/build inputs and test sources. A hash
-        // proves which bytes were present, not that every feature was tested.
-        const sourceHashes = await deploymentSources(
-          fileURLToPath(new URL("../", import.meta.url)),
-        );
-        const sourceFiles = [
-          ...(await fs.readdir(new URL("./", import.meta.url)))
-            .filter((name) => name.endsWith(".mjs"))
-            .map((name) => "tests/" + name),
-          ".github/workflows/mssql-native.yml",
-          ".github/workflows/quality.yml",
-        ];
-        for (const name of sourceFiles)
-          sourceHashes[name] = createHash("sha256")
-            .update(await fs.readFile(new URL("../" + name, import.meta.url)))
-            .digest("hex");
+        await cleanupTestTables(stores[0].db);
+        await stores[0].connect();
+        const releaseChecks = await nativeReleaseSuite(stores, checked);
+        const root = fileURLToPath(new URL("../", import.meta.url));
+        const sourceHashes = await nativeSourceHashes(root);
         return {
           checkedAt: new Date().toISOString(),
           checkedCommit: /^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA || "")
@@ -189,6 +192,8 @@ test(
           load,
           ...(contention ? { contention } : {}),
           sourceHashes,
+          releaseChecks,
+          drivers: installedSqlDrivers(root),
         };
       } finally {
         const closed = await Promise.allSettled(

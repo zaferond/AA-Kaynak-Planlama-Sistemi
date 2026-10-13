@@ -170,7 +170,7 @@ test("empty planning scope reads no rows; large scopes fall back without truncat
     },
   };
   for (const [name, column, scope] of [
-    ["actual_allocations", "amount", []],
+    ["actual_allocations", "amount", {}],
     ["allocations", "amount", "t"],
     ["allocations", "amount", [1]],
   ])

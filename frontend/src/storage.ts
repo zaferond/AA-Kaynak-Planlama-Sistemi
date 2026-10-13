@@ -1,4 +1,4 @@
-import { isResponsibilityConflictCode } from "../../shared/resource-roles";
+import { isResponsibilityConflictCode } from "../../shared/resource-roles.ts";
 import type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
 export type { Change, ChangeKind, ChangeValues } from "../../shared/commands";
 import type { Data } from "./model";

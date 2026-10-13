@@ -166,19 +166,20 @@ test("planning responses match fresh SQL views with one full read for create, ze
   assert.equal(after.data.revisions["allocation:" + key], 5);
 });
 
-test("planning responses keep manager scope and reject forbidden, stale and disabled principals without writes", async (t) => {
+test("planning responses expose all planning allocations, protect peer identity and reject forbidden, stale and disabled writes", async (t) => {
   const { store, users, key, hiddenKey } = await setup(t);
   const result = await changeAndView(store, users.manager, [
     { kind: "allocation", id: key, value: 0.5, revision: 0 },
   ]);
   assert.deepEqual(result, await store.view(users.manager));
-  assert.equal(Object.hasOwn(result.data.allocations, hiddenKey), false);
+  assert.equal(result.data.allocations[hiddenKey], 0.75);
   assert.equal(result.data.users, undefined);
   assert.equal(result.data.legacyArchive, undefined);
-  assert.equal(
-    result.data.resources.some((item) => item.id === "r1"),
-    false,
-  );
+  const peer = result.data.resources.find((item) => item.id === "r1");
+  assert(peer, "outside capacity remains available to planning reports");
+  assert.equal(peer.name, "");
+  assert.equal(peer.note, "");
+  assert.equal(peer.code, undefined);
   assert.equal(Object.keys(result.data.personCalendar).length, 0);
   assert.equal(result.data.actualAllocations["r0|p|2026-01"], 0.25);
   assert.equal(result.data.actualTeamTotals !== undefined, true);

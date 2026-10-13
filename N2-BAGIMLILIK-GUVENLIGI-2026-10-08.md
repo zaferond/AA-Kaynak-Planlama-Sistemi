@@ -1,5 +1,7 @@
 # N2 — Bağımlılık güvenlik uyarıları
 
+> **13.10.2026 güncellemesi:** Aşağıdaki sonuçlar tarihsel kayıttır. M4 çalışmasında Tedious 20.3.8'e geçildi, `sprintf-js` kaldırıldı ve backend/frontend audit sonuçları sıfır oldu. Güncel testler ve native MSSQL doğrulama sınırı için [M4 kaydına](M4-BAGIMLILIK-GUVENLIGI-2026-10-13.md) bakın.
+
 Tarih: 8 Ekim 2026. Taban: `main`, `42cd1ea` ve önceki N1 çalışma ağacı değişiklikleri. İlgili bulgu: `MIMARI-GUVENLIK-PERFORMANS-INCELEME-2026-10-07.md`, **N2 / Orta**.
 
 ## Sonuç: Kısmen giderildi

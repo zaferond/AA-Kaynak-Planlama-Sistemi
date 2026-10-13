@@ -2,6 +2,7 @@ import { actualViewQuery } from "./actual-view.mjs";
 import { saveEmployeeRecord } from "./employee-account-command.mjs";
 import { isResponsibilityConflictCode } from "../shared/resource-roles.ts";
 import { activityQuery } from "./activity-report.mjs";
+import { ReportReadAdmission } from "./report-read-admission.mjs";
 import express from "express";
 import { z } from "zod";
 import path from "node:path";
@@ -52,6 +53,7 @@ export function createApp(
     mutationLimits,
     mutationGate = new MutationAdmission(mutationLimits),
     attemptLimiter = createAttemptLimiter(store),
+    reportReadGate = new ReportReadAdmission(),
   } = {},
 ) {
   const address = applicationAddress(origin);
@@ -205,7 +207,23 @@ export function createApp(
     const u = s && (await store.findUser({ id: s.userId }));
     if (!u?.active || u.version !== s.userVersion)
       fail(401, "Oturum sona erdi. Yeniden giriş yapın.");
-    if (u.authSource === "ldap") await directory.ensureActive(u.directoryId);
+    if (u.authSource === "ldap") {
+      try {
+        await directory.ensureActive(u.directoryId);
+      } catch (error) {
+        // ensureActive uses 401 for denied directory access, 503 for outages.
+        // Persist revocation before returning 401; clearing one browser cookie
+        // alone would allow another session to resume after AD reactivation.
+        if (error.status === 401) {
+          await store.transaction((c) => store.revokeUser(u._id, c));
+          res.clearCookie("kp_session", cookieOptions);
+        }
+        throw error;
+      }
+      // LDAP may finish after another request has revoked this session.
+      if (!(await store.session(s._id)))
+        fail(401, "Oturum sona erdi. Yeniden giriş yapın.");
+    }
     req.user = u;
     req.session = s;
     req.sessionIdentity = sessionIdentity(s._id);
@@ -251,14 +269,20 @@ export function createApp(
   app.get("/api/data", async (req, res) =>
     sendDataSnapshot(req, res, await store.view(req.user)),
   );
-  app.get("/api/actual-view", async (req, res) => {
-    const query = actualViewQuery.parse(req.query);
-    res.json(await store.actualView(req.user, query));
-  });
-  app.get("/api/activity-report", async (req, res) => {
-    const query = activityQuery.parse(req.query);
-    res.json(await store.activityReport(req.user, query));
-  });
+  app.get(
+    "/api/actual-view",
+    reportReadGate.handler(async (req, res) => {
+      const query = actualViewQuery.parse(req.query);
+      res.json(await store.actualView(req.user, query));
+    }),
+  );
+  app.get(
+    "/api/activity-report",
+    reportReadGate.handler(async (req, res) => {
+      const query = activityQuery.parse(req.query);
+      res.json(await store.activityReport(req.user, query));
+    }),
+  );
   app.get("/api/version", async (req, res) => {
     res.json({
       generation: await store.generation(),

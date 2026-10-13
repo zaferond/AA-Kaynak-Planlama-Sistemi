@@ -10,6 +10,7 @@ import {
 import {
   createActualMonthIndex,
   exceedsActualCapacity,
+  type ActualMonthSummary,
 } from "../../../shared/actual-months.ts";
 import { validPlanningMonth } from "../../../shared/planning-dates.ts";
 
@@ -85,6 +86,7 @@ export function prepareActualAllocationChange(
   projectId: string,
   month: string,
   entry: ActualEntry,
+  monthSummary?: ActualMonthSummary,
 ): Change<"actual"> {
   assertResourceMonth(data, resourceId, month);
   const project = data.projects.find((project) => project.id === projectId);
@@ -93,7 +95,9 @@ export function prepareActualAllocationChange(
   if (entry.value > 0 && (month < project.start || month > project.end))
     throw Error("Proje tarihleri dışında kaynak dağılımı girilemez.");
   const id = resourceId + "|" + projectId + "|" + month;
-  const summary = createActualMonthIndex(data).get(resourceId, month);
+  // Peer calendars stay private; their authorized monthly summary owns capacity.
+  const summary =
+    monthSummary ?? createActualMonthIndex(data).get(resourceId, month);
   const checked = checkActualEntry(
     String(entry.value),
     entry.unit,
@@ -120,9 +124,11 @@ export function prepareWorkedHoursChange(
   resourceId: string,
   month: string,
   hours: number | null,
+  monthSummary?: ActualMonthSummary,
 ): Change<"workedHours"> {
   assertResourceMonth(data, resourceId, month);
-  const summary = createActualMonthIndex(data).get(resourceId, month);
+  const summary =
+    monthSummary ?? createActualMonthIndex(data).get(resourceId, month);
   const checkedHours = parseWorkedHoursInput(
     hours === null ? "" : String(hours),
     summary.maxEffectiveHours,

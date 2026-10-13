@@ -21,6 +21,10 @@ export async function seedBenchmarkStore(
 ) {
   const { data } = await store.read();
   const teams = data.teams.filter((team) => team.lead);
+  // Synthetic members belong to real teams; repeatedly filling a direct
+  // leadership unit would create conflicting implicit Leader assignments.
+  const resourceTeams = teams.filter((team) => team.kind !== "leadership");
+  assert(resourceTeams.length, "Synthetic members require a real team.");
   const months = Array.from(
     { length: 48 },
     (_, i) =>
@@ -39,7 +43,7 @@ export async function seedBenchmarkStore(
     phases: {},
   }));
   data.resources = Array.from({ length: resources }, (_, i) => {
-    const team = teams[i % teams.length];
+    const team = resourceTeams[i % resourceTeams.length];
     return {
       id: "bench-r" + i,
       name: "Synthetic resource " + i,

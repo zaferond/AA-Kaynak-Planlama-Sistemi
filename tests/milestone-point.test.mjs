@@ -35,6 +35,8 @@ const fixture = () => ({
   teams: [{ id: "t", name: "Team", lead: "L", excelCapacity: 0 }],
   resources: [],
   leaders: ["L"],
+  leaderParents: {},
+  leadershipUnits: {},
   allocations: {},
   revisions: { "project:p": 3 },
   projects: [

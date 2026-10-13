@@ -1,6 +1,9 @@
 import { activityQuery } from "./activity-report.mjs";
 import { scopeData, allowedActualTeam } from "../shared/access.ts";
-import { employeeAssignment } from "../shared/employee-directory.ts";
+import {
+  employeeAssignment,
+  createEmployeeAssignmentIndex,
+} from "../shared/employee-directory.ts";
 import { selectedLeadershipScope } from "../shared/leadership-planning.ts";
 import { visibleLeaderParents } from "../shared/leadership-hierarchy.ts";
 import { resourceRole } from "../shared/resource-roles.ts";
@@ -46,6 +49,16 @@ export function actualViewTeams(data, user, date = currentPlanningDate()) {
   return data.teams.filter((team) => ids.has(team.id));
 }
 
+export function actualViewResources(data, user, teams, currentMonth) {
+  const ids = new Set(teams.map((team) => team.id));
+  const assignments = createEmployeeAssignmentIndex(data, currentMonth);
+  return data.resources.filter(
+    (resource) =>
+      resource.id === (user.resourceId || "") ||
+      ids.has(assignments.get(resource.id)?.team.id),
+  );
+}
+
 /** Peers receive monthly totals, never colleagues' private calendar entries. */
 export function actualView(data, user, query, date = currentPlanningDate()) {
   const currentMonth = date.slice(0, 7);
@@ -56,12 +69,24 @@ export function actualView(data, user, query, date = currentPlanningDate()) {
   );
   const monthSet = new Set(months);
   const ownId = user.resourceId || "";
-  const base = scopeData(data, user);
-  const resources = data.resources.filter(
-    (resource) =>
-      resource.id === ownId ||
-      ids.has(employeeAssignment(data, resource.id, currentMonth)?.team.id),
+  // This endpoint edits actual work/calendars, never planned allocations or
+  // risks. Do not project their values/revisions through this read-only view.
+  const base = scopeData(
+    {
+      ...data,
+      allocations: {},
+      revisions: filterOwnRecords(
+        data.revisions,
+        (key) =>
+          key.startsWith("actual:") ||
+          key.startsWith("workedHours:") ||
+          key.startsWith("personDay:") ||
+          key === "calendar:shared",
+      ),
+    },
+    user,
   );
+  const resources = actualViewResources(data, user, teams, currentMonth);
   const byId = new Map(resources.map((resource) => [resource.id, resource]));
   const canRead = (id, month) =>
     byId.has(id) &&
@@ -126,7 +151,17 @@ export function actualView(data, user, query, date = currentPlanningDate()) {
       // Descendant edits need the current revision even when generic/private
       // calendar scope is narrower. Keep optimistic locking authoritative.
       revisions: {
-        ...base.revisions,
+        ...filterOwnRecords(base.revisions, (key) => {
+          if (key.startsWith("actual:")) {
+            const parts = key.slice(7).split("|");
+            return canRead(parts[0], parts[2]);
+          }
+          if (key.startsWith("workedHours:")) {
+            const parts = key.slice(12).split("|");
+            return canRead(parts[0], parts[1]);
+          }
+          return true;
+        }),
         ...filterOwnRecords(data.revisions, (key) => {
           if (user.role !== "manager") return false;
           const actual = key.startsWith("actual:");

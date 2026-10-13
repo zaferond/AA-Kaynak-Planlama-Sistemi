@@ -39,6 +39,12 @@ Son ayar kabul edilen isteğin handler başlamadan gövdesini tamamlaması için
 
 Kuyruk sonrası ve gövde alındıktan sonra oturum yeniden doğrulanır; Store içindeki güncel yetki, revision ve transaction kontrolleri korunur. SQL global kilidi kaldırılmaz. Sınırlar süreç/instance başınadır; çoklu servislerin toplam kotası, proxy bağlantı/bant genişliği sınırı veya üretim kapasite garantisi değildir. Doğrudan Store/CLI bakım işlemleri HTTP kuyruğu dışında kalır. Yeni iş mutasyonu endpoint'leri `admission.handler(...)` ile sarmalanmalıdır; böylece bağlantı kopması transaction sürerken yuva açamaz.
 
+### Gerçekleşen dağılım ve aktivite raporu okumaları
+
+`GET /api/actual-view` ve `/api/activity-report`, tam yazma snapshot'ı yerine ayrı salt okunur model kullanır. Gerçekleşen değerler çalışan ve seçilen dönemle; aktivite değerleri ayrıca proje filtresiyle SQL'de daraltılır. Plan tahsisleri/risk kayıtları okunmaz. Metadata eşleştirmesi ortak kalır; yazmaların tam doğrulaması ve Shared/Exclusive transaction kilitleri korunur. Gerçekleşen yanıtında yalnız gerekli gerçekleşen/takvim revision anahtarları bulunur; plan/risk revision'ları bu ekrandan düzenlenmez.
+
+Bu iki uç birlikte uygulama instance'ı başına en fazla **4**, hesap başına **2** eşzamanlı rapor okuması kabul eder; bekleme kuyruğu yoktur. Hesap sınırında 429, toplam sınırda 503 ve `Retry-After: 1` döner; kullanıcı mevcut **Tekrar Dene** ile raporu yeniden yükler. Bağlantı kopması çalışan DB okumasının yuvasını erken boşaltmaz. Bu sınır diğer GET'lere veya çoklu instance toplamına uygulanmaz. Denormalize takvim JSON'u ve yetki belirlemek için organizasyon/çalışan geçmişi hâlâ okunur; 900'ü aşan veya eski ayırıcı içeren kimliklerde güvenli tam kapsam fallback'i kullanılır. Ölçümler ve kalan doğrulama [M5 kaydında](M5-RAPOR-OKUMA-MALIYETI-2026-10-13.md).
+
 ### Tek hücre planlanan dağılım ön kontrolü
 
 Uygulamanın oluşturduğu tek hücrelik planlanan dağılım komutları, mevcut Exclusive transaction içinde hedef takım/proje/hücre/revision için sabit ve parametreli bir ön okuma kullanır. Aynı komut kodu yetki ve revision hatalarını tam snapshot yüklenmeden reddeder. Ön kontrolü geçen istekler tam snapshot doğrulaması, persist, audit ve yanıt üretiminden geçmeye devam eder. Bu kısmi bağlam hiçbir zaman snapshot olarak yazılmaz veya istemciye dönülmez. Toplu/karma işlemler, key biçimi uygun olmayan eski veriler ve keyfî Store callback'leri mevcut tam okuma yolunu kullanır. Geçerli yazma başına bir ek hedef sorgusu vardır; üretim kapasitesi veya hız artışı garantisi değildir.

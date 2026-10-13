@@ -3,6 +3,7 @@ import { actualView } from "./actual-view.mjs";
 import { activityReport } from "./activity-report.mjs";
 import * as identity from "./identity-repository.mjs";
 import { readPlanningSnapshot } from "./planning-reader.mjs";
+import { readActualReportData } from "./actual-report-reader.mjs";
 import { persistPlanningSnapshot } from "./planning-writer.mjs";
 import { prepareMutationSettings } from "./mutation-settings.mjs";
 import { auditEntries } from "./audit.mjs";
@@ -123,7 +124,13 @@ export class Store {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
-      const { data } = await this.read(c);
+      const data = await readActualReportData(
+        c,
+        this.provider,
+        publicUser(active),
+        query,
+        "actual",
+      );
       return actualView(data, publicUser(active), query);
     }, true);
   }
@@ -132,7 +139,13 @@ export class Store {
       const active = await this.findUser({ id: u._id }, c);
       if (!active?.active || active.version !== u.version)
         fail(401, "Oturum yenilenmeli.");
-      const { data } = await this.read(c);
+      const data = await readActualReportData(
+        c,
+        this.provider,
+        publicUser(active),
+        query,
+        "activity",
+      );
       return activityReport(data, publicUser(active), query);
     }, true);
   }

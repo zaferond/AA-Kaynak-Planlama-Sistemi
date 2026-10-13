@@ -231,9 +231,8 @@ test("scoped views preserve historical team boundaries, owned actuals, anonymous
   assert.equal(own.actualWorkedHours["r|2026-07"], 180);
   assert.equal(a.actualPercentEntries["r|p|2026-07"], undefined);
   assert.equal(own.actualPercentEntries["r|p|2026-07"], 50);
-  assert.equal(a.personCalendar["r|2026-01-02"].label, "Legacy");
-  assert.equal(a.personCalendar["r|2026-01-02|training"].hours, 2);
-  assert.equal(a.personCalendar["r|2026-07-02|leave"], undefined);
+  assert.deepEqual(a.personCalendar, {});
+  assert.deepEqual(b.personCalendar, {});
   assert.equal(own.personCalendar["r|2026-07-02|leave"].hours, 3);
   assert.equal(a.revisions["actual:r|p|2026-04"], 6);
   assert.equal(a.revisions["actual:r|p|2026-07"], undefined);
@@ -244,7 +243,6 @@ test("scoped views preserve historical team boundaries, owned actuals, anonymous
     "allocation:a|p|2026-01",
     "actual:r|p|2026-04",
     "workedHours:r|2026-01",
-    "personDay:r|2026-01-02",
     "calendar:shared",
     "risk:second",
     "risk:first",

@@ -1,4 +1,4 @@
-import { allowedActualTeam } from "./access";
+import { allowedActualTeam, canReadPersonalCalendar } from "./access";
 import { actualVersionAt } from "./model";
 import { useEffect, useState } from "react";
 import type { Resource, Project } from "./model";
@@ -68,7 +68,7 @@ export default function PersonAllocationPanel(
     );
   }
   function canViewPersonalCalendar(id: string) {
-    return user.role === "admin" || id === user.resourceId;
+    return canReadPersonalCalendar(user, id);
   }
   async function save(
     resource: Resource,
@@ -86,6 +86,7 @@ export default function PersonAllocationPanel(
           project.id,
           month,
           entry,
+          actualMonths.get(resource.id, month),
         ),
       ]),
     );
@@ -102,7 +103,13 @@ export default function PersonAllocationPanel(
         throw Error("Bu çalışanın verisini düzenleme yetkiniz yok.");
       onSaved(
         await writeBatch([
-          prepareWorkedHoursChange(data, resource.id, month, hours),
+          prepareWorkedHoursChange(
+            data,
+            resource.id,
+            month,
+            hours,
+            actualMonths.get(resource.id, month),
+          ),
         ]),
       );
       return true;

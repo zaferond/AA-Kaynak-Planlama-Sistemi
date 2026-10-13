@@ -1,12 +1,26 @@
 # Native MSSQL doğrulaması — 31. adım
 
-**Güncel durum — 8 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `f3b63835c05830c85847f1c3c0ef04f0b82e7d12` commit'i **21/21** native testi geçti; **şema 31**, iki bağımsız havuz ve temizlik doğrulandı. Ek profil 10.000 planlanan / 4.000 actual kayıt üzerinde **600 işlem / 300 değişiklik** içerir. Raporun **466 kaynak hash'i** aynı commit ile eşleşti. Aynı kaynak için Windows 153/153, Ubuntu 524/524 ve 133 Chromium kontrolü, tüm kalite/audit kapıları başarılı. [N3 ölçüm ve dar kişisel okuma kaydı](N3-SNAPSHOT-KILIT-OLCUM-VE-OKUMA-KAPSAMI-2026-10-08.md) ve [CI kanıt arşivi](CI-KANIT-ARSIVI.md). N3 global yazma snapshot/kilit maliyeti sürüyor; backend Orta bağımlılık uyarısı da açık. Bu sentetik koşular kurum SQL/TLS/Windows servis/proxy ve gerçek yük kabulü değildir.
+**Tarihsel durum — 8 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `f3b63835c05830c85847f1c3c0ef04f0b82e7d12` commit'i **21/21** native testi geçti; **şema 31**, iki bağımsız havuz ve temizlik doğrulandı. Ek profil 10.000 planlanan / 4.000 actual kayıt üzerinde **600 işlem / 300 değişiklik** içerir. Raporun **466 kaynak hash'i** aynı commit ile eşleşti. Aynı kaynak için Windows 153/153, Ubuntu 524/524 ve 133 Chromium kontrolü, tüm kalite/audit kapıları başarılı. [N3 ölçüm ve dar kişisel okuma kaydı](N3-SNAPSHOT-KILIT-OLCUM-VE-OKUMA-KAPSAMI-2026-10-08.md) ve [CI kanıt arşivi](CI-KANIT-ARSIVI.md). N3 global yazma snapshot/kilit maliyeti sürüyor; backend Orta bağımlılık uyarısı da açık. Bu sentetik koşular kurum SQL/TLS/Windows servis/proxy ve gerçek yük kabulü değildir.
 
 **Önceki 8 Ekim kaydı:** `731f5281f123f324628de7d0085508d2aaf54e48`, 20/20 native, 463 hash; Windows 143/143, Ubuntu 509/509 ve 133 Chromium kontrolü. [N4 yenileme kaydı](N4-NATIVE-WINDOWS-KANIT-YENILEME-2026-10-08.md) korunur. Sonraki iki `ce5c2f0` kalite denemesi browser timeout'u ile başarısızdı; arşivde ayrı kayıtlıdır. `f3b6383` risk onay testinin event-turn/promise takibini düzeltti; üretim onay kuralları aynı kaldı.
 
 **Tarihsel durum — 4 Ekim 2026:** geçici GitHub CI SQL Server 2022 Developer ortamında `63780fc4538829c16c7b14739f882a9851629f59` commit'i 19/19 native testi geçti; şema 30 ve temizlik doğrulandı. Önceki sonuç ve 48 kaynak hash'i arşivde korunur; yeni kaynak için bu eski kayıt kullanılmaz.
 
 **Tarihsel durum — 2 Ekim 2026:** bu bilgisayarda SQL Server/Docker veya ayrılmış test bağlantısı olmadığı için o tarihte native sonuç yoktu. Bu sınırlama 4 Ekim'de GitHub'ın geçici test ortamıyla giderildi; bu bilgisayarda veya kurumda native test yapılmış sayılmaz. Yerel güvenlik testleri gerçek MSSQL çalıştırması değildir.
+
+## 13 Ekim 2026 — aynı commit için yayın kabulü
+
+Push ve pull request sonrasında `Quality checks`, yeniden kullanılabilir native workflow'u da çalıştırır. `Release acceptance` yalnız Ubuntu kalite, Windows sentetik ve native MSSQL işlerinin **aynı commit için** başarılı olmasıyla geçer. Yayın öncesi bu kontrolün başarısı aranmalıdır; GitHub branch protection/ruleset ve kurum dağıtım yetkisi ayrıca yönetilir. İş akışı tek başına manuel dağıtımı engellemez.
+
+Native artifact'i, güncel şema kataloğu, kilit dosyasındaki MSSQL/Tedious sürümleri, uygulama/test/workflow kaynak hash'leri, beş güncel kabul kontrolü ve veritabanı temizliğiyle otomatik karşılaştırılır. Başka commit/şema/kaynak için sonuç kabul edilmez. Artifact saklama süresi 90 gündür; uzun süreli kanıt için seçilen JSON ve koşu metadata'sı depodaki arşive ayrıca alınır. Güncel koşu durumu: [M6 raporu](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md).
+
+Ek kontroller: güncel liderlik hiyerarşisi ve Leader/Product Owner benzersizliği, günlük kişisel takvimlerin gizliliği, dar rapor okumalarının tam snapshot sonuçlarıyla eşitliği, iki bağımsız SQL havuzunda sentetik AD oturum iptali/geçici kesinti davranışı ve SQL Server'ın bildirdiği bağlantı şifrelemesi. Yerel SQL.js karşılığı native havuz/TLS kanıtı olarak kabul edilmez. Dondurulmuş eski validator yalnız kendi şemasına indirgenen veriyle karşılaştırılır; güncel şema ayrıca doğrulanır.
+
+Dosya üzerinden kanıt doğrulama (DB bağlantısı açmaz):
+
+```sh
+node scripts/verify-native-evidence.mjs --report native-mssql-report.json --commit <test-edilen-tam-commit-SHA>
+```
 
 ## Ayrı test sunucusunda çalıştırma
 
@@ -72,7 +86,7 @@ npm run test:db -- --env-file .env.mssql.test --size 10000 --contention --profil
 
 ## GitHub üzerinde zamanlanmış ve manuel test ortamı
 
-`Native MSSQL verification` workflow'u **her pazartesi 02:20 UTC ve elle çalıştırılır**. Ubuntu x64 üzerinde geçici SQL Server 2022 Developer container'ı ve boş test veritabanı oluşturur; her çalıştırmada ayrı rastgele şifre üretir, loglarda maskeler ve sonuç JSON'unu artifact olarak saklar. Çalışma sonunda container silinir. Push bu testi otomatik başlatmaz.
+`Native MSSQL verification` workflow'u **her pazartesi 02:20 UTC ve elle çalıştırılır**. Ubuntu x64 üzerinde geçici SQL Server 2022 Developer container'ı ve boş test veritabanı oluşturur; her çalıştırmada ayrı rastgele şifre üretir, loglarda maskeler ve sonuç JSON'unu artifact olarak saklar. Çalışma sonunda container silinir. Push ve pull request bu testi `Quality checks` içinden otomatik başlatır; zamanlanmış/manuel koşular ayrıca korunur.
 
 Bu workflow'un container'ında şifreleme açık, self-signed sertifika için trust açıktır. Bu koşu kurumun CA/hostname doğrulamasını, NTLM/domain bağlantısını, şirket proxy'sini veya Windows servis kurulumunu doğrulamaz. Kurum bağlantısı bunlar için ayrı test gerektirir. [Microsoft container desteği](https://learn.microsoft.com/en-us/sql/linux/sql-server-linux-docker-container-deployment) x86-64 Linux içindir; bu bilgisayar ARM64 olduğundan yerel bir koşu yapılmış sayılmaz.
 

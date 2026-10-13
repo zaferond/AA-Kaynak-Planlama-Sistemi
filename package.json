@@ -43,5 +43,10 @@
   "devDependencies": {
     "playwright": "1.63.0",
     "typescript": "5.9.3"
+  },
+  "overrides": {
+    "mssql": {
+      "tedious": "20.3.8"
+    }
   }
 }

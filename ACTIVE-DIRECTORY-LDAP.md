@@ -37,6 +37,12 @@ Bağlantı başına 5 saniye timeout, süreç başına en fazla dört LDAP bağl
 - AD oturum süresi “Beni Hatırla” seçilse de en fazla 12 saattir. Her istekte dizin etkinliği denetlenir; olumlu sonuç en fazla 60 saniye önbellekte tutulur. Pasif, kilitli, süresi dolmuş hesaplar veya izin verilen gruptan çıkan hesaplar bu denetimde reddedilir. Bağlantı kesilirse önbellek süresi bittikten sonra istekler 503 ile durdurulur; yerel doğrulamaya geçilmez. Girişte şifre her seferinde AD'ye doğrulatılır. Parola değişikliği tek başına mevcut uygulama oturumunu hemen iptal etmez; en geç 12 saatlik oturum süresi uygulanır.
 - AD grup üyeliği uygulama rolünü yükseltmez. Rol/çalışan eşleştirmesini admin yönetir. Yetki değişiklikleri mevcut oturumları iptal eder.
 
+### AD erişimi reddedildiğinde oturum iptali (13.10.2026)
+
+Dizin etkinliği kontrolü 401 ile erişimi reddettiğinde, ilgili uygulama hesabının **tüm sunucu oturumları** transaction içinde silinir ve isteği yapan tarayıcının oturum çerezi temizlenir. AD hesabı yeniden etkinleştirilse veya uygulama yeniden başlatılsa da eski çerezler geçersiz kalır; kullanıcı tekrar giriş yapmalıdır. Hesabın uygulamadaki aktifliği, rolü, çalışan eşleşmesi ve iş verileri değiştirilmez. Diğer hesapların oturumları korunur.
+
+Geçici AD bağlantı hatası 503 döndürür; oturumlar silinmez. Bağlantı düzeldikten sonra süresi dolmamış oturum kullanılabilir. Mevcut 60 saniyelik olumlu önbellek nedeniyle AD'deki değişikliğin algılanması anlık değildir; kurumun kapatma süresi şartıyla IT tarafından karşılaştırılmalıdır. Veritabanına oturum iptali kalıcı olarak yazılamazsa istek 500 ile reddedilir; iptal tamamlanmış kabul edilmez. Ayrıntılı sentetik doğrulama [M3 düzeltme kaydındadır](M3-AD-OTURUM-IPTALI-2026-10-13.md).
+
 ## Dağıtım ve doğrulama
 
 Bu sürüm **şema 32** ile `directory_id`, `email`, `auth_source` ve tekil dizin kimliği kısıtlarını ekler. Mevcut hesaplar `local` kalır; çalışan bağlantıları ve parola özetleri korunur. Çalışan veritabanında bu geliştirme sırasında migration veya hesap oluşturma çalıştırılmamıştır.

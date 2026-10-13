@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { createRequire } from "node:module";
-import ts from "typescript";
 
 const frontendRequire = createRequire(
   new URL("../frontend/package.json", import.meta.url),
@@ -57,125 +56,134 @@ test("the patched source-map dependency preserves ordinary CSS mapping round tri
   assert.equal(rebuilt.sourceContentFor("kaynak.css"), "/* Türkçe: ıİşğ */");
 });
 
-// Temporary exposure guard for GHSA-hp3w-g68c-fv3c, NOT a sprintf-js patch.
-// Fail for an unfamiliar import/alias/call shape so upgrades require review.
-function reviewedSprintfFormats(source, filename) {
-  const ast = ts.createSourceFile(
-    filename,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.JS,
-  );
-  const bindings = new Map(),
-    formats = [];
-  function imports(node) {
-    if (ts.isStringLiteral(node) && node.text === "sprintf-js") {
-      const call = node.parent,
-        declaration = call.parent;
-      assert(
-        ts.isCallExpression(call) &&
-          ts.isIdentifier(call.expression) &&
-          call.expression.text === "require",
-        filename,
-      );
-      assert(
-        ts.isVariableDeclaration(declaration) &&
-          declaration.initializer === call &&
-          ts.isIdentifier(declaration.name),
-        filename,
-      );
-      bindings.set(declaration.name.text, declaration.name);
-    }
-    ts.forEachChild(node, imports);
-  }
-  imports(ast);
-  function calls(node) {
-    if (
-      ts.isIdentifier(node) &&
-      bindings.has(node.text) &&
-      bindings.get(node.text) !== node
-    ) {
-      let expression = node.parent;
-      assert(
-        ts.isPropertyAccessExpression(expression) &&
-          expression.expression === node &&
-          expression.name.text === "sprintf",
-        filename,
-      );
-      while (
-        ts.isParenthesizedExpression(expression.parent) ||
-        (ts.isBinaryExpression(expression.parent) &&
-          expression.parent.operatorToken.kind === ts.SyntaxKind.CommaToken &&
-          expression.parent.right === expression)
-      )
-        expression = expression.parent;
-      const call = expression.parent;
-      assert(
-        ts.isCallExpression(call) && call.expression === expression,
-        filename,
-      );
-      const format = call.arguments[0];
-      assert(
-        format && ts.isStringLiteral(format),
-        "Dynamic sprintf format: " + filename,
-      );
-      assert(
-        !format.text.replace(/%(?:%|s|d|0[248]X)/g, "").includes("%"),
-        "Unreviewed sprintf precision/width: " + filename,
-      );
-      formats.push(format.text);
-    }
-    ts.forEachChild(node, calls);
-  }
-  calls(ast);
-  return formats;
-}
+// M4 replaces the temporary literal-format mitigation with upstream removal.
+// Both the lock and the installed mssql resolution must retain that removal.
+const require = createRequire(import.meta.url);
+const mssqlRequire = createRequire(require.resolve("mssql"));
+const tediousRequire = createRequire(mssqlRequire.resolve("tedious"));
 
-test("the sprintf exposure guard rejects dynamic formats, precision and escaping aliases", () => {
-  for (const call of [
-    "s.sprintf(input, 1)",
-    "s.sprintf('%.101f', 1)",
-    "const alias=s.sprintf; alias(input,1)",
-    "s['sprintf'](input,1)",
-  ])
-    assert.throws(() =>
-      reviewedSprintfFormats(
-        "const s=require('sprintf-js'); " + call,
-        "synthetic.js",
-      ),
+test("the locked dependency graph excludes sprintf-js and pins the reviewed Tedious release", async () => {
+  const root = JSON.parse(
+    await fs.readFile(new URL("../package.json", import.meta.url), "utf8"),
+  );
+  const lock = JSON.parse(
+    await fs.readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+  );
+  assert.equal(root.overrides?.mssql?.tedious, "20.3.8");
+  assert.equal(
+    lock.packages["node_modules/tedious"].version,
+    root.overrides.mssql.tedious,
+  );
+  for (const [name, pkg] of Object.entries(lock.packages)) {
+    assert(
+      !/(?:^|\/)node_modules\/sprintf-js$/.test(name),
+      "Vulnerable package returned: " + name,
     );
+    for (const field of [
+      "dependencies",
+      "optionalDependencies",
+      "peerDependencies",
+    ])
+      assert(
+        !Object.hasOwn(pkg[field] || {}, "sprintf-js"),
+        "Vulnerable dependency returned: " + name,
+      );
+  }
 });
 
-test("installed Tedious uses only reviewed literal sprintf formats; format-looking values remain data", async (t) => {
-  const require = createRequire(import.meta.url);
-  const mssqlRequire = createRequire(require.resolve("mssql"));
-  const tediousRequire = createRequire(mssqlRequire.resolve("tedious"));
+test("installed mssql resolves the locked Tedious version with no sprintf-js dependency or remaining imports", async () => {
+  const lock = JSON.parse(
+    await fs.readFile(new URL("../package-lock.json", import.meta.url), "utf8"),
+  );
+  const pkg = mssqlRequire("tedious/package.json");
+  assert.equal(pkg.version, lock.packages["node_modules/tedious"].version);
+  assert.equal(pkg.dependencies["sprintf-js"], undefined);
+  assert.throws(() => tediousRequire.resolve("sprintf-js"), {
+    code: "MODULE_NOT_FOUND",
+  });
   const lib = path.dirname(mssqlRequire.resolve("tedious"));
-  const formats = [];
   for (const relative of await fs.readdir(lib, { recursive: true })) {
     if (!relative.endsWith(".js")) continue;
-    formats.push(
-      ...reviewedSprintfFormats(
-        await fs.readFile(path.join(lib, relative), "utf8"),
-        relative,
+    const source = await fs.readFile(path.join(lib, relative), "utf8");
+    assert(
+      !/["']sprintf-js["']/.test(source),
+      "Unexpected vulnerable import: " + relative,
+    );
+  }
+});
+
+test("Tedious Login7 debug output redacts synthetic passwords and preserves the serialized login payload", () => {
+  const Login7Payload = tediousRequire("./login7-payload");
+  const payload = new Login7Payload({
+    tdsVersion: 0x74000004,
+    packetSize: 4096,
+    clientProgVer: 0,
+    clientPid: 1,
+    connectionId: 0,
+    clientTimeZone: 0,
+    clientLcid: 1033,
+  });
+  Object.assign(payload, {
+    userName: "Synthetic %.101f Türkçe",
+    password: "Synthetic-login-secret-only-284!",
+    changePassword: "Synthetic-change-secret-only-284!",
+    serverName: "sql.example.test",
+    hostname: "synthetic",
+    appName: "synthetic",
+    libraryName: "synthetic",
+    database: "synthetic_test",
+    clientId: Buffer.alloc(6),
+  });
+  const before = payload.toBuffer();
+  const debug = payload.toString();
+  assert.equal(debug.includes(payload.password), false);
+  assert.equal(debug.includes(payload.changePassword), false);
+  assert.match(debug, /Password:'\*+'/);
+  assert.match(debug, /ChangePassword:'\*+'/);
+  assert(debug.includes(payload.userName));
+  assert.deepEqual(payload.toBuffer(), before);
+});
+
+test("Tedious rejects encryption downgrade and requests TLS with certificate verification for ON and REQ", async () => {
+  const { Connection } = tediousRequire("./tedious");
+  const negotiate = Connection.prototype.performTlsNegotiation;
+  let calls = 0;
+  const context = {
+    config: {
+      server: "sql.example.test",
+      options: { encrypt: true, trustServerCertificate: false },
+    },
+    secureContextOptions: { minVersion: "TLSv1.2" },
+    STATE: { SENT_TLSSSLNEGOTIATION: "synthetic-tls-state" },
+    transitionTo(state) {
+      assert.equal(state, this.STATE.SENT_TLSSSLNEGOTIATION);
+    },
+    messageIo: {
+      async startTls(options, hostname, trust) {
+        calls++;
+        assert.equal(options.minVersion, "TLSv1.2");
+        assert.equal(hostname, "sql.example.test");
+        assert.equal(trust, false);
+      },
+    },
+  };
+  for (const encryptionString of ["OFF", "NOT_SUP", undefined])
+    await assert.rejects(
+      negotiate.call(
+        context,
+        { encryptionString },
+        new AbortController().signal,
       ),
+      { code: "EENCRYPT" },
     );
-  }
-  assert(
-    formats.length > 0,
-    "Tedious formatting changed; re-evaluate the advisory",
-  );
-  const { sprintf } = tediousRequire("sprintf-js");
-  for (const format of formats) {
-    const args = [...format.matchAll(/%(s|d|0[248]X)/g)].map((match) =>
-      match[1] === "s" ? "%.101f" : 1,
+  assert.equal(calls, 0);
+  for (const encryptionString of ["ON", "REQ"])
+    await negotiate.call(
+      context,
+      { encryptionString },
+      new AbortController().signal,
     );
-    assert.doesNotThrow(() => sprintf(format, ...args));
-    if (format.includes("%s"))
-      assert(sprintf(format, ...args).includes("%.101f"));
-  }
-  t.diagnostic(
-    `Reviewed ${formats.length} static format calls; no database connection made. The upstream advisory remains open.`,
-  );
+  assert.equal(calls, 2);
+  // Only an in-memory protocol context is used: no Connection.connect, socket,
+  // DNS, certificate file, SQL credentials or database is involved.
 });

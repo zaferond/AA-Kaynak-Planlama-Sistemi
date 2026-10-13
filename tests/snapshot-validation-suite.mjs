@@ -85,6 +85,26 @@ const outcome = (fn, input, options) => {
     };
   }
 };
+
+// The frozen oracle predates hierarchy and responsibility roles. Compare only
+// its legacy schema, while the current complete model is validated separately.
+// Never claim that removing these fields independently tests their new rules.
+export function legacyValidationProjection(input) {
+  const legacy = structuredClone(input);
+  delete legacy.leaderParents;
+  delete legacy.leadershipUnits;
+  for (const team of legacy.teams) delete team.kind;
+  for (const resource of legacy.resources)
+    for (const version of resource.versions) {
+      assert(
+        version.assignmentRole === undefined ||
+          version.assignmentRole === "member",
+        "Legacy oracle cannot validate leadership/PO responsibilities",
+      );
+      delete version.assignmentRole;
+    }
+  return legacy;
+}
 /** Compare complete results, including property order, Zod issues and first error. */
 export function compareSnapshotValidation(input, options) {
   const before = JSON.stringify(input),

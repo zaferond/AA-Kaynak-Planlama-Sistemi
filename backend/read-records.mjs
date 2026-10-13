@@ -58,14 +58,23 @@ export async function readCompositeMap(
   name,
   valueColumn,
   ownerIds,
+  period,
+  projectIds,
 ) {
   return readRecordMap(
     c,
-    ...compositeRead(provider, name, valueColumn, ownerIds),
+    ...compositeRead(provider, name, valueColumn, ownerIds, period, projectIds),
   );
 }
 
-function compositeRead(provider, name, valueColumn, ownerIds) {
+function compositeRead(
+  provider,
+  name,
+  valueColumn,
+  ownerIds,
+  period,
+  projectIds,
+) {
   const spec = tableSpec(name),
     keys = spec.key;
   if (
@@ -82,6 +91,7 @@ function compositeRead(provider, name, valueColumn, ownerIds) {
     if (
       ![
         "allocations",
+        "actual_allocations",
         "actual_worked_hours",
         "actual_percent_entries",
       ].includes(name) ||
@@ -97,6 +107,48 @@ function compositeRead(provider, name, valueColumn, ownerIds) {
       where = ids.length
         ? ` WHERE ${ident(keys[0])} IN (${ids.map((_, i) => "@p" + i).join(",")})`
         : " WHERE 1=0";
+    }
+  }
+  if (period !== undefined) {
+    if (
+      ![
+        "actual_allocations",
+        "actual_worked_hours",
+        "actual_percent_entries",
+      ].includes(name) ||
+      !Array.isArray(period) ||
+      period.length !== 2 ||
+      !period.every(
+        (month) =>
+          typeof month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(month),
+      )
+    )
+      throw Error("Invalid actual report period");
+    const offset = parameters.length;
+    where +=
+      (where ? " AND " : " WHERE ") +
+      `[month]>=@p${offset} AND [month]<=@p${offset + 1}`;
+    parameters.push(...period);
+  }
+  if (projectIds !== undefined) {
+    if (
+      name !== "actual_allocations" ||
+      !Array.isArray(projectIds) ||
+      !projectIds.every((id) => typeof id === "string")
+    )
+      throw Error("Invalid actual project scope");
+    const ids = [...new Set(projectIds)];
+    if (
+      ids.length + parameters.length <= 900 &&
+      !ids.some((id) => id.includes("|"))
+    ) {
+      const offset = parameters.length;
+      where +=
+        (where ? " AND " : " WHERE ") +
+        (ids.length
+          ? `[project_id] IN (${ids.map((_, i) => "@p" + (offset + i)).join(",")})`
+          : "1=0");
+      parameters.push(...ids);
     }
   }
   if (provider === "sqljs") {
