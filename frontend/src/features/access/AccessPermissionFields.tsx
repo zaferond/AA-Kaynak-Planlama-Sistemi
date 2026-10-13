@@ -1,3 +1,5 @@
+import { orderedLeaderships } from "../../../../shared/leadership-hierarchy";
+import { useMemo } from "react";
 import { Plus, Check } from "lucide-react";
 import type { Data } from "../../model";
 import { fold } from "../../model";
@@ -34,6 +36,10 @@ export default function AccessPermissionFields({
   boundResource = false,
 }: Props) {
   const creating = !form.id;
+  const leadershipRows = useMemo(
+    () => orderedLeaderships(data),
+    [data.leaders, data.leaderParents],
+  );
   const people = data.resources
     .filter(isEmployeeResource)
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
@@ -228,13 +234,14 @@ export default function AccessPermissionFields({
           {!boundResource && !creating && <option value="admin">Admin</option>}
         </select>
       </label>
-      {form.role !== "admin" && (
+      {form.role === "manager" && (
         <fieldset className="access-leader-field">
-          <legend>Liderlik Erişimi</legend>
+          <legend>Planlanan Kaynak Dağılımı Yetkisi</legend>
           <p>
-            {form.role === "manager"
-              ? "Yönetici, planlanan kaynak dağılımında tüm takımları görüntüler. Seçilen liderlikler, bunların alt liderlikleri ve bağlı takımları için kaynak girişi yapabilir. Seçim yapılmazsa plan salt okunur kalır."
-              : "Liderlik seçimi normal kullanıcıya plan düzenleme yetkisi vermez."}
+            Yönetici, planlanan kaynak dağılımında tüm takımları görüntüler.
+            Seçilen liderlikler, bunların alt liderlikleri ve bağlı takımları
+            için kaynak girişi yapabilir. Seçim yapılmazsa plan salt okunur
+            kalır.
           </p>
           <input
             aria-label="Liderlik ara"
@@ -270,12 +277,23 @@ export default function AccessPermissionFields({
             </span>
           </div>
           <div className="accessleaders">
-            {data.leaders
-              ?.filter((leader) => fold(leader).includes(fold(leaderQuery)))
-              .map((leader) => (
-                <label key={leader}>
+            {leadershipRows
+              .filter(({ name }) => fold(name).includes(fold(leaderQuery)))
+              .map(({ id: leader, parentId, depth }) => (
+                <label
+                  key={leader}
+                  data-leadership-depth={depth}
+                  data-leadership-parent={parentId || undefined}
+                  style={{ paddingInlineStart: 5 + Math.min(depth, 8) * 14 }}
+                  title={
+                    parentId
+                      ? "Üst liderlik: " + parentId
+                      : "Üst seviye liderlik"
+                  }
+                >
                   <input
                     type="checkbox"
+                    aria-label={leader}
                     disabled={busy}
                     checked={form.leaders.includes(leader)}
                     onChange={(event) =>
@@ -287,7 +305,15 @@ export default function AccessPermissionFields({
                       })
                     }
                   />
-                  {leader}
+                  {depth > 0 && (
+                    <span className="access-leader-branch" aria-hidden="true">
+                      ↳
+                    </span>
+                  )}
+                  <span className="access-leader-name">
+                    {leader}
+                    {parentId && <small>Üst: {parentId}</small>}
+                  </span>
                 </label>
               ))}
           </div>

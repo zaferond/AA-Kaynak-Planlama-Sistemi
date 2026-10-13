@@ -109,6 +109,42 @@ export async function checkLeadershipFilterRoots(f) {
               .count(),
             1,
           );
+          const names = await panel
+            .getByRole("checkbox")
+            .evaluateAll((nodes) =>
+              nodes.map((n) => n.getAttribute("aria-label")),
+            );
+          assert(
+            names.indexOf(f.teamA.lead) < names.indexOf(child) &&
+              names.indexOf(child) < names.indexOf(grand),
+            "Descendants are listed below their parent",
+          );
+          const parentOption = panel
+            .getByRole("checkbox", { name: f.teamA.lead, exact: true })
+            .locator("..");
+          const childOption = panel
+            .getByRole("checkbox", { name: child, exact: true })
+            .locator("..");
+          const grandOption = panel
+            .getByRole("checkbox", { name: grand, exact: true })
+            .locator("..");
+          assert.equal(
+            await childOption.getAttribute("data-leadership-parent"),
+            f.teamA.lead,
+          );
+          assert.equal(
+            await grandOption.getAttribute("data-leadership-parent"),
+            child,
+          );
+          const padding = (option) =>
+            option.evaluate((el) =>
+              parseFloat(getComputedStyle(el).paddingInlineStart),
+            );
+          assert(
+            (await padding(parentOption)) < (await padding(childOption)) &&
+              (await padding(childOption)) < (await padding(grandOption)),
+            "Hierarchy indentation is painted",
+          );
           await page.keyboard.press("Escape");
           await select("Liderlik", [f.teamA.lead]);
           const teams = await open("Takım");
@@ -203,6 +239,75 @@ export async function checkLeadershipFilterRoots(f) {
       },
     );
     await f.check(
+      "permission grants: manager hierarchy matches filters and searching does not add parent grants",
+      async () => {
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
+        await select("Liderlik", []);
+        await select("Takım", []);
+        await page
+          .locator('tr[data-account-id="employee"]')
+          .getByRole("button", { name: "Düzenle", exact: true })
+          .click();
+        const dialog = page.locator(
+          '.employee-access-editor[data-state="open"]',
+        );
+        assert.equal(await dialog.locator(".access-leader-field").count(), 0);
+        await dialog.getByLabel("Rol", { exact: true }).selectOption("manager");
+        const grants = dialog.getByRole("group", {
+          name: "Planlanan Kaynak Dağılımı Yetkisi",
+          exact: true,
+        });
+        const childBox = grants.getByRole("checkbox", {
+          name: child,
+          exact: true,
+        });
+        const grandBox = grants.getByRole("checkbox", {
+          name: grand,
+          exact: true,
+        });
+        assert.equal(
+          await childBox.locator("..").getAttribute("data-leadership-parent"),
+          f.teamA.lead,
+        );
+        assert.equal(
+          await grandBox.locator("..").getAttribute("data-leadership-parent"),
+          child,
+        );
+        assert(
+          Number(
+            await childBox.locator("..").getAttribute("data-leadership-depth"),
+          ) <
+            Number(
+              await grandBox
+                .locator("..")
+                .getAttribute("data-leadership-depth"),
+            ),
+        );
+        const initialChecked = await grants
+          .locator('input[type="checkbox"]:checked')
+          .count();
+        await grants
+          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .fill(grand);
+        assert.equal(await grants.getByRole("checkbox").count(), 1);
+        await grandBox.check();
+        await grandBox.uncheck();
+        await grants
+          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .fill("");
+        assert.equal(
+          await grants.locator('input[type="checkbox"]:checked').count(),
+          initialChecked,
+        );
+        await grandBox.scrollIntoViewIfNeeded();
+        await f.capture(page, "permission-leadership-hierarchy");
+        await dialog
+          .getByRole("button", { name: "Vazgeç", exact: true })
+          .click();
+        assert.deepEqual(await f.state(), before);
+      },
+    );
+    await f.check(
       "root reports: independent units remain distinct, descendants aggregate once and requested headings render",
       async () => {
         await page
@@ -291,7 +396,7 @@ export async function checkLeadershipFilterRoots(f) {
         await checkTeams("Takım", false);
         await chooseSingle("Liderlik", f.teamA.lead);
         await checkTeams("Takım", true);
-        await chooseSingle("Liderlik", "Seçin");
+        await chooseSingle("Liderlik", "İsteğe bağlı");
         await checkTeams("Takım", false);
         await dialog
           .getByRole("button", { name: "Close", exact: true })

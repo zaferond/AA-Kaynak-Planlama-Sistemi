@@ -153,11 +153,11 @@ test("leadership filters expose all authorized leaderships and team filters omit
   const scope = selectWorkspaceScope(data, null, filters);
   assert.deepEqual(
     scope.leaderFilterItems.map((x) => x.id),
-    data.leaders,
+    ["Root", "Zulu Child", "Alpha Grandchild", "Other"],
   );
   assert.deepEqual(
     scope.leaderItems.map((x) => x.id),
-    data.leaders,
+    ["Root", "Zulu Child", "Alpha Grandchild", "Other"],
   );
   assert(scope.availableTeams.every((team) => team.kind !== "leadership"));
   assert(scope.teams.some((team) => team.kind === "leadership"));

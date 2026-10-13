@@ -1,3 +1,4 @@
+import { orderedLeaderships } from "../shared/leadership-hierarchy.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { directoryTree } from "../shared/directory-tree.ts";
@@ -43,4 +44,31 @@ test("directory tree: cycle fallback and missing parents never duplicate or hide
   });
   assert.equal(rows.length, 4);
   assert.equal(new Set(rows.map((r) => r.lead)).size, 4);
+});
+
+test("leadership options: descendants follow parents, scoped catalogs never add missing parents and cycles remain finite", () => {
+  const before = structuredClone(data);
+  assert.deepEqual(
+    orderedLeaderships(data).map(({ id, parentId, depth }) => [
+      id,
+      parentId,
+      depth,
+    ]),
+    [
+      ["Root", "", 0],
+      ["Child", "Root", 1],
+      ["Grandchild", "Child", 2],
+      ["Other", "", 0],
+    ],
+  );
+  assert.deepEqual(orderedLeaderships({ ...data, leaders: ["Grandchild"] }), [
+    { id: "Grandchild", name: "Grandchild", parentId: "", depth: 0 },
+  ]);
+  const cycle = orderedLeaderships({
+    ...data,
+    leaderParents: { Root: "Child", Child: "Root", Grandchild: "Missing" },
+  });
+  assert.equal(cycle.length, data.leaders.length);
+  assert.equal(new Set(cycle.map((row) => row.id)).size, data.leaders.length);
+  assert.deepEqual(data, before);
 });

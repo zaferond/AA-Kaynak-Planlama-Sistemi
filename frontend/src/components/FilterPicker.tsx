@@ -6,7 +6,13 @@ import {
   PopoverContent,
 } from "@/components/ui/popover";
 import { fold } from "../model";
-export type PickerItem = { id: string; name: string; description?: string };
+export type PickerItem = {
+  id: string;
+  name: string;
+  description?: string;
+  depth?: number;
+  parentId?: string;
+};
 function ItemLabel({
   item,
   descriptionId,
@@ -151,6 +157,14 @@ export function Picker({
                 <button
                   key={i.id}
                   aria-label={i.name}
+                  data-leadership-depth={i.depth}
+                  data-leadership-parent={i.parentId || undefined}
+                  title={i.parentId ? "Üst liderlik: " + i.parentId : undefined}
+                  style={
+                    i.depth
+                      ? { paddingInlineStart: 7 + Math.min(i.depth, 8) * 14 }
+                      : undefined
+                  }
                   aria-describedby={descriptionId(i)}
                   className={"option " + (value.includes(i.id) ? "chosen" : "")}
                   onClick={() => {
@@ -158,11 +172,30 @@ export function Picker({
                     closePicker();
                   }}
                 >
+                  {!!i.depth && (
+                    <span
+                      className="picker-hierarchy-branch"
+                      aria-hidden="true"
+                    >
+                      ↳
+                    </span>
+                  )}
                   <ItemLabel item={i} descriptionId={descriptionId(i)} />
                   {value.includes(i.id) && <Check size={15} />}
                 </button>
               ) : (
-                <label key={i.id} className="option">
+                <label
+                  key={i.id}
+                  className="option"
+                  data-leadership-depth={i.depth}
+                  data-leadership-parent={i.parentId || undefined}
+                  title={i.parentId ? "Üst liderlik: " + i.parentId : undefined}
+                  style={
+                    i.depth
+                      ? { paddingInlineStart: 7 + Math.min(i.depth, 8) * 14 }
+                      : undefined
+                  }
+                >
                   <input
                     type="checkbox"
                     aria-label={i.name}
@@ -176,6 +209,14 @@ export function Picker({
                       )
                     }
                   />
+                  {!!i.depth && (
+                    <span
+                      className="picker-hierarchy-branch"
+                      aria-hidden="true"
+                    >
+                      ↳
+                    </span>
+                  )}
                   <ItemLabel item={i} descriptionId={descriptionId(i)} />
                 </label>
               ),

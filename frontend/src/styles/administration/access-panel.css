@@ -706,3 +706,33 @@
   --resource-status-color: #914456;
   --resource-status-border: #dfb6c1;
 }
+
+/* Keep related leadership grants together without widening or cascading selections. */
+.access-leader-field .accessleaders label[data-leadership-depth] {
+  border: 1px solid var(--brand-border, #d4decd);
+  border-radius: 4px;
+  padding-block: 6px;
+  padding-inline-end: 6px;
+  background: var(--brand-surface-soft, #f7f9f4);
+}
+.access-leader-field .accessleaders label[data-leadership-depth="0"] {
+  background: var(--brand-surface, #edf2e8);
+  font-weight: 700;
+}
+.access-leader-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.access-leader-name small {
+  display: block;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--brand-muted, #697b66);
+}
+.access-leader-branch {
+  flex: none;
+  color: var(--brand-muted, #697b66);
+}
+.access-leader-field .accessleaders input {
+  flex: none;
+}

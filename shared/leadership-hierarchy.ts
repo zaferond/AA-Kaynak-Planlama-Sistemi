@@ -58,3 +58,32 @@ export function visibleLeaderParents(data: Directory, names: Iterable<string>) {
   }
   return Object.fromEntries(entries);
 }
+
+/** Display only: order the supplied leadership catalog without adding inaccessible parents. */
+export function orderedLeaderships(data: Directory) {
+  const names = [...new Set(data.leaders || [])],
+    known = new Set(names);
+  const children = new Map<string, string[]>();
+  const parentOf = (name: string) => {
+    const parent = ownValue(data.leaderParents, name) || "";
+    return parent !== name && known.has(parent) ? parent : "";
+  };
+  for (const name of names) {
+    const parent = parentOf(name);
+    const siblings = children.get(parent) || [];
+    if (!children.has(parent)) children.set(parent, siblings);
+    siblings.push(name);
+  }
+  const seen = new Set<string>();
+  const rows: { id: string; name: string; parentId: string; depth: number }[] =
+    [];
+  function visit(name: string, depth: number) {
+    if (seen.has(name)) return;
+    seen.add(name);
+    rows.push({ id: name, name, parentId: parentOf(name), depth });
+    for (const child of children.get(name) || []) visit(child, depth + 1);
+  }
+  for (const root of children.get("") || []) visit(root, 0);
+  for (const name of names) visit(name, 0); // Defensive fallback for malformed cycles.
+  return rows;
+}

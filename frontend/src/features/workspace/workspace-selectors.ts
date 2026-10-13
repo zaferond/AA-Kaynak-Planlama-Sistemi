@@ -1,3 +1,4 @@
+import { orderedLeaderships } from "../../../../shared/leadership-hierarchy.ts";
 import {
   orderedPlanningUnits,
   selectedLeadershipScope,
@@ -83,7 +84,7 @@ export function selectWorkspaceScope(
     },
     { label: "Başlangıç Ayı", values: [monthLabel(start)], active: true },
   ];
-  const leaderItems = allLeads.map((lead) => ({ id: lead, name: lead }));
+  const leaderItems = orderedLeaderships(data || {});
   const leaderFilterItems = leaderItems;
   return {
     allLeads,

@@ -30,6 +30,42 @@ export async function checkPermissionPopup(f) {
           await popup().getByLabel("Rol", { exact: true }).inputValue(),
           "normal",
         );
+        assert.equal(
+          await popup().locator(".access-leader-field").count(),
+          0,
+          "Normal users do not see leadership grant controls",
+        );
+        await popup()
+          .getByLabel("Rol", { exact: true })
+          .selectOption("manager");
+        const grants = popup().getByRole("group", {
+          name: "Planlanan Kaynak Dağılımı Yetkisi",
+          exact: true,
+        });
+        await grants.waitFor();
+        const selected = await grants
+          .locator('input[type="checkbox"]:checked')
+          .count();
+        assert.equal(
+          await popup()
+            .getByText(
+              "Liderlik seçimi normal kullanıcıya plan düzenleme yetkisi vermez.",
+              { exact: true },
+            )
+            .count(),
+          0,
+        );
+        await popup().getByLabel("Rol", { exact: true }).selectOption("normal");
+        assert.equal(await popup().locator(".access-leader-field").count(), 0);
+        await popup()
+          .getByLabel("Rol", { exact: true })
+          .selectOption("manager");
+        assert.equal(
+          await grants.locator('input[type="checkbox"]:checked').count(),
+          selected,
+          "Hiding grant controls preserves the pending selection",
+        );
+        await popup().getByLabel("Rol", { exact: true }).selectOption("normal");
         await page.setViewportSize({ width: 900, height: 600 });
         await f.wait(async () => {
           const rect = await popup().boundingBox();

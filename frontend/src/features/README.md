@@ -281,3 +281,6 @@ Gerçekleşen dağılımın kişi alt toplamı yüzde biriminde dağıtılan kay
 
 
 Gerçekleşen dağılımda yönetici hesabının liderlik yetkisi, tüm alt liderliklerin doğrudan kaynak birimleri ve takımları için devralınır (`allowedActualTeam`). Ekran ve kayıt komutları aynı hiyerarşi kontrolünü kullanır; görünür olmak tek başına düzenleme hakkı vermez. Ayın çalışan ataması yetki kapsamına girmelidir. `actual-view` bu hücrelerin güncel revision değerlerini taşır. Yöneticinin diğer çalışanların izin/eğitim ikonu gizlidir; kendi eşleşmiş çalışan kaydının takvimi ve admin erişimi korunur. Kişisel takvim veri/yazma politikası genişletilmez.
+
+
+Hesap ve Yetkiler alanında liderlik seçimleri yalnız Yönetici rolünde **Planlanan Kaynak Dağılımı Yetkisi** başlığıyla açılır; normal kullanıcıda gizlenir. Rol geçişi görünmeyen taslak seçimlerini silmez. `orderedLeaderships` yalnız verilen liderlik kataloğunu üst/alt sırasıyla gösterir; erişilemeyen liderlik oluşturmaz. Aynı derinlik ve üst birim bilgisi ana filtreler ile tekli/toplu kaynak seçimlerine de taşınır. Liste girintisi ve ↳ işareti yalnız gösterim içindir; seçim kimlikleri, arama ve yetki hesapları değişmez.

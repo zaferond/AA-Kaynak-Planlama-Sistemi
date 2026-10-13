@@ -500,3 +500,15 @@ select {
 .pickeroptions .option > .picker-item-label {
   flex: 1;
 }
+
+.pickeroptions .option[data-leadership-depth="0"] {
+  font-weight: 650;
+}
+.pickeroptions .picker-hierarchy-branch {
+  flex: none;
+  color: var(--brand-muted, #697b66);
+  font-size: 0.9em;
+}
+.pickeroptions .option[data-leadership-depth] input {
+  flex: none;
+}
