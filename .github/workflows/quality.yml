@@ -39,7 +39,7 @@ jobs:
         run: node scripts/check-deployment-package.mjs
       - run: npx playwright install --with-deps chromium
       - name: Browser security and draft regression checks (synthetic database)
-        run: node scripts/run-browser-checks.mjs
+        run: node scripts/run-browser-checks-isolated.mjs
       - run: npm audit --audit-level=moderate
       - run: npm --prefix frontend audit --audit-level=high
   windows-synthetic:
