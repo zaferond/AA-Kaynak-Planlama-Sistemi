@@ -170,7 +170,10 @@ export async function fixture({ mutationLimits } = {}) {
       await page.goto(origin);
       if (login)
         await page
-          .getByRole("tab", { name: "AA Risk Yönetimi", exact: true })
+          .getByRole("tab", {
+            name: "AA Mühendislik Liderliği Projeler",
+            exact: true,
+          })
           .waitFor();
       return { context, page, id };
     }

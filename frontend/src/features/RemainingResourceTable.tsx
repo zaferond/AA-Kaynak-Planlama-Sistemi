@@ -9,6 +9,7 @@ import {
   TableCell,
   TableHead,
   TableHeader,
+  TableFooter,
   TableRow,
 } from "@/components/ui/table";
 import { useMemo, type RefObject } from "react";
@@ -69,6 +70,8 @@ export default function RemainingResourceTable({
     return <TimelineMonthHead key={month} month={month} years={years} />;
   }
   function reportRows(groups: ReportGroup[], teamReport = false) {
+    // Aggregate the same filtered units once, independent of report grouping.
+    const totalIds = [...new Set(groups.flatMap((group) => group.ids))].sort();
     return (
       <>
         <Table
@@ -139,6 +142,35 @@ export default function RemainingResourceTable({
               </TableRow>
             ))}
           </TableBody>
+          <TableFooter className="remaining-report-totals">
+            <TableRow>
+              <TableCell colSpan={2} className="remaining-total-label">
+                <span className="remaining-total-heading">
+                  <span className="remaining-total-icon" aria-hidden="true">
+                    Σ
+                  </span>
+                  <strong>Toplam Eksik Kaynak</strong>
+                </span>
+              </TableCell>
+              {months.map((month) => {
+                const value = metric(totalIds, month);
+                const remaining = value.current - value.total;
+                const status = capacityStatus(value.current, value.total);
+                return (
+                  <TableCell
+                    key={month}
+                    data-total-month={month}
+                    className={status.className}
+                    title={`${monthLabel(month)}: mevcut ${fmt(value.current)} − dağıtılan ${fmt(value.total)} = ${fmt(remaining)} · ${status.label}`}
+                  >
+                    <strong className="remaining-total-value">
+                      {fmt(remaining)}
+                    </strong>
+                  </TableCell>
+                );
+              })}
+            </TableRow>
+          </TableFooter>
         </Table>
         {!groups.length && (
           <p className="emptymsg">Bu filtrelere uygun birim yok.</p>

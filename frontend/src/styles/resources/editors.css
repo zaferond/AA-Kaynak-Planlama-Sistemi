@@ -236,3 +236,36 @@
     padding: 11px 16px;
   }
 }
+
+/* Compact organisation pickers wrap long unit names inside the employee form. */
+.editor .resource-editor-form .pick-compact > span {
+  font-size: 11px;
+}
+.editor .resource-editor-form .pick-compact .pickerbutton {
+  height: auto;
+  min-height: 36px;
+  padding: 6px 8px;
+  gap: 6px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+.editor .resource-editor-form .pick-compact .pickerbutton > span {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
+}
+.editor .resource-editor-form .pick-compact .pickerbutton > svg {
+  flex: none;
+}
+.pickerpanel.pickerpanel-compact .option,
+.pickerpanel.pickerpanel-compact .pickersearch input {
+  font-size: 11px;
+  line-height: 1.4;
+}
+.pickerpanel.pickerpanel-compact .option {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}

@@ -28,6 +28,7 @@ export function useWorkspaceFilters(
     [showCapacity, setShowCapacity] = useState(true),
     [showProjectDetails, setShowProjectDetails] = useState(false),
     [projectWeekly, setProjectWeekly] = useState(false),
+    [showProjectCodes, setShowProjectCodes] = useState(false),
     [filterResetKey, setFilterResetKey] = useState(0);
   const [todayDate, setTodayDate] = useState(currentPlanningDate);
   const currentMonth = todayDate.slice(0, 7);
@@ -59,6 +60,7 @@ export function useWorkspaceFilters(
     const firstMonth = currentMonth.slice(0, 4) + "-01";
     setDensity("detail");
     setProjectWeekly(false);
+    setShowProjectCodes(false);
     setLeads([]);
     setTeamIds([]);
     setProjectIds([]);
@@ -111,6 +113,8 @@ export function useWorkspaceFilters(
     setShowProjectDetails,
     projectWeekly,
     setProjectWeekly,
+    showProjectCodes,
+    setShowProjectCodes,
     filterResetKey,
     resetFilters,
     todayDate,

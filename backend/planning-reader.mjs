@@ -58,6 +58,7 @@ export async function readPlanningSnapshot(c, provider, viewUser) {
       ? { sortOrder: Number(r.sort_order) }
       : {}),
     responsibleName: r.responsible_name || "",
+    ...(r.project_code ? { code: r.project_code } : {}),
     start: r.start_month,
     end: r.end_month,
     phases: {},

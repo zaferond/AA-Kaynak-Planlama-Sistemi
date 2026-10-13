@@ -109,6 +109,7 @@ const proj = z.object({
   name: z.string().trim().min(1).max(200),
   sortOrder: z.number().int().min(0).max(1000000000).optional(),
   responsibleName: z.string().trim().max(200).optional(),
+  code: z.string().trim().max(100).optional(),
   start: mo,
   end: mo,
   phases: z.record(z.string().max(3000)),

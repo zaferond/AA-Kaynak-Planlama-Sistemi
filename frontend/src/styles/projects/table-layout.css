@@ -71,3 +71,24 @@
   user-select: none !important;
   cursor: cell !important;
 }
+
+/* Optional code is a second frozen label, including detail rows. */
+.app.tab-projects .projectmatrix .project-code-cell {
+  position: sticky;
+  left: var(--project-name-width);
+  z-index: 3;
+  padding: 6px 8px !important;
+  background: var(--table-project-background);
+  border-right: 1px solid var(--table-label-border);
+  box-shadow: var(--table-frozen-shadow);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 10px;
+  font-weight: 650;
+}
+.app.tab-projects .projectmatrix thead tr:not(.yearrow) > .project-code-cell {
+  z-index: 12;
+  background: var(--table-header-background);
+}

@@ -63,6 +63,7 @@ export async function persistPlanningSnapshot(
       id: p.id,
       name: p.name,
       responsible_name: p.responsibleName || "",
+      project_code: p.code || "",
       sort_order: p.sortOrder ?? null,
       start_month: p.start,
       end_month: p.end,

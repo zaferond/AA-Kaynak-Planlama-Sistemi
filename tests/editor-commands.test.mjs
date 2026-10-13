@@ -435,7 +435,7 @@ test("leader resource selects a direct leadership owner without a team; member s
         { ...editor, assignmentKind: "member" },
         context,
       ),
-    /Liderlik ve takım/,
+    /Takım seçin/,
   );
   assert.throws(
     () =>

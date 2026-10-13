@@ -88,3 +88,73 @@
 .actual-limit-actions .button {
   min-width: 86px;
 }
+
+/* Keep the total row compact with room below its centered text for overlay scrollbars. */
+.app.tab-overview
+  .panel
+  > [data-slot="table-container"]:has(> .remaining-report) {
+  max-height: 672px;
+  padding-bottom: 0;
+  scrollbar-gutter: stable;
+}
+.app.tab-overview .remaining-report .remaining-report-totals td {
+  position: sticky;
+  bottom: 0;
+  z-index: 3;
+  height: 52px;
+  padding: 4px;
+  vertical-align: middle;
+  border-top: 2px solid var(--brand-border-strong, #96a889);
+  background: var(--brand-surface, #edf1e8);
+  color: #25796f;
+  text-align: center;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 -3px 6px #29372d0d;
+}
+.app.tab-overview
+  .remaining-report
+  .remaining-report-totals
+  .remaining-total-label {
+  left: 0;
+  z-index: 4;
+  padding: 4px 10px;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  background: var(--brand-primary, #405341);
+  color: #fff;
+}
+
+.app.tab-overview .remaining-report .remaining-total-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+.app.tab-overview .remaining-report .remaining-total-heading strong {
+  display: block;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.app.tab-overview .remaining-report .remaining-total-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid #ffffff40;
+  border-radius: 4px;
+  background: #ffffff12;
+  font-size: 13px;
+}
+.app.tab-overview .remaining-report .remaining-total-value {
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 750;
+}
+/* Cell borders remain uniform even on the final row and frozen label columns. */
+.app.tab-overview .remaining-report tbody > tr > td {
+  border-bottom: 1px solid var(--table-grid-border, #bdcede);
+  border-right: 1px solid var(--table-grid-border, #bdcede);
+}

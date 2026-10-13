@@ -1,3 +1,8 @@
+import { checkAllocationFocusLayers } from "./browser-checks/allocation-focus-layers.mjs";
+import { checkTeamOnlyResource } from "./browser-checks/team-only-resource.mjs";
+import { checkProjectCodes } from "./browser-checks/project-codes.mjs";
+import { checkRemainingReportTotals } from "./browser-checks/remaining-report-totals.mjs";
+import { checkPlannedTeamFreeze } from "./browser-checks/planned-team-freeze.mjs";
 import { checkPlanningPermissions } from "./browser-checks/planning-permissions.mjs";
 import { checkActualTeamView } from "./browser-checks/actual-team-view.mjs";
 import { checkReportOwnerSource } from "./browser-checks/report-owner-source.mjs";
@@ -43,6 +48,11 @@ import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
 
 for (const check of [
+  checkAllocationFocusLayers,
+  checkTeamOnlyResource,
+  checkProjectCodes,
+  checkRemainingReportTotals,
+  checkPlannedTeamFreeze,
   checkPlanningPermissions,
   checkActualTeamView,
   checkReportOwnerSource,

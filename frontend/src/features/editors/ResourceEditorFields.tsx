@@ -87,6 +87,8 @@ export default function ResourceEditorFields({
       <div className="resource-form-grid">
         <Single
           label="Liderlik"
+          compact
+          empty={assignmentKind === "leader" ? "Seçin" : "İsteğe bağlı"}
           value={editor.version.lead || ""}
           onChange={(l) =>
             setEditor({
@@ -106,6 +108,7 @@ export default function ResourceEditorFields({
         {assignmentKind !== "leader" && (
           <Single
             label="Takım"
+            compact
             value={editor.version.team}
             onChange={(t) =>
               setEditor({
@@ -115,7 +118,8 @@ export default function ResourceEditorFields({
                   team: t,
                   lead:
                     data?.teams.find((x) => x.id === t)?.lead ||
-                    editor.version.lead,
+                    editor.version.lead ||
+                    "",
                 },
               })
             }
@@ -127,7 +131,7 @@ export default function ResourceEditorFields({
               )
               .map((t) => ({
                 ...t,
-                name: t.name + (!t.lead ? " (liderlik atanacak)" : ""),
+                name: t.name + (!t.lead ? " (Bağımsız takım)" : ""),
               }))}
           />
         )}
@@ -140,7 +144,11 @@ export default function ResourceEditorFields({
       )}
       {editor.version.team &&
         !data?.teams.find((t) => t.id === editor.version.team)?.lead && (
-          <small>Bu takım seçtiğiniz liderliğe bağlanacak.</small>
+          <small>
+            {editor.version.lead
+              ? "Bu takım seçtiğiniz liderliğe bağlanacak."
+              : "Bu kaynak bağımsız takıma kaydedilecek; liderlik seçimi zorunlu değildir."}
+          </small>
         )}
       <div className="resource-form-grid">
         <Single

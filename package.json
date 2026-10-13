@@ -24,7 +24,7 @@
     "format": "npm --prefix frontend run format",
     "format:check": "npm --prefix frontend run format:check",
     "verify": "npm run format:check && npm test && npm run build",
-    "test:ui": "node scripts/run-browser-checks.mjs",
+    "test:ui": "node scripts/run-browser-checks-isolated.mjs",
     "pretest:ui": "npm run build",
     "db:backup": "node scripts/data-maintenance.mjs backup",
     "db:verify-backup": "node scripts/data-maintenance.mjs verify",

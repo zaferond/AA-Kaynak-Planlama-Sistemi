@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Principal } from "../access";
-import { TAB_LABELS } from "../settings";
+import { RISK_MANAGEMENT_ENABLED, TAB_LABELS } from "../settings";
 export type WorkspaceDensity = "detail" | "compact" | "overview";
 type Props = {
   user: Principal | null;
@@ -78,10 +78,12 @@ export default function WorkspaceNavigation({
           <FolderKanban />
           {TAB_LABELS.projects}
         </TabsTrigger>
-        <TabsTrigger value="risk">
-          <ShieldAlert />
-          {TAB_LABELS.risk}
-        </TabsTrigger>
+        {RISK_MANAGEMENT_ENABLED && (
+          <TabsTrigger value="risk">
+            <ShieldAlert />
+            {TAB_LABELS.risk}
+          </TabsTrigger>
+        )}
         {(isAdmin || isManager) && (
           <TabsTrigger value="critical">
             <FolderKanban />

@@ -10,6 +10,8 @@ import {
 export type WindowedSection = {
   key: string;
   height: number;
+  /** Keep this section mounted while any of its group's chunks are visible. */
+  headingKey?: string;
   render: () => ReactNode;
 };
 
@@ -145,6 +147,7 @@ export function useWindowedSections(
       );
       gap = 0;
     };
+    const visibleKeys = new Set<string>();
     for (const section of sections) {
       const height = measured.current.get(section.key) || section.height;
       const visible =
@@ -153,10 +156,17 @@ export function useWindowedSections(
         (position + height >= viewport.top - 800 &&
           position <= viewport.top + viewport.height + 800);
       if (visible) {
+        visibleKeys.add(section.key);
+        if (section.headingKey) visibleKeys.add(section.headingKey);
+      }
+      position += height;
+    }
+    for (const section of sections) {
+      const height = measured.current.get(section.key) || section.height;
+      if (visibleKeys.has(section.key)) {
         flush(section.key);
         output.push(section.render());
       } else gap += height;
-      position += height;
     }
     flush("end");
     return output;

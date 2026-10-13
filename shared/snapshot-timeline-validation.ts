@@ -28,6 +28,8 @@ export function normalizeSnapshotResources(
       v.start = normalizeResourceDate(v.start, "start");
       v.end = normalizeResourceDate(v.end, "end");
       if (v.team && !teamIds.has(v.team)) throw bad("Takım bulunamadı.");
+      if (v.assignmentRole && v.assignmentRole !== "leader" && !v.lead)
+        v.lead = d.teams.find((team) => team.id === v.team)?.lead || "";
       try {
         assertResourceRole(d, v);
         assertResourceDates(

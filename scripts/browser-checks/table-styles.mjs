@@ -96,7 +96,7 @@ export async function checkTableStyles(f) {
             await page
               .locator(input)
               .evaluate((el) => getComputedStyle(el.closest("td")).zIndex),
-            "9",
+            "1",
           );
           assert.equal(
             await page

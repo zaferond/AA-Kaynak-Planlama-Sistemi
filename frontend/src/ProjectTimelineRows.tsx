@@ -26,6 +26,7 @@ export default function ProjectTimelineRows({
   periods,
   density,
   expandAllDetails,
+  showCodes = false,
   windowKey,
   expanded: controlledExpanded,
   onExpandedChange,
@@ -153,6 +154,11 @@ export default function ProjectTimelineRows({
             )}
           </div>
         </TableCell>
+        {showCodes && (
+          <TableCell className="project-code-cell">
+            {project.code || "—"}
+          </TableCell>
+        )}
         {periods.map((period) => {
           const active = periodOverlapsProject(period, project);
           const month = phaseMonthForPeriod(period, project);
@@ -269,7 +275,7 @@ export default function ProjectTimelineRows({
         <>
           {isAdmin && (
             <TableRow className="milestone-section-row">
-              <TableCell colSpan={periods.length + 1}>
+              <TableCell colSpan={periods.length + (showCodes ? 2 : 1)}>
                 <div className="milestone-section">
                   <button
                     type="button"
@@ -457,6 +463,9 @@ export default function ProjectTimelineRows({
                     )}
                   </div>
                 </TableCell>
+                {showCodes && (
+                  <TableCell className="project-code-cell" aria-hidden="true" />
+                )}
                 <TableCell
                   colSpan={periods.length}
                   className="milestone-month milestone-track-cell"

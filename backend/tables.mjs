@@ -47,6 +47,7 @@ export const tables = {
       name: "nvarchar(200)",
       sort_order: "int",
       responsible_name: "nvarchar(200)",
+      project_code: "nvarchar(100)",
       start_month: "varchar(7)",
       end_month: "varchar(7)",
     },

@@ -1,5 +1,8 @@
 import { currentPlanningMonth } from "./resource-dates.ts";
 export { SYSTEM_NAME, UI_THEME } from "./branding.ts";
+// Hidden by default; a future release can opt in at build time.
+export const RISK_MANAGEMENT_ENABLED =
+  process.env.AA_RISK_UI_ENABLED === "true";
 export const TAB_LABELS = {
   plan: "AA Planlanan Kaynak Dağılımı",
   projects: "AA Mühendislik Liderliği Projeler",

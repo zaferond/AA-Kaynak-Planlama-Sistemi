@@ -1,3 +1,4 @@
+import { monthLabel } from "./format";
 import { useMemo } from "react";
 import type { Metric } from "./metrics";
 import {
@@ -8,13 +9,7 @@ import {
 const numberFormat = new Intl.NumberFormat("tr-TR", {
   maximumFractionDigits: 2,
 });
-const monthFormat = new Intl.DateTimeFormat("tr-TR", {
-  month: "long",
-  year: "numeric",
-});
 const fmt = (value: number) => numberFormat.format(value);
-const monthLabel = (month: string) =>
-  monthFormat.format(new Date(month + "-01T12:00:00"));
 
 type Props = {
   capacity: Record<string, Metric>;
@@ -39,7 +34,7 @@ export default function MonthlyShortageTrend({
   const step = Math.pow(10, Math.floor(Math.log10(top / 4)));
   const tick = Math.ceil(top / (4 * step)) * step;
   const maxValue = tick * 4;
-  const width = Math.max(780, points.length * 62 + 78),
+  const width = Math.max(780, points.length * 74 + 78),
     height = 274;
   const left = 58,
     right = width - 24,
@@ -140,7 +135,7 @@ export default function MonthlyShortageTrend({
                       fontSize={11}
                       fill="var(--report-label-color, #61758b)"
                     >
-                      {point.month.slice(5)}/{point.month.slice(2, 4)}
+                      {monthLabel(point.month)}
                     </text>
                   )}
                 </g>

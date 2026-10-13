@@ -1,4 +1,5 @@
 import { currentUser } from "./storage";
+import { RISK_MANAGEMENT_ENABLED } from "./settings";
 const adminDefaultTabs = [
   "actual",
   "activity",
@@ -24,11 +25,13 @@ export const defaultTabKey = (userId: string) =>
 export function allowedDefaultTabs(
   user: ReturnType<typeof currentUser>,
 ): readonly string[] {
-  return user?.role === "admin"
-    ? adminDefaultTabs
-    : user?.role === "manager"
-      ? managerDefaultTabs
-      : normalDefaultTabs;
+  const tabs =
+    user?.role === "admin"
+      ? adminDefaultTabs
+      : user?.role === "manager"
+        ? managerDefaultTabs
+        : normalDefaultTabs;
+  return RISK_MANAGEMENT_ENABLED ? tabs : tabs.filter((tab) => tab !== "risk");
 }
 export function readDefaultTab(user: ReturnType<typeof currentUser>) {
   if (!user) return "plan";

@@ -1,4 +1,10 @@
-import { useMemo, useState, useLayoutEffect, type MouseEvent } from "react";
+import {
+  useMemo,
+  useState,
+  useLayoutEffect,
+  type MouseEvent,
+  type CSSProperties,
+} from "react";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -56,6 +62,8 @@ type Props = {
   revisions: Record<string, number>;
   months: string[];
   weekly: boolean;
+  showCodes: boolean;
+  onCodesChange: (show: boolean) => void;
   todayDate: string;
   labelWidth: number;
   monthWidth: number;
@@ -77,6 +85,8 @@ export default function ProjectTimelinePanel({
   revisions,
   months,
   weekly,
+  showCodes,
+  onCodesChange,
   todayDate,
   labelWidth,
   monthWidth,
@@ -92,6 +102,8 @@ export default function ProjectTimelinePanel({
   selection,
 }: Props) {
   const viewportRef = useViewportWorkspace();
+  const labelColumns = showCodes ? 2 : 1;
+  const codeWidth = showCodes ? 110 : 0;
   const [expandedProjects, setExpandedProjects] = useState<
     Record<string, boolean>
   >({});
@@ -126,6 +138,7 @@ export default function ProjectTimelinePanel({
           setExpandedProjects((old) => ({ ...old, [p.id]: value }))
         }
         project={p}
+        showCodes={showCodes}
         projectRevision={revisions["project:" + p.id] || 0}
         ordering={ordering.rowProps(p.id)}
         phaseSelection={selection}
@@ -158,8 +171,8 @@ export default function ProjectTimelinePanel({
   const windowedRows = useWindowedSections(
     selection.tableRef,
     sections,
-    projectPeriods.length + 1,
-    `${weekly}|${density}|${months.join("|")}|${expandAllDetails}`,
+    projectPeriods.length + labelColumns,
+    `${weekly}|${density}|${months.join("|")}|${expandAllDetails}|${showCodes}`,
   );
   return (
     <section className="panel workspace-dock" ref={viewportRef}>
@@ -192,6 +205,15 @@ export default function ProjectTimelinePanel({
           />
           Haftalık Görünüm
         </label>
+        <label>
+          <Switch
+            size="sm"
+            checked={showCodes}
+            onCheckedChange={onCodesChange}
+            aria-label="Proje Kodlarını Göster"
+          />
+          Proje Kodlarını Göster
+        </label>
       </div>
       <div className="workspace-record-count">{projects.length} proje</div>
       <Table
@@ -201,15 +223,20 @@ export default function ProjectTimelinePanel({
         todayMonthsKey={projectPeriods.map((period) => period.key).join("|")}
         className={
           "matrix projectmatrix planning-grid" +
-          (weekly ? " weekly-projectmatrix" : "")
+          (weekly ? " weekly-projectmatrix" : "") +
+          (showCodes ? " project-codes-visible" : "")
         }
-        style={{
-          width: labelWidth + projectPeriods.length * monthWidth,
-          minWidth: "100%",
-        }}
+        style={
+          {
+            width: labelWidth + codeWidth + projectPeriods.length * monthWidth,
+            minWidth: "100%",
+            "--project-name-width": `${labelWidth}px`,
+          } as CSSProperties
+        }
       >
         <colgroup>
           <col style={{ width: labelWidth }} />
+          {showCodes && <col style={{ width: codeWidth }} />}
           {projectPeriods.map((period) => (
             <col key={period.key} style={{ width: monthWidth }} />
           ))}
@@ -217,9 +244,13 @@ export default function ProjectTimelinePanel({
         <TableHeader>
           <TimelineYearRow
             years={projectPeriods.map((period) => period.year)}
+            labelColumns={labelColumns}
           />
           <TableRow>
             <TableHead>Proje</TableHead>
+            {showCodes && (
+              <TableHead className="project-code-cell">Proje Kodu</TableHead>
+            )}
             {projectPeriods.map((period) =>
               period.kind === "month" ? (
                 <TimelineMonthHead

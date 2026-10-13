@@ -96,7 +96,7 @@ export default function ResourcesPanel({
         </div>
         <div className="actions resource-toolbar">
           <input
-            placeholder="Çalışan, kullanıcı adı, statü veya liderlik ara…"
+            placeholder="Çalışan, kullanıcı adı, e-posta, statü veya liderlik ara…"
             aria-label="Kaynak ara"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -190,7 +190,7 @@ export default function ResourcesPanel({
       <div className="employee-access-table-wrap accesstable">
         <Table className="resource-table employee-access-table">
           <colgroup>
-            {[3, 12, 11, 10, 8, 4, 7, 7, 10, 8, 9, 11].map((width, index) => (
+            {[3, 11, 10, 9, 7, 4, 6, 6, 9, 11, 7, 8, 9].map((width, index) => (
               <col key={index} style={{ width: width + "%" }} />
             ))}
           </colgroup>
@@ -206,6 +206,7 @@ export default function ResourcesPanel({
                 "İşbaşı Tarihi",
                 "İşten Ayrılış Tarihi",
                 "Hesap",
+                "E-posta Adresi",
                 "Rol / Yetki",
                 "Yetki Kapsamı",
                 "İşlemler",
@@ -294,10 +295,8 @@ export default function ResourcesPanel({
                     <TableCell>
                       {v ? (
                         <span
-                          className={
-                            "badge " +
-                            (v.status.includes("İlan") ? "amber" : "")
-                          }
+                          className="badge resource-status-badge"
+                          data-resource-status={v.status}
                         >
                           {v.status}
                         </span>
@@ -319,13 +318,13 @@ export default function ResourcesPanel({
                               ? "Active Directory"
                               : "Yerel Hesap"}
                           </small>
-                          {account.email && (
-                            <small className="subline">{account.email}</small>
-                          )}
                         </>
                       ) : (
                         <span className="account-missing">Hesap yok</span>
                       )}
+                    </TableCell>
+                    <TableCell className="account-email">
+                      {account?.email || "—"}
                     </TableCell>
                     <TableCell>
                       {account ? (

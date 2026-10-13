@@ -152,7 +152,9 @@ function projectSheet(
   months: string[],
   view: ProjectReportView,
   weekly: boolean,
+  showCodes: boolean,
 ) {
+  const labelColumns = showCodes ? 2 : 1;
   const columns = projectTimelinePeriods(months, weekly);
   const columnWidth = weekly
     ? view === "overview"
@@ -165,7 +167,11 @@ function projectSheet(
       : view === "compact"
         ? 18
         : 29;
-  const widths = [43, ...columns.map(() => columnWidth)],
+  const widths = [
+      43,
+      ...(showCodes ? [20] : []),
+      ...columns.map(() => columnWidth),
+    ],
     last = col(widths.length - 1),
     rows: string[] = [],
     merges = [`A1:${last}1`, `A2:${last}2`, `A3:${last}3`];
@@ -215,14 +221,21 @@ function projectSheet(
     ),
   );
   const yearCells = [textCell(4, 0, "YIL", S.year)];
+  if (showCodes) {
+    yearCells.push(blankCell(4, 1, S.year));
+    merges.push("A4:B4");
+  }
   for (let i = 0; i < columns.length;) {
     const year = columns[i].year,
       start = i;
     while (i < columns.length && columns[i].year === year) i++;
-    yearCells.push(textCell(4, start + 1, year, S.year));
+    yearCells.push(textCell(4, start + labelColumns, year, S.year));
     for (let j = start + 1; j < i; j++)
-      yearCells.push(blankCell(4, j + 1, S.year));
-    if (i - start > 1) merges.push(`${col(start + 1)}4:${col(i)}4`);
+      yearCells.push(blankCell(4, j + labelColumns, S.year));
+    if (i - start > 1)
+      merges.push(
+        `${col(start + labelColumns)}4:${col(i + labelColumns - 1)}4`,
+      );
   }
   rows.push(row(4, 22, yearCells));
   rows.push(
@@ -231,6 +244,7 @@ function projectSheet(
       29,
       [
         "Proje",
+        ...(showCodes ? ["Proje Kodu"] : []),
         ...columns.map((period) =>
           period.kind === "week"
             ? `W${period.weekNumber} ${period.label}`
@@ -258,7 +272,10 @@ function projectSheet(
             Math.max(
               39,
               wrappedLines(p.name, widths[0]) * 15 + 10,
-              ...values.map((v, j) => wrappedLines(v, widths[j + 1]) * 14 + 10),
+              showCodes ? wrappedLines(p.code || "—", widths[1]) * 14 + 10 : 0,
+              ...values.map(
+                (v, j) => wrappedLines(v, widths[j + labelColumns]) * 14 + 10,
+              ),
             ),
           )
         : Math.min(
@@ -266,16 +283,20 @@ function projectSheet(
             Math.max(
               view === "overview" ? 30 : 36,
               wrappedLines(p.name, widths[0]) * 14 + 9,
+              showCodes ? wrappedLines(p.code || "—", widths[1]) * 14 + 9 : 0,
             ),
           );
     rows.push(
       row(r, height, [
         textCell(r, 0, p.name, alt ? S.nameAlt : S.name),
+        ...(showCodes
+          ? [textCell(r, 1, p.code || "—", alt ? S.nameAlt : S.name)]
+          : []),
         ...columns.map((period, j) => {
           const month = phaseMonthForPeriod(period, p);
           return textCell(
             r,
-            j + 1,
+            j + labelColumns,
             values[j],
             !periodOverlapsProject(period, p)
               ? S.outside
@@ -287,7 +308,7 @@ function projectSheet(
       ]),
     );
   });
-  const freeze = `<pane xSplit="1" ySplit="5" topLeftCell="B6" activePane="bottomRight" state="frozen"/><selection pane="bottomRight" activeCell="B6" sqref="B6"/>`;
+  const freeze = `<pane xSplit="${labelColumns}" ySplit="5" topLeftCell="${col(labelColumns)}6" activePane="bottomRight" state="frozen"/><selection pane="bottomRight" activeCell="${col(labelColumns)}6" sqref="${col(labelColumns)}6"/>`;
   const footer = xml("&LAA Mühendislik&R Sayfa &P / &N");
   const sheet = `<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="${ns}"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${last}${rows.length}"/><sheetViews><sheetView workbookViewId="0" showGridLines="0" zoomScale="90">${freeze}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="19"/><cols>${widths.map((width, i) => `<col min="${i + 1}" max="${i + 1}" width="${width}" customWidth="1"/>`).join("")}</cols><sheetData>${rows.join("")}</sheetData><autoFilter ref="A5:${last}${rows.length}"/><mergeCells count="${merges.length}">${merges.map((ref) => `<mergeCell ref="${ref}"/>`).join("")}</mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.3" right="0.3" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup paperSize="8" orientation="landscape" fitToWidth="${columns.length <= 12 ? 1 : 0}" fitToHeight="0"/><headerFooter><oddFooter>${footer}</oddFooter></headerFooter></worksheet>`;
   return sheet;
@@ -298,6 +319,7 @@ export function projectWorkbook(
   months: string[],
   view: ProjectReportView = "detail",
   weekly = false,
+  showCodes = false,
 ): Uint8Array {
   if (
     !months.length ||
@@ -311,7 +333,7 @@ export function projectWorkbook(
     sheets: [
       {
         name: sheetName,
-        xml: projectSheet(projects, months, view, weekly),
+        xml: projectSheet(projects, months, view, weekly, showCodes),
         printTitleRows: 5,
       },
     ],
@@ -325,8 +347,9 @@ export function downloadProjects(
   months: string[],
   view: ProjectReportView = "detail",
   weekly = false,
+  showCodes = false,
 ) {
-  const bytes = projectWorkbook(projects, months, view, weekly);
+  const bytes = projectWorkbook(projects, months, view, weekly, showCodes);
   downloadWorkbook(
     bytes,
     "AA-Muhendislik-Projeler-Raporu-" +

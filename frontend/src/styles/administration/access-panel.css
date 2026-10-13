@@ -653,3 +653,56 @@
   justify-content: flex-end;
   gap: 8px;
 }
+
+.app.tab-resources .employee-access-table .account-email {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+/* Distinct status tones retain readable labels in narrow employee columns. */
+.app.tab-resources .employee-access-table .resource-status-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 4px 7px;
+  border: 1px solid var(--resource-status-border, #cbd2db);
+  border-radius: 5px;
+  background: var(--resource-status-background, #eef0f3);
+  color: var(--resource-status-color, #5b6673);
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.app.tab-resources [data-resource-status="Aktif Çalışan"] {
+  --resource-status-background: #e6f3e9;
+  --resource-status-color: #275d3e;
+  --resource-status-border: #aacdb5;
+}
+.app.tab-resources [data-resource-status="Gear Up"] {
+  --resource-status-background: #e3f3f1;
+  --resource-status-color: #236761;
+  --resource-status-border: #a4d3cd;
+}
+.app.tab-resources [data-resource-status="SAAT Ücretli Ofis Ç."] {
+  --resource-status-background: #e6effb;
+  --resource-status-color: #315f91;
+  --resource-status-border: #b2c9e8;
+}
+.app.tab-resources [data-resource-status="Aktif İlan"] {
+  --resource-status-background: #fff1d5;
+  --resource-status-color: #8a590d;
+  --resource-status-border: #e8cd94;
+}
+.app.tab-resources [data-resource-status="Pasif İlan"] {
+  --resource-status-background: #eef0f3;
+  --resource-status-color: #5b6673;
+  --resource-status-border: #cbd2db;
+}
+.app.tab-resources [data-resource-status="İşten Ayrıldı"] {
+  --resource-status-background: #f8e7eb;
+  --resource-status-color: #914456;
+  --resource-status-border: #dfb6c1;
+}

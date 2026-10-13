@@ -53,6 +53,7 @@ export type Project = {
   name: string;
   sortOrder?: number;
   responsibleName?: string;
+  code?: string;
   start: string;
   end: string;
   phases: Record<string, string>;

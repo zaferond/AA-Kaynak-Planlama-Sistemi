@@ -24,7 +24,12 @@ await build({
   root,
   resolve: { alias: { "@": root } },
   esbuild: { jsx: "automatic" },
-  define: { "process.env.NODE_ENV": '"production"' },
+  define: {
+    "process.env.NODE_ENV": '"production"',
+    "process.env.AA_RISK_UI_ENABLED": JSON.stringify(
+      process.env.AA_RISK_UI_ENABLED === "true" ? "true" : "false",
+    ),
+  },
   build: {
     outDir: path.join(root, ".compiled"),
     minify: true,

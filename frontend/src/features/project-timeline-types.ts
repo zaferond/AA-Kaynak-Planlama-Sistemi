@@ -16,6 +16,7 @@ export type ProjectTimelineRowProps = {
   periods: TimelinePeriod[];
   density: "detail" | "compact" | "overview";
   expandAllDetails: boolean;
+  showCodes?: boolean;
   windowKey?: string;
   expanded?: boolean;
   onExpandedChange?: (expanded: boolean) => void;

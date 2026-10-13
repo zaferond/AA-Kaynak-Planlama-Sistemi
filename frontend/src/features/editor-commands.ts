@@ -108,8 +108,14 @@ function resourceChanges(
 
   const assignmentKind =
     editor.assignmentKind || resourceRole(data, editor.version);
+  const selectedTeam = data.teams.find(
+    (team) => team.id === editor.version.team,
+  );
   const selectedVersion = {
     ...editor.version,
+    lead:
+      editor.version.lead ||
+      (assignmentKind !== "leader" ? selectedTeam?.lead || "" : ""),
     assignmentRole: assignmentKind,
     team:
       assignmentKind === "leader"
@@ -136,13 +142,13 @@ function resourceChanges(
     start,
   );
   assertResourceDates(v);
-  if (!v.lead || !v.team) throw Error("Liderlik ve takım seçin.");
+  if (!v.team) throw Error("Takım seçin.");
   const t = data.teams.find((t) => t.id === v.team);
   if (!t)
     throw Error("Seçilen takım bulunamadı. Verileri yenileyip tekrar deneyin.");
   if (t.lead && t.lead !== v.lead)
     throw Error("Seçilen takım bu liderliğe bağlı değil.");
-  if (!t.lead)
+  if (!t.lead && v.lead)
     changes.push(
       command(editor.baseRevisions, "team", t.id, { ...t, lead: v.lead }),
     );
@@ -172,8 +178,7 @@ function bulkResourceChanges(
   if (editor.team && !t)
     throw Error("Seçilen takım bulunamadı. Verileri yenileyip tekrar deneyin.");
   const leader = t ? t.lead || editor.lead : "";
-  if (t && !leader) throw Error("Bu takım için liderlik seçin.");
-  if (t && !t.lead)
+  if (t && !t.lead && leader)
     changes.push(
       command(editor.baseRevisions, "team", t.id, { ...t, lead: leader }),
     );

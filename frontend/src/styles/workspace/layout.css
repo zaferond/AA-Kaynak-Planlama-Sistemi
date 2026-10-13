@@ -343,11 +343,21 @@
   text-overflow: clip;
   outline: 2px solid #b5d5fc;
 }
-/* Only numeric allocation editors need an elevated focus layer.
-   Project buttons must stay behind the frozen identification column. */
+/* Numeric editors can expand over neighbouring cells, below frozen labels/headers. */
 .app .planning-grid td:has(.cell input:focus) {
   position: relative;
-  z-index: 9;
+  z-index: 1;
+}
+.app.tab-actual .allocation-grid td:has(.person-amount) {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+}
+.app.tab-actual .allocation-grid td:has(.person-amount input:focus) {
+  z-index: 1;
+}
+.app:is(.tab-plan, .tab-actual) .allocation-grid .rowname {
+  z-index: 2;
 }
 .app .planning-grid .cell small {
   position: absolute;

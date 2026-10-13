@@ -46,7 +46,7 @@ import ProjectResponsible from "./ProjectResponsible";
 import ProjectTimelinePanel from "./features/ProjectTimelinePanel";
 import ResourcesPanel from "./features/ResourcesPanel";
 import RiskManagement from "./RiskManagement";
-import { DEFAULT_FILTERS } from "./settings";
+import { DEFAULT_FILTERS, RISK_MANAGEMENT_ENABLED } from "./settings";
 import { captureSessionGuard, currentUser, readLocal } from "./storage";
 import TeamDirectory from "./TeamDirectory";
 ("use client");
@@ -151,6 +151,8 @@ export default function Portal() {
     setShowProjectDetails,
     projectWeekly,
     setProjectWeekly,
+    showProjectCodes,
+    setShowProjectCodes,
     filterResetKey,
     resetFilters,
     todayDate,
@@ -391,6 +393,7 @@ export default function Portal() {
     months,
     density,
     projectWeekly,
+    showProjectCodes,
     currentMonth,
     start,
     personIds,
@@ -641,6 +644,8 @@ export default function Portal() {
                     revisions={data.revisions}
                     months={months}
                     weekly={projectWeekly}
+                    showCodes={showProjectCodes}
+                    onCodesChange={setShowProjectCodes}
                     todayDate={todayDate}
                     labelWidth={projectLabelWidth}
                     monthWidth={monthWidth}
@@ -671,7 +676,7 @@ export default function Portal() {
                   />
                 </TabsContent>
               )}
-              {tab === "risk" && (
+              {RISK_MANAGEMENT_ENABLED && tab === "risk" && (
                 <TabsContent value="risk">
                   <RiskManagement
                     leaveGuardRef={riskLeaveGuard}

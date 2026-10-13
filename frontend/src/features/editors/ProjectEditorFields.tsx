@@ -16,6 +16,19 @@ export default function ProjectEditorFields({ editor, setEditor }: Props) {
         />
       </label>
       <label>
+        Proje Kodu
+        <input
+          maxLength={100}
+          value={editor.value.code || ""}
+          onChange={(e) =>
+            setEditor({
+              ...editor,
+              value: { ...editor.value, code: e.target.value },
+            })
+          }
+        />
+      </label>
+      <label>
         Proje Sorumlusu
         <input
           maxLength={200}

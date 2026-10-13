@@ -54,7 +54,7 @@ Risk, takvim, yetki/geçmiş ve içe aktarma/yedek akışları için depo kökü
 
 `useProjectRowOrder.ts` proje tutamacını, bırakma işaretini ve Alt + ↑/↓ kısayolunu yönetir. `project-order-commands.ts` filtre dışındaki projeleri koruyarak revision'lı komutlar hazırlar. Sıra `Project.sortOrder` / `kp_projects.sort_order` içinde saklanır; yalnız admin değiştirir. İlk sıralamaya kadar eski kayıtların mevcut sırası korunur; sıralanmış listeye yeni proje en alttan eklenir. İçerik güncellemeleri sıra alanını korur.
 
-Her proje ayrı `TableBody` grubudur. Ortak `Table` içindeki `stickyProjectRows`, gerçek header yüksekliğini ve grubun bitişini ölçer; başlık yıl/ay altında kalır ve grubun sonunda yukarı çıkar. Yalnız CSS `sticky` kullanmak Chrome'da eski proje başlıklarının üst üste kalmasına yol açtığından grup sınırı ayrıca uygulanır. Projeler/gerçekleşen tabloda ve planlanan ekranın **Proje → Takımlar** görünümünde aktiftir. Normal/yönetici için yeni sıralama yetkisi eklenmez.
+Her proje ayrı `TableBody` grubudur. Ortak `Table` içindeki `stickyProjectRows`, gerçek header yüksekliğini ve grubun bitişini ölçer; başlık yıl/ay altında kalır ve grubun sonunda yukarı çıkar. Yalnız CSS `sticky` kullanmak Chrome'da eski proje başlıklarının üst üste kalmasına yol açtığından grup sınırı ayrıca uygulanır. Projeler/gerçekleşen tabloda ve planlanan ekranın **Proje → Takımlar** görünümünde aktiftir. **Takım → Projeler** görünümünde de takım başlığı yıl/ay satırlarının altında sabit kalır ve sonraki takımın başlığıyla yer değiştirir. Takım projeleri 20 satırlık parçalarda oluşturulmaya devam eder; `headingKey` görünür parçaların ilk başlık parçasını korur. Sabitleme sınırı aynı takımın oluşturulmuş parçalarının sonundan hesaplanır. Normal/yönetici için yeni sıralama yetkisi eklenmez.
 
 `test:ui` bu üç tabloyu ve kayıtlı sıralamayı da doğrular. Yatay sabitleme kontrolü, tablo alanı daraltılıp gerçekten yatay scroll oluştuğu denetlenerek yapılır.
 
@@ -249,3 +249,25 @@ Ortak takvim kayıtları dahil başlangıç/bitiş; kişisel izin/eğitim kayıt
 Çalışan & Kaynak altındaki izin/eğitim raporu `absence-range-report.ts` ile aynı gruplamayı kullanır. Tarihler tam kaynak aralığını, gün ve saatler seçili aylar ve tarihsel takım filtresini gösterir; kısmi filtre satırda belirtilir. Eğitim saatleri izin sonrası kalan çalışılabilir saatle sınırlanır. Yöneticiye görünen günlük metadata başka liderlikteki ayların tarihlerini açığa çıkarmaz; kaynağın sahibi kendi aralığının tamamını görür. Raporun mevcut admin kapsamındaki Düzenle/Sil işlemleri aralığın tamamını hedefler, yetkileri sunucu denetler.
 
 `calendar-commands.test.mjs` gruplama, eski kayıt uyumu, ay/yıl/takım filtreleri, metadata doğrulama, açılış revision’ı ve atomik hata senaryolarını kapsar. `browser-checks/calendar.mjs` tek satırlı ortak/kişisel aralıkların kalıcı düzenlenmesini ve silinmesini, çalışan raporundaki doğrudan aralık düzenleme/silmeyi sentetik ortamda kontrol eder.
+
+## Risk ekranının geçici olarak gizlenmesi
+
+Standart derlemede Risk Yönetimi sekmesi ve varsayılan sekme seçeneği gizlidir (`AA_RISK_UI_ENABLED` ayarlanmamış veya `true` dışında). Risk kaynak kodu, API yetki kontrolleri ve kayıtlı veriler korunur. Sonraki sürümde yeniden açmak için derleme ortamında `AA_RISK_UI_ENABLED=true` ayarlanıp yeniden derlenir. Bu bir arayüz görünürlük ayarıdır.
+
+`npm run test:ui` önce gizli görünümü sentetik hesaplarla doğrular, sonra geçici bir kaynak kopyasında risk arayüzünü açıp mevcut risk senaryolarını da çalıştırır. Geçici test derlemesi çalışan sitenin dosyalarını ve veritabanını değiştirmez.
+
+## Proje kodu ve grafik ay etiketleri
+
+Proje formundaki isteğe bağlı `code` alanı en fazla 100 karakterdir. Paylaşılan doğrulama sınırı, parametreli SQL yazıcısı ve okuyucu üzerinden korunur; 35 numaralı migration projelere nullable `project_code` alanını ekler. Eski proje kayıtları kod olmadan geçerlidir. MSSQL dağıtımında sunucu yeniden başlatılmadan önce IT `npm run db:migrate` çalıştırmalıdır; yerel SQL.js geliştirme modunda açılış migration'ı uygulanır.
+
+Projeler ekranındaki **Proje Kodlarını Göster** seçimi başlangıçta kapalıdır ve filtre sıfırlamada kapanır. Açıldığında proje adının sağında sabit kod sütunu görüntülenir; detay çizelgesi, takvim ve bugün çizgisi bu sütunun ardından başlar. Excel çıktısında da yalnız bu seçim açıkken kod sütunu bulunur. Aylık/haftalık Excel başlıkları, dondurulan sütunlar ve hücre konumları seçime göre hesaplanır; kodlar formül yerine metin olarak yazılır.
+
+Aylık Eksik Kaynak Sayısı ve Aylık Ortalama Çalışan Sayısı ve Öngörü grafiklerinin yatay etiketleri ortak `monthLabel` biçimini kullanır: **Oca 2026**, **Şub 2026**.
+
+## Takım seçimi, AD e-posta ve hücre katmanları
+
+Team Member ve Product Owner kaydında takım zorunludur; liderlik seçimi isteğe bağlıdır. Takımın liderliği varsa boş liderlik alanı o takımdan tamamlanır. Bağımsız takımda liderlik boş kalabilir. Lider rolünün geçerli doğrudan liderlik birimi şartı ve tek Lider/Product Owner çakışma kontrolleri sürer. İsteğe bağlı liderlik seçilerek bağımsız bir takımı liderliğe bağlayan mevcut işlem korunur. Aynı kural toplu takım değişiminde de uygulanır.
+
+Çalışan tablosunda Active Directory hesabının mevcut `email` bilgisi ayrı **E-posta Adresi** sütununda, satır kaydırmalı metin olarak gösterilir. Arama mevcut e-posta değerini de kapsar. Altı kaynak statüsü okunabilir, farklı arka plan renkleri olan etiketlerle ayrılır.
+
+Kaynak giriş kutusunun odak katmanı `1`, sabit kimlik hücreleri `2` ve takvim/proje başlıkları daha üst katmandadır. Gerçekleşen hücrelerde iç odak/hata katmanları hücre bağlamında sınırlandırılır. Kaydırma odaktaki taslağı kaydetmez ya da silmez; kutu üst başlıkların arkasından geçer.

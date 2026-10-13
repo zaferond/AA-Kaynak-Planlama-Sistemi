@@ -47,7 +47,7 @@ export default function BulkResourceEditorFields({
               name:
                 t.kind === "leadership"
                   ? "Doğrudan Liderlik · " + t.name
-                  : t.name + (!t.lead ? " (liderlik seçilmeli)" : ""),
+                  : t.name + (!t.lead ? " (Bağımsız takım)" : ""),
             }))}
           empty="Takımı değiştirme"
         />

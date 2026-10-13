@@ -36,9 +36,9 @@ export function assertResourceRole(
   const team = data.teams.find((team) => team.id === version.team);
   if (
     !team ||
-    !version.lead ||
-    !data.leaders?.includes(version.lead) ||
-    team.lead !== version.lead
+    (version.assignmentRole === "leader" && !version.lead) ||
+    (!!version.lead && !data.leaders?.includes(version.lead)) ||
+    (team.lead || "") !== (version.lead || "")
   )
     throw Error("Kaynak rolü için geçerli liderlik ve birim seçin.");
   if (

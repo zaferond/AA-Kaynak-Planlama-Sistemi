@@ -25,11 +25,18 @@ function Table({ className, todayDate, todayMonthsKey, stickyProjectRows, ...pro
       const zoom = Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1
       const top = container.getBoundingClientRect().top
       // Read all group bounds before updating styles to avoid repeated layout work.
-      const positions = Array.from(container.querySelectorAll<HTMLTableSectionElement>("tbody[data-project-group]"))
-        .flatMap(group => {
+      const groups = Array.from(container.querySelectorAll<HTMLTableSectionElement>("tbody[data-project-group]"))
+      // A windowed team can span multiple tbody chunks. Bound its heading by
+      // the last mounted chunk, keeping it alive through intermediate chunks.
+      const ends = new Map<string, number>()
+      for (const group of groups) {
+        const key = group.dataset.projectGroup!
+        ends.set(key, Math.max(ends.get(key) ?? -Infinity, group.getBoundingClientRect().bottom))
+      }
+      const positions = groups.flatMap(group => {
           const heading = group.querySelector<HTMLTableRowElement>("[data-project-heading]")
           if (!heading) return []
-          const end = (group.getBoundingClientRect().bottom - top - heading.getBoundingClientRect().height) / zoom
+          const end = (ends.get(group.dataset.projectGroup!)! - top - heading.getBoundingClientRect().height) / zoom
           return [{ heading, offset: Math.min(headerHeight, end) }]
         })
       container.style.setProperty("--project-sticky-offset", `${headerHeight}px`)

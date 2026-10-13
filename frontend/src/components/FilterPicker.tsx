@@ -35,6 +35,7 @@ export function Picker({
   items,
   single = false,
   empty = "Tümü",
+  compact = false,
 }: {
   label: string;
   value: string[];
@@ -42,6 +43,7 @@ export function Picker({
   items: PickerItem[];
   single?: boolean;
   empty?: string;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
@@ -61,7 +63,11 @@ export function Picker({
   return (
     <div
       ref={pickerRef}
-      className={"pick" + (value.length ? " filter-active" : "")}
+      className={
+        "pick" +
+        (value.length ? " filter-active" : "") +
+        (compact ? " pick-compact" : "")
+      }
     >
       <span>{label}</span>
       <Popover
@@ -97,7 +103,11 @@ export function Picker({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          className={"pickerpanel" + (single ? " pickerpanel-single" : "")}
+          className={
+            "pickerpanel" +
+            (single ? " pickerpanel-single" : "") +
+            (compact ? " pickerpanel-compact" : "")
+          }
           align="start"
           side="bottom"
           collisionPadding={12}
@@ -183,12 +193,14 @@ export function Single({
   onChange,
   items,
   empty = "Seçin",
+  compact = false,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   items: PickerItem[];
   empty?: string;
+  compact?: boolean;
 }) {
   return (
     <Picker
@@ -198,6 +210,7 @@ export function Single({
       items={items}
       single
       empty={empty}
+      compact={compact}
     />
   );
 }

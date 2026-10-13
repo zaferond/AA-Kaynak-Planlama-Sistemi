@@ -26,6 +26,7 @@ type Props = {
   months: string[];
   density: WorkspaceDensity;
   projectWeekly: boolean;
+  showProjectCodes: boolean;
   currentMonth: string;
   start: string;
   personIds: string[];
@@ -47,6 +48,7 @@ export function createWorkspaceExports({
   months,
   density,
   projectWeekly,
+  showProjectCodes,
   currentMonth,
   start,
   personIds,
@@ -85,7 +87,13 @@ export function createWorkspaceExports({
   function exportCurrentTab() {
     try {
       if (tab === "projects")
-        downloadProjects(projects, months, density, projectWeekly);
+        downloadProjects(
+          projects,
+          months,
+          density,
+          projectWeekly,
+          showProjectCodes,
+        );
       else if (tab === "overview") exportResourceReport();
       else if (tab === "plan" && data)
         downloadPlannedAllocations(data, teams, projects, months);

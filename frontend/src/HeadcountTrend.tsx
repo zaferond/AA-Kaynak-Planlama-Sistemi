@@ -1,3 +1,4 @@
+import { monthLabel } from "./format";
 import { useMemo } from "react";
 import type { Data } from "./model";
 import { buildHeadcountTrend } from "./headcount-trend";
@@ -5,13 +6,7 @@ import { buildHeadcountTrend } from "./headcount-trend";
 const numberFormat = new Intl.NumberFormat("tr-TR", {
   maximumFractionDigits: 2,
 });
-const monthFormat = new Intl.DateTimeFormat("tr-TR", {
-  month: "short",
-  year: "numeric",
-});
 const fmt = (value: number) => numberFormat.format(value);
-const monthLabel = (month: string) =>
-  monthFormat.format(new Date(month + "-01T12:00:00"));
 
 type Props = {
   data: Data;
@@ -41,7 +36,7 @@ export default function HeadcountTrend({
         (point) => point.actualAverage ?? point.projectedAverage ?? 0,
       ),
     ) * 1.15;
-  const width = Math.max(780, points.length * 50),
+  const width = Math.max(780, points.length * 74),
     height = 252;
   const x = (index: number) =>
     56 + (index * (width - 82)) / Math.max(1, points.length - 1);
@@ -215,7 +210,7 @@ export default function HeadcountTrend({
                     fontSize={11}
                     fill="var(--report-label-color, #61758b)"
                   >
-                    {point.month.slice(5)}/{point.month.slice(2, 4)}
+                    {monthLabel(point.month)}
                   </text>
                 )}
               </g>

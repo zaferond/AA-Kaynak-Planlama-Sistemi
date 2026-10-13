@@ -68,15 +68,22 @@ export default function PlannedAllocationTable(
               const key = `${t.id}:${part}`;
               return {
                 key,
+                headingKey: `${t.id}:0`,
                 height:
                   (first ? 76 : 0) +
                   chunk.length * (actualRowsVisible(props, t.id) ? 100 : 60) +
                   (last ? 126 : 0),
                 render: () => (
-                  <TableBody key={key} data-window-key={key}>
+                  <TableBody
+                    key={key}
+                    data-window-key={key}
+                    className="project-row-group"
+                    data-project-group={`team:${t.id}`}
+                  >
                     {first && (
                       <TableRow
-                        className="group"
+                        className="group project-freeze-row"
+                        data-project-heading={`team:${t.id}`}
                         data-planning-group={t.id}
                         data-hierarchy-depth={
                           planningUnitHierarchy(props.data, t).depth
@@ -195,7 +202,7 @@ export default function PlannedAllocationTable(
   return (
     <Table
       ref={planTableRef}
-      stickyProjectRows={view === "project"}
+      stickyProjectRows
       todayDate={todayDate}
       todayMonthsKey={months.join("|")}
       className={

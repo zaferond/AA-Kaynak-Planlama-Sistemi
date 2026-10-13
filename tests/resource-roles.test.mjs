@@ -202,7 +202,7 @@ test("resource editor saves Product Owner, requires a real team and detects conf
   assert.throws(
     () =>
       prepareEditorChanges(d, editor, { start: "2026-01", resourceIds: [] }),
-    /Liderlik ve takım/,
+    /Takım seçin/,
   );
 });
 
@@ -424,4 +424,74 @@ test("planning unit managers derive team Product Owners and leadership Leaders w
     unit: "",
     other: "",
   });
+});
+
+test("Team Member and Product Owner can save with only a team, including independent teams", () => {
+  for (const role of ["member", "productOwner"]) {
+    for (const standalone of [false, true]) {
+      const d = fixture();
+      if (standalone) d.teams.find((t) => t.id === "t").lead = "";
+      const resource = person("only-team", role, { lead: "" });
+      const editor = {
+        kind: "resource",
+        isNew: true,
+        value: { ...resource, versions: [] },
+        version: resource.versions[0],
+        assignmentKind: role,
+        baseRevisions: captureEditorRevisions(d),
+      };
+      const before = structuredClone(editor);
+      const changes = prepareEditorChanges(d, editor, {
+        start: "2026-01",
+        resourceIds: [],
+      });
+      assert.equal(changes.length, 1);
+      const saved = changes[0].value;
+      assert.equal(saved.versions[0].lead, standalone ? "" : "A");
+      assert.equal(
+        validate({ ...d, resources: [resource] }).resources[0].versions[0].lead,
+        standalone ? "" : "A",
+      );
+      assert.equal(
+        validate({ ...d, resources: [saved] }).resources[0].versions[0]
+          .assignmentRole,
+        role,
+      );
+      assert.deepEqual(editor, before);
+    }
+  }
+});
+
+test("independent Product Owners still conflict and leader assignments still require leadership", () => {
+  const d = fixture(
+    person("owner", "productOwner", { lead: "" }),
+    person("new", "productOwner", { lead: "" }),
+  );
+  d.teams.find((t) => t.id === "t").lead = "";
+  conflict(() => validate(d), "Synthetic owner");
+  assert.throws(
+    () =>
+      validate(fixture(person("leader", "leader", { team: "t", lead: "" }))),
+    /geçerli liderlik/,
+  );
+  const one = fixture(person("member", "member"));
+  one.teams.find((t) => t.id === "other").lead = "";
+  const changes = prepareEditorChanges(
+    one,
+    {
+      kind: "bulkResources",
+      effective: "2026-01",
+      team: "other",
+      lead: "",
+      status: "",
+      included: "keep",
+      baseRevisions: captureEditorRevisions(one),
+    },
+    { start: "2026-01", resourceIds: ["member"] },
+  );
+  assert.equal(changes.length, 1);
+  assert.equal(changes[0].value.versions[0].lead, "");
+  assert.doesNotThrow(() =>
+    validate({ ...one, resources: [changes[0].value] }),
+  );
 });
