@@ -284,3 +284,12 @@ Gerçekleşen dağılımda yönetici hesabının liderlik yetkisi, tüm alt lide
 
 
 Hesap ve Yetkiler alanında liderlik seçimleri yalnız Yönetici rolünde **Planlanan Kaynak Dağılımı Yetkisi** başlığıyla açılır; normal kullanıcıda gizlenir. Rol geçişi görünmeyen taslak seçimlerini silmez. `orderedLeaderships` yalnız verilen liderlik kataloğunu üst/alt sırasıyla gösterir; erişilemeyen liderlik oluşturmaz. Aynı derinlik ve üst birim bilgisi ana filtreler ile tekli/toplu kaynak seçimlerine de taşınır. Liste girintisi ve ↳ işareti yalnız gösterim içindir; seçim kimlikleri, arama ve yetki hesapları değişmez.
+
+
+Active Directory hesabı yeni tanımlanırken veya bağlı çalışan kaydından düzenlenirken **Admin** rolü seçilebilir. Atama, rol değişikliği ve yetki kaldırma yalnız mevcut admin oturumuyla yapılır. AD admin hesabında çalışan eşleştirmesi korunur, liderlik yetki listesi boşaltılır (admin tüm kapsama erişir). Yerel ana yönetici koruması sürer. Rol değişikliği eski oturumları kapatır; kendi rolünü değiştiren AD admin hesabına işlem sonrası ayrıcalıklı veri döndürülmez, yeniden giriş istenir.
+
+
+Liderlik Bazında Eksik Raporu, üst birimlerin altında alt liderlikleri `expandLeadershipReportGroups` ile girintili kırılımlar halinde gösterir. Her alt satır yalnız filtrelenmiş birimler içindeki kendi alt ağacının toplamıdır; doğrudan liderlik kaynakları da dahildir. Ana grup hesabı değiştirilmez. Ekran genel toplamı benzersiz birim kimliklerinden, Excel genel toplamı yalnız kök satırlardan hesaplanır; alt kırılımlar tekrar toplanmaz. Excel'de aynı sıra ve girinti korunur.
+
+
+Kaynak Ekle / Yetki Tanımla ekranında Active Directory seçilince kaynak Ad Soyad alanı salt okunur olur ve seçilen AD kullanıcısının adı gösterilir; kullanıcı seçilmeden kayıt tamamlanmaz. AD modundan çıkılırsa önceki manuel isim taslağı korunur. Aynı `directoryEmployeeName` seçicisi görüntüleme ve kayıt komutunda kullanılır. Birleşik hesap/çalışan kaydında sunucu yeni hesabın adını AD'den yeniden çözer ve gelen manuel kaynak adını dikkate almaz; mevcut AD hesabının yetki düzenlemesinde kaynak adı AD profilindeki hesap adıyla eşitlenir.

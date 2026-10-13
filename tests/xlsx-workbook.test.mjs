@@ -336,7 +336,7 @@ test("remaining resource workbooks use the requested headings and preserve stand
   const leadership = files.get("xl/worksheets/sheet1.xml"),
     team = files.get("xl/worksheets/sheet2.xml");
   assert.match(leadership, /Liderlik Bazında Eksik Raporu/);
-  assert.match(leadership, /En Üst Birim/);
+  assert.match(leadership, /Liderlik \/ Birim/);
   assert.match(leadership, /Standalone PO/);
   assert.match(team, /Takım Bazında Eksik Kaynak Raporu/);
 });
@@ -397,4 +397,31 @@ test("actual Excel uses authorized monthly capacity and training summaries witho
   assert.match(sheet, /r="E5"[^>]*><v>0\.5<\/v>/);
   assert.match(sheet, /Eğitim/);
   assert.match(sheet, /r="E6"[^>]*><v>0\.1<\/v>/);
+});
+
+test("leadership workbook shows indented subtotal rows without double counting personnel or monthly totals", () => {
+  const group = (name, personnel, remaining, depth = 0) => ({
+    name,
+    manager: "Synthetic owner",
+    personnel,
+    months: [{ remaining, status: "within-capacity" }],
+    ...(depth ? { depth } : {}),
+  });
+  const files = entries(
+    resourceReportWorkbook(
+      ["2026-01"],
+      [
+        group("Root", 4, -5),
+        group("Child", 3, -6, 1),
+        group("Grand", 1, -3, 2),
+        group("Other", 2, 0),
+      ],
+      [],
+    ),
+  );
+  const sheet = files.get("xl/worksheets/sheet1.xml");
+  assert.match(sheet, /↳ Child/);
+  assert.match(sheet, /↳ Grand/);
+  assert.match(sheet, /<c r="C10"[^>]*><v>6<\/v><\/c>/);
+  assert.match(sheet, /<c r="D10"[^>]*><v>-5<\/v><\/c>/);
 });

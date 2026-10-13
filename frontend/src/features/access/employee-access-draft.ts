@@ -20,6 +20,16 @@ export function accountForm(data: Data, id: string): PermissionForm | null {
       }
     : null;
 }
+/** AD is the identity source. Keep the manual draft untouched when switching modes. */
+export function directoryEmployeeName(
+  data: Pick<Data, "users"> | null,
+  form: PermissionForm | null | undefined,
+): string | undefined {
+  if (!form) return undefined;
+  if (!form.id) return form.directoryUser?.name || "";
+  const account = data?.users?.find((user) => user.id === form.id);
+  return account?.authSource === "ldap" ? account.name : undefined;
+}
 export function employeePermission(
   draft: EmployeeAccessDraft | undefined,
   resourceId: string,
@@ -29,7 +39,8 @@ export function employeePermission(
   const form = draft.form;
   if (draft.revoke)
     return { action: "revoke", id: form.id, revision: form.revision };
-  if (form.role === "admin")
+  const user = data.users?.find((u) => u.id === form.id);
+  if (form.role === "admin" && form.id && user?.authSource !== "ldap")
     throw Error("Admin hesaplarını ilgili kaydın Düzenle ekranından yönetin.");
   if (!form.id) {
     if (!form.directoryUser) throw Error("Active Directory kullanıcısı seçin.");
@@ -41,7 +52,6 @@ export function employeePermission(
       resourceId,
     };
   }
-  const user = data.users?.find((u) => u.id === form.id);
   return {
     action: "update",
     id: form.id,

@@ -51,7 +51,7 @@
   width: 100%;
   text-align: left;
 }
-.app.tab-overview .remaining-report .report-unit-title > span:first-child {
+.app.tab-overview .remaining-report .report-unit-title > .report-unit-name {
   min-width: 0;
   flex: 1;
   white-space: normal;
@@ -150,4 +150,24 @@
   line-height: 1.25;
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* Leadership rows contain their descendant subtotals; the total footer deduplicates units. */
+.app.tab-overview
+  .leader-report
+  tr[data-report-depth="0"]
+  td:nth-child(-n + 2) {
+  background: var(--brand-surface-soft, #edf2e8);
+  font-weight: 700;
+}
+.app.tab-overview .leader-report .report-unit-branch {
+  flex: none;
+  color: var(--brand-muted, #697b66);
+}
+.app.tab-overview
+  .leader-report
+  tr[data-report-depth]:not([data-report-depth="0"])
+  .report-unit-name {
+  font-size: 11px;
+  font-weight: 500;
 }

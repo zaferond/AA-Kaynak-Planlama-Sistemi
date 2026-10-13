@@ -2021,7 +2021,7 @@ test("AD provisioning and manager ownership preserve authorization boundaries", 
         { username: "forged" },
         { name: "forged" },
         { email: "forged@example.test" },
-        { role: "admin" },
+        { role: "invalid" },
         { directoryId: "0".repeat(32) },
         { resourceId: "" },
         { resourceId: "missing" },
@@ -3171,8 +3171,8 @@ test("employee/account atomic save: authorization, rollback, linkage, revisions 
       const bad = create("atomic-a");
       bad.changes.push({ kind: "project", id: "p", value: {}, revision: 0 });
       assert.equal((await send(bad)).status, 400);
-      const adminRole = create("atomic-a", { role: "admin" });
-      assert.equal((await send(adminRole)).status, 400);
+      const invalidRole = create("atomic-a", { role: "invalid" });
+      assert.equal((await send(invalidRole)).status, 400);
       assert.equal((await state()).generation, before.generation);
     },
   );
@@ -3185,7 +3185,11 @@ test("employee/account atomic save: authorization, rollback, linkage, revisions 
       account = saved.json.data.users.find((u) => u.directoryId === person.id);
       assert.equal(account.resourceId, "atomic-a");
       assert.equal(account.name, person.name);
-      assert(saved.json.data.resources.some((r) => r.id === "atomic-a"));
+      assert.equal(
+        saved.json.data.resources.find((r) => r.id === "atomic-a").name,
+        person.name,
+        "Authoritative AD display name replaces the client employee name",
+      );
       const stored = await store.findUser({ id: account.id });
       assert.equal(stored.authSource, "ldap");
       const audit = await store.auditLog(
@@ -3253,7 +3257,7 @@ test("employee/account atomic save: authorization, rollback, linkage, revisions 
       assert.equal(after.generation, snapshot.generation);
       assert.equal(
         after.data.resources.find((r) => r.id === "atomic-a").name,
-        "Synthetic Employee",
+        person.name,
       );
     },
   );
@@ -3353,7 +3357,7 @@ test("employee/account atomic save: authorization, rollback, linkage, revisions 
     },
   );
   await t.test(
-    "existing accounts cannot be stolen, admin accounts cannot be demoted here and concurrent linking has one winner",
+    "existing accounts cannot be stolen, local admin accounts remain protected here and concurrent linking has one winner",
     async () => {
       const snap = await state();
       const steal = create("atomic-steal");
@@ -3818,4 +3822,237 @@ test("manager planning visibility is global, inherited write grants stay narrow 
   assert.equal(deleted.status, 200);
   assert.equal(deleted.json.data.allocations[key(team.id)], undefined);
   assert.equal(deleted.json.data.revisions["allocation:" + key(team.id)], 3);
+});
+
+test("AD administrators: provisioning, linked role lifecycle, protected root and self-change response", async (t) => {
+  const password = "Synthetic-AD-admin-only-735!";
+  const directory = syntheticDirectory(password);
+  const person = {
+    id: "a".repeat(32),
+    username: "qa.ad-admin",
+    name: "Synthetic AD Admin",
+    email: "ad-admin@example.test",
+  };
+  directory.add(person);
+  const f = await setup(t, { directory });
+  const { request, state, store, admin, user } = f;
+  const team = (await state()).data.teams.find(
+    (t) => t.lead && t.kind !== "leadership",
+  );
+  const resource = {
+    id: "ad-admin-employee",
+    name: "Synthetic AD Employee",
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        start: "2026-01-01",
+        end: "",
+        team: team.id,
+        lead: team.lead,
+        status: "Aktif Çalışan",
+        included: true,
+        amount: 1,
+        assignmentRole: "member",
+      },
+    ],
+  };
+  assert.equal(
+    (await f.write([{ kind: "resource", id: resource.id, value: resource }]))
+      .status,
+    200,
+  );
+  const create = {
+    directoryId: person.id,
+    role: "admin",
+    leaders: [team.lead],
+    resourceId: resource.id,
+  };
+  for (const role of ["normal", "manager"])
+    assert.equal(
+      (
+        await request(
+          "/users/create",
+          create,
+          await user("deny-ad-admin-" + role, role),
+        )
+      ).status,
+      403,
+    );
+  assert.equal(
+    (await request("/users/create", create, { ...admin, csrf: "bad" })).status,
+    403,
+  );
+  const saved = await request("/users/create", create, admin);
+  assert.equal(saved.status, 200);
+  let account = await store.findUser({ directoryId: person.id });
+  assert.equal(account.role, "admin");
+  assert.equal(account.resourceId, resource.id);
+  assert.deepEqual(account.leaders, []);
+  assert.equal(account.authSource, "ldap");
+  async function login() {
+    const r = await request("/auth/login", {
+      username: person.username,
+      password,
+    });
+    assert.equal(r.status, 200);
+    return {
+      cookie: r.response.headers.get("set-cookie").split(";")[0],
+      csrf: r.json.csrf,
+    };
+  }
+  const firstSession = await login();
+  assert.equal(
+    (await request("/directory/users", undefined, firstSession)).status,
+    200,
+  );
+  const edit = async (role, auth = admin, patch = {}) => {
+    const snap = await state();
+    return request(
+      "/employees/save",
+      {
+        changes: [
+          {
+            kind: "resource",
+            id: resource.id,
+            value: resource,
+            revision: snap.data.revisions["resource:" + resource.id],
+          },
+        ],
+        permission: {
+          action: "update",
+          id: account._id,
+          role,
+          resourceId: resource.id,
+          leaders: [team.lead],
+          revision: snap.data.revisions["user:" + account._id],
+          ...patch,
+        },
+      },
+      auth,
+    );
+  };
+  const before = await state();
+  assert.equal((await edit("manager", admin, { revision: 0 })).status, 409);
+  assert.deepEqual(await state(), before);
+  assert.equal((await edit("manager")).status, 200);
+  assert.equal(
+    (await request("/auth/me", undefined, firstSession)).status,
+    401,
+  );
+  account = await store.findUser({ directoryId: person.id });
+  assert.equal(account.role, "manager");
+  assert.equal(account.resourceId, resource.id);
+  const managerSession = await login();
+  assert.equal((await edit("admin", managerSession)).status, 403);
+  assert.equal((await edit("admin")).status, 200);
+  assert.equal(
+    (await request("/auth/me", undefined, managerSession)).status,
+    401,
+  );
+  account = await store.findUser({ directoryId: person.id });
+  assert.deepEqual(account.leaders, []);
+  assert.equal(account.resourceId, resource.id);
+  // Self-demotion commits, revokes the old admin session and returns no privileged snapshot.
+  const adminSession = await login();
+  const selfChange = await edit("normal", adminSession);
+  assert.equal(selfChange.status, 401);
+  assert.equal(selfChange.json.data, undefined);
+  assert.equal(
+    (await request("/auth/me", undefined, adminSession)).status,
+    401,
+  );
+  account = await store.findUser({ directoryId: person.id });
+  assert.equal(account.role, "normal");
+  assert.equal(account.resourceId, resource.id);
+  assert.equal((await edit("admin")).status, 200);
+  account = await store.findUser({ directoryId: person.id });
+  assert.equal(account.role, "admin");
+  // Neither the employee form nor generic role API may change the protected root.
+  await user("root-admin");
+  const snap = await state();
+  for (const action of ["update", "revoke"]) {
+    const permission =
+      action === "update"
+        ? {
+            action,
+            id: "root-admin",
+            role: "normal",
+            resourceId: resource.id,
+            leaders: [],
+            revision: 1,
+          }
+        : { action, id: "root-admin", revision: 1 };
+    assert.equal(
+      (
+        await request(
+          "/employees/save",
+          {
+            changes: [
+              {
+                kind: "resource",
+                id: resource.id,
+                value: resource,
+                revision: snap.data.revisions["resource:" + resource.id],
+              },
+            ],
+            permission,
+          },
+          admin,
+        )
+      ).status,
+      403,
+    );
+  }
+  assert.equal((await store.findUser({ id: "root-admin" })).role, "admin");
+  const otherEmployee = { ...resource, id: "different-employee" };
+  const steal = await request(
+    "/employees/save",
+    {
+      changes: [
+        {
+          kind: "resource",
+          id: otherEmployee.id,
+          value: otherEmployee,
+          revision: 0,
+        },
+      ],
+      permission: {
+        action: "update",
+        id: account._id,
+        role: "admin",
+        resourceId: otherEmployee.id,
+        leaders: [],
+        revision: account.revision,
+      },
+    },
+    admin,
+  );
+  assert.equal(steal.status, 403);
+  assert(
+    !(await state()).data.resources.some((r) => r.id === otherEmployee.id),
+  );
+  const revoked = await request(
+    "/employees/save",
+    {
+      changes: [
+        {
+          kind: "resource",
+          id: resource.id,
+          value: resource,
+          revision: (await state()).data.revisions["resource:" + resource.id],
+        },
+      ],
+      permission: {
+        action: "revoke",
+        id: account._id,
+        revision: account.revision,
+      },
+    },
+    admin,
+  );
+  assert.equal(revoked.status, 200);
+  account = await store.findUser({ directoryId: person.id });
+  assert.equal(account.active, false);
+  assert((await state()).data.resources.some((r) => r.id === resource.id));
 });

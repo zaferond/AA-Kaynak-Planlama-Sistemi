@@ -225,13 +225,20 @@ export default function AccessPermissionFields({
             setForm({
               ...form,
               role: event.target.value as Role,
-              resourceId: event.target.value === "admin" ? "" : form.resourceId,
+              resourceId:
+                event.target.value === "admin" &&
+                !boundResource &&
+                selected?.authSource !== "ldap"
+                  ? ""
+                  : form.resourceId,
             })
           }
         >
           <option value="normal">Normal Kullanıcı</option>
           <option value="manager">Yönetici</option>
-          {!boundResource && !creating && <option value="admin">Admin</option>}
+          {(creating || selected?.authSource === "ldap" || !boundResource) && (
+            <option value="admin">Admin</option>
+          )}
         </select>
       </label>
       {form.role === "manager" && (

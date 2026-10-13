@@ -225,9 +225,22 @@ export async function checkEmployeeAccess(f) {
           .click();
         await dialog()
           .getByLabel("Ad Soyad", { exact: true })
-          .fill("QA Combined Employee");
+          .fill("Manual name to replace");
         await choose("Liderlik", f.teamA.lead);
         await choose("Takım", f.teamA.name);
+        await dialog()
+          .getByLabel("Hesap Eşleştirmesi", { exact: true })
+          .selectOption("new-ad");
+        const mainName = dialog()
+          .getByLabel("Ad Soyad", { exact: true })
+          .first();
+        assert.equal(await mainName.inputValue(), "");
+        assert.equal(await mainName.getAttribute("readonly"), "");
+        await dialog()
+          .getByLabel("Hesap Eşleştirmesi", { exact: true })
+          .selectOption("");
+        assert.equal(await mainName.inputValue(), "Manual name to replace");
+        assert.equal(await mainName.getAttribute("readonly"), null);
         await dialog()
           .getByLabel("Hesap Eşleştirmesi", { exact: true })
           .selectOption("new-ad");
@@ -259,6 +272,14 @@ export async function checkEmployeeAccess(f) {
           assert.equal(await field.inputValue(), value);
           assert.equal(await field.getAttribute("readonly"), "");
         }
+        const employeeName = dialog()
+          .getByLabel("Ad Soyad", { exact: true })
+          .first();
+        assert.equal(await employeeName.inputValue(), "Directory New Account");
+        assert.equal(await employeeName.getAttribute("readonly"), "");
+        await employeeName.click();
+        await page.keyboard.type("Cannot change");
+        assert.equal(await employeeName.inputValue(), "Directory New Account");
         await dialog()
           .getByLabel("Rol", { exact: true })
           .selectOption("manager");
@@ -272,7 +293,7 @@ export async function checkEmployeeAccess(f) {
         await save();
         const data = await f.state(),
           employee = data.resources.find(
-            (r) => r.name === "QA Combined Employee",
+            (r) => r.name === "Directory New Account",
           );
         assert(employee);
         const account = await f.store.findUser({ directoryId: "f".repeat(32) });
@@ -291,10 +312,9 @@ export async function checkEmployeeAccess(f) {
     await f.check(
       "employee access: conflict preserves resource and permission drafts",
       async () => {
-        await edit("QA Combined Employee");
-        await dialog()
-          .getByLabel("Ad Soyad", { exact: true })
-          .fill("QA Preserved Draft");
+        await edit("Directory New Account");
+        const note = dialog().getByRole("textbox", { name: /^İK Notu/ });
+        await note.fill("QA Preserved Draft");
         await dialog()
           .getByLabel("Rol", { exact: true })
           .selectOption("normal");
@@ -308,10 +328,7 @@ export async function checkEmployeeAccess(f) {
           }),
         );
         await save(409);
-        assert.equal(
-          await dialog().getByLabel("Ad Soyad", { exact: true }).inputValue(),
-          "QA Preserved Draft",
-        );
+        assert.equal(await note.inputValue(), "QA Preserved Draft");
         assert.equal(
           await dialog().getByLabel("Rol", { exact: true }).inputValue(),
           "normal",
@@ -327,7 +344,7 @@ export async function checkEmployeeAccess(f) {
     await f.check(
       "employee access: employee form revokes account while keeping employee",
       async () => {
-        await edit("QA Combined Employee");
+        await edit("Directory New Account");
         page.once("dialog", (d) => d.accept());
         await dialog()
           .getByRole("button", {
@@ -341,7 +358,7 @@ export async function checkEmployeeAccess(f) {
         assert.equal(account.resourceId, "");
         assert(
           (await f.state()).resources.some(
-            (r) => r.name === "QA Combined Employee",
+            (r) => r.name === "Directory New Account",
           ),
         );
       },

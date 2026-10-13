@@ -13,6 +13,7 @@ export type ResourceReportGroup = {
   manager: string;
   personnel: number;
   months: ResourceReportMonth[];
+  depth?: number;
 };
 
 const ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
@@ -133,6 +134,8 @@ function reportSheet(
     last = column(widths.length - 1),
     rows: string[] = [],
     merges = [`A1:${last}1`, `A2:${last}2`, `A3:${last}3`];
+  // Child leaderships are subtotals already contained in their root row.
+  const totalGroups = groups.filter((group) => !group.depth);
   const filledRow = (
     row: number,
     height: number,
@@ -205,7 +208,14 @@ function reportSheet(
     rows.push(
       xmlRow(r, 29, [
         textCell(r, 0, group.manager || "—", STYLE.manager),
-        textCell(r, 1, group.name, STYLE.name),
+        textCell(
+          r,
+          1,
+          group.depth
+            ? "  ".repeat(Math.min(group.depth, 8)) + "↳ " + group.name
+            : group.name,
+          STYLE.name,
+        ),
         numberCell(r, 2, group.personnel, STYLE.personnel),
         ...group.months.map((value, i) =>
           numberCell(
@@ -230,14 +240,17 @@ function reportSheet(
       numberCell(
         totalRow,
         2,
-        groups.reduce((total, group) => total + group.personnel, 0),
+        totalGroups.reduce((total, group) => total + group.personnel, 0),
         STYLE.totalNumber,
       ),
       ...months.map((_, i) =>
         numberCell(
           totalRow,
           i + 3,
-          groups.reduce((total, group) => total + group.months[i].remaining, 0),
+          totalGroups.reduce(
+            (total, group) => total + group.months[i].remaining,
+            0,
+          ),
           STYLE.totalNumber,
         ),
       ),
@@ -269,7 +282,7 @@ export function resourceReportWorkbook(
     {
       name: "Liderlik Bazında",
       title: "Liderlik Bazında Eksik Raporu",
-      unit: "En Üst Birim",
+      unit: "Liderlik / Birim",
       groups: leaders,
     },
     {

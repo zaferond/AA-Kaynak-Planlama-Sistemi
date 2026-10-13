@@ -460,3 +460,100 @@ test("leader resource selects a direct leadership owner without a team; member s
     /Liderlik seçin/,
   );
 });
+
+test("AD employee names drive save commands without overwriting the manual draft; selection is required", () => {
+  const data = freeze(fixture());
+  const editor = freeze({
+    kind: "resource",
+    baseRevisions: captureEditorRevisions(data),
+    isNew: true,
+    value: { id: "new-ad", name: "Manual draft", note: "", versions: [] },
+    version,
+    account: {
+      changed: true,
+      form: {
+        id: "",
+        role: "normal",
+        leaders: [],
+        resourceId: "new-ad",
+        revision: 0,
+        directoryUser: {
+          id: "f".repeat(32),
+          name: "AD Display Name",
+          username: "qa.ad",
+          email: "qa@example.test",
+        },
+      },
+    },
+  });
+  assert.equal(
+    prepareEditorChanges(data, editor, context).at(-1).value.name,
+    "AD Display Name",
+  );
+  assert.equal(editor.value.name, "Manual draft");
+  const noAccount = { ...editor, account: { form: null, changed: false } };
+  assert.equal(
+    prepareEditorChanges(data, noAccount, context).at(-1).value.name,
+    "Manual draft",
+  );
+  const unselected = {
+    ...editor,
+    account: {
+      ...editor.account,
+      form: { ...editor.account.form, directoryUser: undefined },
+    },
+  };
+  assert.throws(
+    () => prepareEditorChanges(data, unselected, context),
+    /Active Directory kullanıcısı seçin/,
+  );
+});
+test("linked AD employee commands retain the authoritative account name while local employee names stay editable", () => {
+  const data = fixture();
+  data.users = [
+    {
+      id: "ad-account",
+      name: "AD Linked Name",
+      authSource: "ldap",
+      resourceId: "r",
+      role: "normal",
+      leaders: [],
+      active: true,
+    },
+    {
+      id: "local-account",
+      name: "Local Account",
+      authSource: "local",
+      resourceId: "",
+      role: "normal",
+      leaders: [],
+      active: true,
+    },
+  ];
+  const editor = {
+    kind: "resource",
+    baseRevisions: captureEditorRevisions(data),
+    isNew: false,
+    value: { ...data.resources[0], name: "Manual override" },
+    version,
+    account: {
+      changed: false,
+      form: {
+        id: "ad-account",
+        role: "normal",
+        leaders: [],
+        resourceId: "r",
+        revision: 1,
+      },
+    },
+  };
+  assert.equal(
+    prepareEditorChanges(data, editor, context).at(-1).value.name,
+    "AD Linked Name",
+  );
+  editor.account.form.id = "local-account";
+  assert.equal(
+    prepareEditorChanges(data, editor, context).at(-1).value.name,
+    "Manual override",
+  );
+});

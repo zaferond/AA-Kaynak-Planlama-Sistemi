@@ -1,5 +1,8 @@
 import { directoryResponsibilityIndex } from "../../../../shared/resource-roles.ts";
-import { reportGroupManager } from "../resource-report-groups.ts";
+import {
+  expandLeadershipReportGroups,
+  reportGroupManager,
+} from "../resource-report-groups.ts";
 import {
   isWorkingStatus,
   versionAt,
@@ -31,8 +34,12 @@ export function buildResourceReportGroups(
   teamReport: boolean,
 ): ResourceReportGroup[] {
   const responsibility = directoryResponsibilityIndex(data);
-  return groups.map((group) => ({
+  const displayGroups = teamReport
+    ? groups
+    : expandLeadershipReportGroups(data, teams, groups);
+  return displayGroups.map((group) => ({
     name: group.name,
+    ...(group.depth ? { depth: group.depth } : {}),
     manager: reportGroupManager(responsibility, teams, group, teamReport),
     personnel: data.resources.filter((r) => {
       const v = versionAt(r, start);

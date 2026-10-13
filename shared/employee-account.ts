@@ -2,14 +2,14 @@ export type EmployeePermission =
   | {
       action: "create";
       directoryId: string;
-      role: "normal" | "manager";
+      role: "normal" | "manager" | "admin";
       leaders: string[];
       resourceId: string;
     }
   | {
       action: "update";
       id: string;
-      role: "normal" | "manager";
+      role: "normal" | "manager" | "admin";
       leaders: string[];
       resourceId: string;
       revision: number;

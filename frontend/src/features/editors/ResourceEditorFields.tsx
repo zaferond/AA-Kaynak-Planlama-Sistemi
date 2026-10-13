@@ -1,3 +1,4 @@
+import { directoryEmployeeName } from "../access/employee-access-draft";
 import {
   resourceRole,
   resourceRoleLabels,
@@ -27,6 +28,8 @@ export default function ResourceEditorFields({
   editTeams,
   chooseResourceStatus,
 }: Props) {
+  const directoryName = directoryEmployeeName(data, editor.account?.form);
+  const directoryManaged = directoryName !== undefined;
   const assignmentKind =
     editor.assignmentKind ||
     resourceRole({ teams: data?.teams || [] }, editor.version);
@@ -42,8 +45,17 @@ export default function ResourceEditorFields({
         <input
           maxLength={200}
           autoFocus
-          value={editor.value.name}
+          value={directoryName ?? editor.value.name}
+          readOnly={directoryManaged}
+          aria-readonly={directoryManaged || undefined}
+          placeholder={directoryManaged ? "AD kullanıcısı seçin" : undefined}
+          title={
+            directoryManaged
+              ? "Ad Soyad Active Directory tarafından yönetilir."
+              : undefined
+          }
           onChange={(e) =>
+            !directoryManaged &&
             setEditor({
               ...editor,
               value: { ...editor.value, name: e.target.value },

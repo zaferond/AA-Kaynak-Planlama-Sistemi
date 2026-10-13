@@ -1,3 +1,4 @@
+import { directoryEmployeeName } from "./access/employee-access-draft.ts";
 import {
   resourceRole,
   assertUniqueResourceResponsibilities,
@@ -135,8 +136,12 @@ function resourceChanges(
       "leadership"
   )
     throw Error("Product Owner ve Team Member için bir takım seçin.");
+  const directoryName = directoryEmployeeName(data, editor.account?.form);
+  if (directoryName === "") throw Error("Active Directory kullanıcısı seçin.");
   const { resource: resourceForSave, version: v } = resourceVersionForSave(
-    editor.value,
+    directoryName === undefined
+      ? editor.value
+      : { ...editor.value, name: directoryName },
     selectedVersion,
     editor.isNew,
     start,

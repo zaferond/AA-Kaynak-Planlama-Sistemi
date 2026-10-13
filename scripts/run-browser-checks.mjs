@@ -1,3 +1,4 @@
+import { checkAdAdminRole } from "./browser-checks/ad-admin-role.mjs";
 import { checkActualManagerHierarchy } from "./browser-checks/actual-manager-hierarchy.mjs";
 import { checkActualRemainingHours } from "./browser-checks/actual-remaining-hours.mjs";
 import { checkTeamCapacityHeader } from "./browser-checks/team-capacity-header.mjs";
@@ -51,6 +52,7 @@ import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
 
 for (const check of [
+  checkAdAdminRole,
   checkActualManagerHierarchy,
   checkActualRemainingHours,
   checkTeamCapacityHeader,

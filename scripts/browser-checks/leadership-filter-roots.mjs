@@ -326,22 +326,62 @@ export async function checkLeadershipFilterRoots(f) {
               .count(),
             1,
           );
-        for (const name of [child, grand, "Liderlik eşleştirilmemiş"])
+        for (const name of [child, grand])
           assert.equal(
             await report
-              .locator(".report-unit-title > span")
+              .locator(".report-unit-name")
               .getByText(name, { exact: true })
               .count(),
-            0,
+            1,
           );
+        assert.equal(
+          await report
+            .getByText("Liderlik eşleştirilmemiş", { exact: true })
+            .count(),
+          0,
+        );
         for (const name of [
           "Liderlik Bazında Eksik Raporu",
           "Takım Bazında Eksik Kaynak Raporu",
         ])
           await page.getByRole("heading", { name, exact: true }).waitFor();
         await select("Liderlik", [f.teamA.lead]);
-        assert.equal(await report.locator("tbody tr").count(), 1);
+        assert.equal(
+          await report.locator('tbody tr[data-report-depth="0"]').count(),
+          1,
+        );
+        assert.equal(await report.locator("tbody tr").count(), 3);
         assert((await report.innerText()).includes(f.teamA.lead));
+        for (const [name, depth, expected] of [
+          [f.teamA.lead, 0, "3"],
+          [child, 1, "2"],
+          [grand, 2, "1"],
+        ]) {
+          const row = report.locator(`tr[data-report-leader="${name}"]`);
+          assert.equal(
+            await row.getAttribute("data-report-depth"),
+            String(depth),
+          );
+          assert.equal(
+            (await row.locator("td").nth(2).innerText()).trim(),
+            expected,
+          );
+        }
+        assert.equal(
+          (
+            await report.locator('[data-total-month="2026-01"]').innerText()
+          ).trim(),
+          "3",
+        );
+        assert.equal(
+          (
+            await page
+              .locator('.team-report [data-total-month="2026-01"]')
+              .innerText()
+          ).trim(),
+          "3",
+        );
+
         await f.capture(page, "root-leadership-report");
       },
     );

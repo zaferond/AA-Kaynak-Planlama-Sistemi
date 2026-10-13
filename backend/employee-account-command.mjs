@@ -1,3 +1,4 @@
+import { ROOT_ADMIN_ID } from "../shared/access.ts";
 import { z } from "zod";
 import { isDeepStrictEqual } from "node:util";
 import { admin, fail, hashPassword, token } from "./auth.mjs";
@@ -15,7 +16,6 @@ const permission = z.discriminatedUnion("action", [
   permissionInput
     .extend({
       action: z.literal("update"),
-      role: z.enum(["normal", "manager"]),
       resourceId: z.string().min(1).max(120),
     })
     .strict(),
@@ -53,6 +53,9 @@ export async function saveEmployeeRecord(store, actor, body, directory) {
         400,
         "AD kullanıcısı bulunamadı, pasif veya izin verilen kapsam dışında.",
       );
+    // Ignore the client-supplied employee name when provisioning from AD.
+    // The directory is resolved again on save, so stale UI names cannot win.
+    resources[0].value = { ...resources[0].value, name: person.name };
     password = await hashPassword(token());
   }
   const { action, ...payload } = account;
@@ -64,11 +67,23 @@ export async function saveEmployeeRecord(store, actor, body, directory) {
         const old = await store.findUser({ id: payload.id }, session);
         if (!old) fail(404, "Kullanıcı bulunamadı.");
         if (
-          old.role === "admin" ||
+          old._id === ROOT_ADMIN_ID ||
+          (old.role === "admin" && old.authSource !== "ldap") ||
           (old.resourceId && old.resourceId !== resourceId) ||
           (action === "revoke" && old.resourceId !== resourceId)
         )
           fail(403, "Bu hesap seçilen çalışan üzerinden yönetilemez.");
+        if (
+          action === "update" &&
+          payload.role === "admin" &&
+          old.authSource !== "ldap"
+        )
+          fail(
+            400,
+            "Bu ekranda Admin rolü yalnız Active Directory hesaplarına verilebilir.",
+          );
+        if (action === "update" && old.authSource === "ldap")
+          resources[0].value = { ...resources[0].value, name: old.name };
       }
       const teamChange = input.changes.find((c) => c.kind === "team");
       if (teamChange) {

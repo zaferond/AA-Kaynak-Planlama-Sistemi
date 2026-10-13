@@ -363,7 +363,20 @@ export function createApp(
         req.user._id,
         ATTEMPT_LIMITS.userEdit,
       );
-      res.json(await saveEmployeeRecord(store, req.user, req.body, directory));
+      const view = await saveEmployeeRecord(
+        store,
+        req.user,
+        req.body,
+        directory,
+      );
+      // A linked AD administrator may edit their own role. The mutation commits
+      // and revokes the session before requiring reauthentication, without a snapshot.
+      if (
+        req.body.permission?.action !== "create" &&
+        req.body.permission?.id === req.user._id
+      )
+        fail(401, "Oturum yenilenmeli.");
+      res.json(view);
     }),
   );
   app.post(

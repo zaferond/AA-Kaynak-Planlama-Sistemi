@@ -387,7 +387,7 @@ export async function revokeUser(
 }
 export type CreateUserInput = {
   directoryId: string;
-  role: "manager" | "normal";
+  role: "admin" | "manager" | "normal";
   leaders: string[];
   resourceId: string;
 };

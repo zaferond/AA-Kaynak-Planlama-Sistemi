@@ -20,16 +20,19 @@ export const revokePermissionInput = permissionInput.pick({
 export const accountInput = z
   .object({
     directoryId: z.string().regex(/^[a-f0-9]{32}$/),
-    role: z.enum(["manager", "normal"]),
+    role: z.enum(["admin", "manager", "normal"]),
     leaders: z.array(z.string()).max(100),
     resourceId: z.string().min(1).max(120),
   })
   .strict();
 
-async function checkScope(d, session, input, id) {
+async function checkScope(d, session, input, id, authSource) {
   if (input.leaders.some((leader) => !d.leaders.includes(leader)))
     fail(400, "Geçersiz liderlik seçimi.");
-  const resourceId = input.role === "admin" ? "" : input.resourceId;
+  // AD administrators remain employees; local administrator linkage keeps its
+  // existing behavior. Role changes must not detach an AD employee record.
+  const resourceId =
+    input.role === "admin" && authSource !== "ldap" ? "" : input.resourceId;
   const resource = d.resources.find((r) => r.id === resourceId);
   if (resourceId && (!resource || !isEmployeeResource(resource)))
     fail(400, "Çalışan kaydı bulunamadı veya ilan kaydı seçildi.");
@@ -59,7 +62,13 @@ export async function updatePermissions(store, d, u, session, input) {
       409,
       "Yetki kaldırılmış. Yeniden yetki vermek için hesabı tekrar seçin.",
     );
-  const { resourceId } = await checkScope(d, session, input, input.id);
+  const { resourceId } = await checkScope(
+    d,
+    session,
+    input,
+    input.id,
+    old.authSource,
+  );
   await store.saveUser(
     {
       ...old,
@@ -117,7 +126,7 @@ export async function createEmployeeAccount(
       "Bu kullanıcı adı zaten kullanılıyor. Mevcut hesabı otomatik olarak AD hesabına dönüştürme işlemi yapılmadı.",
     );
   const id = "user-" + token();
-  const { resourceId } = await checkScope(d, session, input, id);
+  const { resourceId } = await checkScope(d, session, input, id, "ldap");
   await store.saveUser(
     {
       _id: id,
@@ -127,7 +136,7 @@ export async function createEmployeeAccount(
       authSource: "ldap",
       directoryId: person.id,
       role: input.role,
-      leaders: input.leaders,
+      leaders: input.role === "admin" ? [] : input.leaders,
       resourceId,
       active: true,
       // A random, undisclosed placeholder preserves the existing backup schema.

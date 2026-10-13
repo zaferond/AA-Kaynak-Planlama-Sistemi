@@ -1,3 +1,4 @@
+import { CornerDownRight } from "lucide-react";
 import { ownValue } from "../../../shared/records";
 import {
   TimelineMonthHead,
@@ -19,7 +20,11 @@ import MemberBadge from "../components/MemberBadge";
 import { fmt, monthLabel } from "../format";
 import type { Metric } from "../metrics";
 import type { Data, Team } from "../model";
-import { reportGroupManager, type ReportGroup } from "./resource-report-groups";
+import {
+  expandLeadershipReportGroups,
+  reportGroupManager,
+  type ReportGroup,
+} from "./resource-report-groups";
 export type { ReportGroup } from "./resource-report-groups";
 type Props = {
   groups: ReportGroup[];
@@ -72,6 +77,9 @@ export default function RemainingResourceTable({
   function reportRows(groups: ReportGroup[], teamReport = false) {
     // Aggregate the same filtered units once, independent of report grouping.
     const totalIds = [...new Set(groups.flatMap((group) => group.ids))].sort();
+    const displayGroups = teamReport
+      ? groups
+      : expandLeadershipReportGroups(data || {}, teams, groups);
     return (
       <>
         <Table
@@ -94,13 +102,18 @@ export default function RemainingResourceTable({
             {reportYearRow()}
             <TableRow>
               <TableHead>Yönetici</TableHead>
-              <TableHead>{teamReport ? "Takım" : "En Üst Birim"}</TableHead>
+              <TableHead>{teamReport ? "Takım" : "Liderlik / Birim"}</TableHead>
               {months.map(reportMonthHead)}
             </TableRow>
           </TableHeader>
           <TableBody>
-            {groups.map((g) => (
+            {displayGroups.map((g) => (
               <TableRow
+                data-report-leader={g.leader}
+                data-report-depth={teamReport ? undefined : g.depth || 0}
+                title={
+                  g.parentLeader ? "Üst liderlik: " + g.parentLeader : undefined
+                }
                 key={
                   (teamReport ? "team:" : g.unitId ? "unit:" : "leader:") +
                   (teamReport ? g.ids[0] : g.unitId || g.leader || g.name)
@@ -110,8 +123,22 @@ export default function RemainingResourceTable({
                   {reportGroupManager(responsibility, teams, g, teamReport)}
                 </TableCell>
                 <TableCell>
-                  <span className="report-unit-title">
-                    <span>{g.name}</span>
+                  <span
+                    className="report-unit-title"
+                    style={
+                      g.depth
+                        ? { paddingInlineStart: Math.min(g.depth, 8) * 14 }
+                        : undefined
+                    }
+                  >
+                    {!!g.depth && (
+                      <CornerDownRight
+                        size={13}
+                        className="report-unit-branch"
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="report-unit-name">{g.name}</span>
                     {memberBadge(
                       g.name,
                       g.ids
@@ -176,7 +203,12 @@ export default function RemainingResourceTable({
           <p className="emptymsg">Bu filtrelere uygun birim yok.</p>
         )}
         <footer className="tablefoot">
-          <span>Kalan Kaynak · aylık kişi eşdeğeri</span>
+          <span>
+            Kalan Kaynak · aylık kişi eşdeğeri
+            {!teamReport && displayGroups.some((group) => group.depth)
+              ? " · Alt liderlikler üst toplamın kırılımıdır."
+              : ""}
+          </span>
           <span>
             Üye sayısı: bu ay Aktif Çalışan, Saat Ücretli ve Gear Up kayıtları.
           </span>
