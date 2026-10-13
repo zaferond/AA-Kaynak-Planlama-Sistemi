@@ -613,8 +613,21 @@ export async function checkDirectoryManagement(f) {
         const labels = await page
           .locator(".leader-report tbody tr .report-unit-title")
           .allTextContents();
-        assert(!labels.some((label) => label.includes(name)));
+        // Current UI expands child leadership subtotals under the root;
+        // only unique root units contribute to the final total.
+        assert(labels.some((label) => label.includes(name)));
         assert(labels.some((label) => label.includes(f.teamA.lead)));
+        const table = page.locator(".leader-report");
+        const childRow = table.locator(`[data-report-leader="${name}"]`);
+        const rootRow = table.locator(`[data-report-leader="${f.teamA.lead}"]`);
+        assert.equal(await childRow.getAttribute("data-report-depth"), "1");
+        assert.equal(await rootRow.getAttribute("data-report-depth"), "0");
+        assert.equal(await childRow.locator("td").nth(2).innerText(), "0,5");
+        assert.equal(await rootRow.locator("td").nth(2).innerText(), "0,5");
+        assert.equal(
+          await table.locator('[data-total-month="2026-01"]').innerText(),
+          "0,5",
+        );
         await f.capture(page, "hierarchy-top-leader-report");
         await f.store.mutate(f.actor, (data, actor) =>
           applyChanges(data, actor, [

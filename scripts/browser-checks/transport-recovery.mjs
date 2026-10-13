@@ -433,7 +433,29 @@ export async function checkTransportRecovery(report) {
             { kind: "workedHours", id: key, value: 189, revision },
           ]),
         );
+        await actual.page.route(
+          "**/api/actual-view?**",
+          (route) =>
+            route.fulfill({
+              status: 503,
+              json: { error: "Synthetic actual view read failure" },
+            }),
+          { times: 1 },
+        );
         await inspectGlobal(actual.page);
+        await actual.page
+          .getByRole("alert")
+          .filter({ hasText: "Synthetic actual view read failure" })
+          .waitFor();
+        assert.equal(await hoursInput.inputValue(), "180");
+        assert(await hoursInput.isDisabled());
+        await actual.page
+          .getByRole("button", { name: "Tekrar Dene", exact: true })
+          .click();
+        await f.wait(
+          async () => !(await hoursInput.isDisabled()),
+          "failed actual read retried without losing selected hours",
+        );
         assert.equal(await hoursInput.inputValue(), "180");
         assert.equal(await actual.page.evaluate(() => window.__posts), 1);
         const reply = actual.page.waitForResponse((r) =>

@@ -101,6 +101,15 @@ export async function checkEntityEditors(f) {
             .responsibleName,
           "Remote synthetic owner Local synthetic draft",
         );
+        // Receiving 409 precedes React's saving=false render. Escape is
+        // intentionally blocked while saving; wait for the visible UI to settle.
+        await f.wait(
+          () =>
+            dialog()
+              .getByRole("button", { name: "Kaydet", exact: true })
+              .isEnabled(),
+          "failed editor write settled before Escape",
+        );
         await page.keyboard.press("Escape");
         await dialog().waitFor({ state: "hidden" });
       },
@@ -125,6 +134,15 @@ export async function checkEntityEditors(f) {
         );
         assert((await f.state()).projects.some((p) => p.id === "p-a"));
         assert.equal(await field().inputValue(), "Delete draft");
+        // Receiving 409 precedes React's saving=false render. Escape is
+        // intentionally blocked while saving; wait for the visible UI to settle.
+        await f.wait(
+          () =>
+            dialog()
+              .getByRole("button", { name: "Kaydet", exact: true })
+              .isEnabled(),
+          "failed editor write settled before Escape",
+        );
         await page.keyboard.press("Escape");
         await dialog().waitFor({ state: "hidden" });
       },

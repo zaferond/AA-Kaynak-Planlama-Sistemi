@@ -720,7 +720,7 @@ export default function Portal() {
                     <p role="status">Gerçekleşen kaynak verileri yükleniyor…</p>
                   )}
                   {actualView.error && (
-                    <p role="alert">
+                    <p role="alert" data-actual-view-status>
                       {actualView.error}{" "}
                       <button onClick={actualView.reload}>Tekrar Dene</button>
                     </p>

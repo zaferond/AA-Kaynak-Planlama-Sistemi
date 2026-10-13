@@ -35,7 +35,7 @@ export function useActualCellSelection({
     const withinSelection = (target: EventTarget | null) =>
       target instanceof Element &&
       !!target.closest(
-        '.person-allocation [data-actual-context-cell="true"], .person-allocation .actual-unit-control, .actual-limit-dialog, [data-write-recovery]',
+        '.person-allocation [data-actual-context-cell="true"], .person-allocation .actual-unit-control, .actual-limit-dialog, [data-write-recovery], [data-actual-view-status]',
       );
     const clearOutside = (event: Event) => {
       if (!limitOpenRef.current && !withinSelection(event.target))
