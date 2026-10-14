@@ -3,6 +3,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useMemo,
   type Dispatch,
   type RefObject,
   type SetStateAction,
@@ -46,6 +47,25 @@ export function usePlannedGrid({
   setNotice,
   setError,
 }: Props) {
+  const teamIndex = useMemo(
+    () => new Map(data?.teams.map((team) => [team.id, team]) || []),
+    [data?.teams],
+  );
+  const projectIndex = useMemo(
+    () => new Map(data?.projects.map((project) => [project.id, project]) || []),
+    [data?.projects],
+  );
+  const writableTeams = useMemo(
+    () =>
+      new Set(
+        data && user
+          ? data.teams
+              .filter((team) => allowedPlanningTeam(data, user, team.id))
+              .map((team) => team.id)
+          : [],
+      ),
+    [data, user],
+  );
   const cellSet = new Set(cells);
   const selectionRef = useRef(cells);
   selectionRef.current = cells;
@@ -131,21 +151,21 @@ export function usePlannedGrid({
   });
   function planCellAvailable(key: string) {
     const [teamId, projectId, month] = key.split("|");
-    const project = data?.projects.find((item) => item.id === projectId);
-    const team = data?.teams.find((item) => item.id === teamId);
+    const project = projectIndex.get(projectId);
+    const team = teamIndex.get(teamId);
     return (
       !!project && !!team && month >= project.start && month <= project.end
     );
   }
   function planCellWritable(key: string) {
     const teamId = key.split("|")[0],
-      team = data?.teams.find((item) => item.id === teamId);
+      team = teamIndex.get(teamId);
     return (
       !saving &&
       !!team &&
       !!data &&
       !!user &&
-      allowedPlanningTeam(data, user, team.id) &&
+      writableTeams.has(team.id) &&
       planCellAvailable(key)
     );
   }

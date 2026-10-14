@@ -122,6 +122,7 @@ export function useTodayDateMarker(
   markerRef: RefObject<HTMLDivElement | null>,
   todayDate: string | undefined,
   todayMonthsKey: string | undefined,
+  aboveRows = false,
 ) {
   useLayoutEffect(() => {
     const container = containerRef.current;
@@ -155,7 +156,25 @@ export function useTodayDateMarker(
             86400000 +
             1)
         : todayMonthProgress(todayDate);
-    let frame = 0;
+    let frame = 0,
+      visibilityFrame = 0;
+    let markerLeft = 0,
+      frozenWidth = 0,
+      lastLeft = container.scrollLeft;
+    const updateVisibility = () => {
+      visibilityFrame = 0;
+      const value =
+        aboveRows && markerLeft - container.scrollLeft < frozenWidth
+          ? "hidden"
+          : "visible";
+      if (marker.style.visibility !== value) marker.style.visibility = value;
+    };
+    const onScroll = () => {
+      if (container.scrollLeft === lastLeft) return;
+      lastLeft = container.scrollLeft;
+      if (!visibilityFrame)
+        visibilityFrame = requestAnimationFrame(updateVisibility);
+    };
     const update = () => {
       frame = 0;
       const containerRect = container.getBoundingClientRect();
@@ -167,10 +186,24 @@ export function useTodayDateMarker(
           zoom +
         container.scrollLeft;
       const height = table.offsetHeight;
+      markerLeft = left;
+      frozenWidth = aboveRows
+        ? Math.max(
+            0,
+            ...Array.from(header.parentElement!.children).map((cell) => {
+              const style = getComputedStyle(cell);
+              return style.position === "sticky" && style.left !== "auto"
+                ? (Number.parseFloat(style.left) || 0) +
+                    (cell as HTMLElement).offsetWidth
+                : 0;
+            }),
+          )
+        : 0;
       marker.style.left = `${left}px`;
       marker.style.top = "0px";
       marker.style.height = `${height}px`;
       marker.style.display = "block";
+      updateVisibility();
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
@@ -181,10 +214,14 @@ export function useTodayDateMarker(
     observer.observe(table);
     observer.observe(header);
     window.addEventListener("resize", schedule);
+    if (aboveRows)
+      container.addEventListener("scroll", onScroll, { passive: true });
     return () => {
       cancelAnimationFrame(frame);
+      cancelAnimationFrame(visibilityFrame);
       observer.disconnect();
       window.removeEventListener("resize", schedule);
+      container.removeEventListener("scroll", onScroll);
     };
-  }, [containerRef, markerRef, todayDate, todayMonthsKey]);
+  }, [containerRef, markerRef, todayDate, todayMonthsKey, aboveRows]);
 }

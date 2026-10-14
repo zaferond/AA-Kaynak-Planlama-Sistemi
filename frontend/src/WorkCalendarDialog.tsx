@@ -8,13 +8,11 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { useWorkCalendarEditor } from "./features/work-calendar/useWorkCalendarEditor";
 import { useWorkCalendarView } from "./features/work-calendar/useWorkCalendarView";
 import SharedCalendarSection from "./features/work-calendar/SharedCalendarSection";
 import PersonalCalendarSection from "./features/work-calendar/PersonalCalendarSection";
-import CalendarHoursSummary from "./features/work-calendar/CalendarHoursSummary";
 import type { WorkCalendarDialogProps } from "./features/work-calendar/types";
 
 export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
@@ -23,16 +21,18 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
   const editor = useWorkCalendarEditor(props);
   const { year, setYear, draft, dirty, busy, error, save, requestOpenChange } =
     editor;
-  const { entries, personalEntries, monthRows } = useWorkCalendarView({
+  const { entries, personalEntries } = useWorkCalendarView({
     data,
-    mode,
     resource,
     year,
     calendar: draft,
   });
   return (
     <Dialog open={open} onOpenChange={requestOpenChange}>
-      <DialogContent className="work-calendar-dialog">
+      <DialogContent
+        className={`work-calendar-dialog work-calendar-dialog-${mode}`}
+        aria-describedby={undefined}
+      >
         <DialogHeader>
           <DialogTitle>
             <CalendarDays size={18} />{" "}
@@ -40,11 +40,6 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
               ? "Çalışma Takvimi"
               : resource?.name + " · İzin ve Eğitim Takvimi"}
           </DialogTitle>
-          <DialogDescription>
-            {mode === "shared"
-              ? "Resmî tatil, bayram ve Otokar çalışma dışı günlerini burada tanımlayın. Kaydedilen tarihler tüm çalışanların aylık saat hesabına uygulanır."
-              : "Ayrılış/başlangıç ve dönüş tarihlerini seçerek izin veya eğitim aralığını girin. Dönüş günü hesaba katılmaz; çalışma takvimi otomatik uygulanır."}
-          </DialogDescription>
         </DialogHeader>
         <div className="work-calendar-body">
           <div className="work-calendar-year">
@@ -99,7 +94,6 @@ export default function WorkCalendarDialog(props: WorkCalendarDialogProps) {
               cancelEdit={editor.cancelSharedEdit}
             />
           )}
-          <CalendarHoursSummary rows={monthRows} />
         </div>
         {error && (
           <p role="alert" className="work-calendar-error">

@@ -8,6 +8,7 @@ import { useStickyProjectRows, useTodayDateMarker } from "./use-table-viewport";
 type TableProps = React.ComponentProps<"table"> & {
   todayDate?: string;
   todayMonthsKey?: string;
+  todayOverlay?: boolean;
   stickyProjectRows?: boolean;
 };
 
@@ -15,13 +16,20 @@ function Table({
   className,
   todayDate,
   todayMonthsKey,
+  todayOverlay,
   stickyProjectRows,
   ...props
 }: TableProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const markerRef = React.useRef<HTMLDivElement>(null);
   useStickyProjectRows(containerRef, stickyProjectRows);
-  useTodayDateMarker(containerRef, markerRef, todayDate, todayMonthsKey);
+  useTodayDateMarker(
+    containerRef,
+    markerRef,
+    todayDate,
+    todayMonthsKey,
+    todayOverlay,
+  );
 
   return (
     <div
@@ -38,7 +46,10 @@ function Table({
       {todayDate && (
         <div
           ref={markerRef}
-          className="today-date-line"
+          className={cn(
+            "today-date-line",
+            todayOverlay && "today-date-overlay",
+          )}
           title={`Bugün: ${todayDate}`}
           aria-hidden="true"
         />

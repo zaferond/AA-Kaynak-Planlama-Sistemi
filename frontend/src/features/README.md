@@ -109,11 +109,10 @@ Tarayıcı kontrolleri yüzde/gün/saat dönüşümü, manuel/otomatik saat, dı
 |---|---|
 | `work-calendar/types.ts` | Pencere sözleşmesi; komut hazırlayıcılarından türetilen ortak/kişisel form türleri |
 | `work-calendar/useWorkCalendarEditor.ts` | Form state'i, açılış snapshot/revision'ı, yerel ortak taslak ve mevcut kayıt/silme akışı |
-| `work-calendar/useWorkCalendarView.ts` | Seçili yılın ortak/kişisel kayıtları ve shared kurallardan aylık saat önizlemesi |
+| `work-calendar/useWorkCalendarView.ts` | Seçili yılın ortak/kişisel tarih aralığı kayıtları |
 | `work-calendar/SharedCalendarSection.tsx` | Ortak tarih aralığı formu ve çalışma dışı tarih listesi |
 | `work-calendar/PersonalCalendarSection.tsx` | Kişisel izin/eğitim formu ve kayıt listesi |
-| `work-calendar/CalendarHoursSummary.tsx` | Önceden hesaplanmış aylık önizleme satırlarının görünümü |
-| `work-calendar/format.ts` | Takvimin ay/tarih biçimleri |
+| `work-calendar/format.ts` | Takvimin tarih/aralık biçimleri |
 
 Ortak tarih ekleme/silme yerel taslağı değiştirir; sunucuya yalnız **Takvimi Kaydet** ile yazılır. Açılış değeri ve revision birlikte kalır; props yenilenmesi taslağı yeniden bazlamaz. 409 ve geçici kayıt hatası taslağı açık tutar. Pencereyi kapatıp güncel verilerle yeniden açmak yeni taslak oluşturur. Kişisel kayıtlar mevcut `preparePersonalDayChange`/`preparePersonalDayRemoval` yoluyla tek tek kaydedilir.
 
@@ -295,3 +294,13 @@ Liderlik Bazında Eksik Raporu, üst birimlerin altında alt liderlikleri `expan
 Kaynak Ekle / Yetki Tanımla ekranında Active Directory seçilince kaynak Ad Soyad alanı salt okunur olur ve seçilen AD kullanıcısının adı gösterilir; kullanıcı seçilmeden kayıt tamamlanmaz. AD modundan çıkılırsa önceki manuel isim taslağı korunur. Aynı `directoryEmployeeName` seçicisi görüntüleme ve kayıt komutunda kullanılır. Birleşik hesap/çalışan kaydında sunucu yeni hesabın adını AD'den yeniden çözer ve gelen manuel kaynak adını dikkate almaz; mevcut AD hesabının yetki düzenlemesinde kaynak adı AD profilindeki hesap adıyla eşitlenir.
 
 Kişisel izin/eğitim ayrıntıları ve `personDay` revision'ları, ortak `canReadPersonalCalendar` politikasıyla yalnız Admin/kayıt sahibine projekte edilir. Yönetici liderlik grant'leri günlük takvimi açmaz. Gerçekleşen görünümde başkaları için gereken kapasite/eğitim toplamları `monthSummaries` üzerinden gelir; `PersonAllocationPanel` komut hazırlarken aynı aylık özeti kullanarak net saat ve kapasite sınırlarını korur. İlgili regresyonlar ve sınırlar [M1 düzeltme kaydında](../../../M1-KISISEL-TAKVIM-VERI-KAPSAMI-2026-10-13.md).
+
+## Head Count raporları
+
+AA Kaynak Planlama Raporları içinde **Kaynak Raporları** mevcut tabloları/grafikleri, **Head Count** ise iki statü pivotunu gösterir. Alt sekme seçimi görünüm satırında organizasyon görünümüyle aynı kontrolü kullanır. Head Count yalnız mevcut Admin/Yönetici rapor erişiminde görünür; yeni bir veri veya yetki API'si eklenmez.
+
+`resource-reports/headcount-report-data.ts`, yetkili snapshot ve filtrelenmiş birimler üzerinden İstanbul takvimindeki bugünü esas alır. Güncel ayın son geçerli kaynak sürümü kullanılır; çalışan statülerinde işe başlangıç/bitiş sınırları dahildir. Her kaynak kaydı bir kişi/adet sayılır; FTE miktarı ve kaynak planına dahil seçeneği sayımı değiştirmez. Aktif/Pasif İlanlar tahmini işbaşı tarihi boş veya gelecekte olsa da ilan sütunlarında sayılır. İşten Ayrıldı statüsü bu pivotlara girmez.
+
+Mühendislik pivotu Aktif Çalışan + Gear Up + Saat Ücretli Çalışan toplamını gösterir. İKD pivotu Aktif Çalışan, Aktif İlan ve Pasif İlan sütunlarını; ayrıca yalnız Aktif Çalışan + Aktif İlan hesabıyla **Aktif İlan Dahil Head Count** satırını gösterir. Alt liderlikler mevcut `expandLeadershipReportGroups` ile üst toplamların kırılımıdır; genel toplam benzersiz birim kimliklerinden hesaplanır. Bağımsız takımlar ayrı kök birimler olarak korunur.
+
+Head Count görünümünde dönem/yoğunluk ve aktif ilanları planlamaya dahil etme kontrolleri gizlidir; liderlik/takım filtreleri ile rapor tarihi görünür. Kaynak Raporları'na dönülünce mevcut dönem ve kontroller korunur. `headcount-report-export.ts`, aynı hesap çıktısını iki `.xlsx` sayfasına yazar; metin hücreleri formül olarak çalıştırılmaz ve Excel satır/hücre sınırları ortak yardımcılarla kontrol edilir. `headcount-report.test.mjs` hesap/hiyerarşi/çıktı sınırlarını, `browser-checks/headcount-reports.mjs` gezinme/filtre/indirme/rol görünürlüğünü doğrular.

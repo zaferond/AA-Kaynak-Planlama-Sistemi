@@ -35,7 +35,7 @@
 }
 
 /* Make the planned allocation orientation easy to distinguish at a glance. */
-.app:is(.tab-plan, .tab-resources)
+.app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch) {
   display: inline-flex;
@@ -50,7 +50,7 @@
   background: #e8f0f5;
   box-shadow: inset 0 1px 2px #24455f12;
 }
-.app:is(.tab-plan, .tab-resources)
+.app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch)
   [role="tab"] {
@@ -70,14 +70,14 @@
     color 0.15s,
     box-shadow 0.15s;
 }
-.app:is(.tab-plan, .tab-resources)
+.app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch)
   [role="tab"]:hover:not([data-state="active"]) {
   background: #f8fbfd;
   color: #173f5e;
 }
-.app:is(.tab-plan, .tab-resources)
+.app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch)
   [role="tab"][data-state="active"] {
@@ -86,7 +86,7 @@
   color: #fff;
   box-shadow: 0 1px 4px #183a5650;
 }
-.app:is(.tab-plan, .tab-resources)
+.app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch)
   [role="tab"]:focus-visible {

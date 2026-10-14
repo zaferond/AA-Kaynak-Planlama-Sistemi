@@ -23,6 +23,12 @@
   box-shadow: 0 0 0 2px #fff;
 }
 
+/* Project rows have opaque sticky backgrounds. Keep today's line above their
+   calendar cells; the viewport hook hides it behind frozen name/code columns. */
+[data-slot="table-container"] > .today-date-line.today-date-overlay {
+  z-index: 5;
+}
+
 /* Saved positive entries remain easy to scan in each distribution grid. */
 .app.tab-plan .allocation-grid td.has-entry .cell input:not(:focus) {
   background: var(--table-planned-entry-background);

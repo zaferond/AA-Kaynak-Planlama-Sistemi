@@ -45,7 +45,7 @@ export default function SharedCalendarSection({
               ? "Çalışma dışı tarih aralığını düzenle"
               : "Çalışma dışı tarih ekle"}
           </div>
-          <div className="work-calendar-fields">
+          <div className="work-calendar-fields work-calendar-shared-fields">
             <label>
               Başlangıç
               <input
@@ -111,25 +111,27 @@ export default function SharedCalendarSection({
                 onChange={(event) => update("label", event.target.value)}
               />
             </label>
-            <button
-              type="button"
-              className="button primary"
-              disabled={busy}
-              onClick={addDates}
-            >
-              {editing ? <Pencil size={14} /> : <Plus size={14} />}
-              {editing ? "Güncelle" : "Ekle"}
-            </button>
-            {editing && (
+            <div className="work-calendar-form-actions">
               <button
                 type="button"
-                className="button work-calendar-cancel-edit"
+                className="button primary"
                 disabled={busy}
-                onClick={cancelEdit}
+                onClick={addDates}
               >
-                Vazgeç
+                {editing ? <Pencil size={14} /> : <Plus size={14} />}
+                {editing ? "Güncelle" : "Ekle"}
               </button>
-            )}
+              {editing && (
+                <button
+                  type="button"
+                  className="button work-calendar-cancel-edit"
+                  disabled={busy}
+                  onClick={cancelEdit}
+                >
+                  Vazgeç
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

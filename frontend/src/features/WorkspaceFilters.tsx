@@ -45,6 +45,7 @@ type Props = {
   saving: boolean;
   resetAll: () => Promise<void>;
   notice: string;
+  showPeriodFilters?: boolean;
 };
 export default function WorkspaceFilters({
   data,
@@ -72,6 +73,7 @@ export default function WorkspaceFilters({
   saving,
   resetAll,
   notice,
+  showPeriodFilters = true,
 }: Props) {
   const isAdmin = user?.role === "admin";
   const { notify, toast } = useFilterAppliedToast();
@@ -164,45 +166,52 @@ export default function WorkspaceFilters({
                   items={availablePeople}
                 />
               )}
-              <label className="pick">
-                <span>Başlangıç Ayı</span>
-                <input
-                  type="month"
-                  min={MIN_PLANNING_MONTH}
-                  max={MAX_FILTER_START}
-                  value={start}
-                  onChange={(e) => {
-                    if (
-                      validPlanningMonth(e.target.value) &&
-                      e.target.value >= MIN_PLANNING_MONTH &&
-                      e.target.value <= MAX_FILTER_START &&
-                      e.target.value !== start
-                    ) {
-                      setStart(e.target.value);
-                      notify("startMonth");
-                    }
-                  }}
-                />
-              </label>
-              <label className="pick period">
-                <span>Görünür Dönem</span>
-                <select
-                  value={count}
-                  onChange={(e) => {
-                    if (Number(e.target.value) === count) return;
-                    setCount(Number(e.target.value));
-                    if (Number(e.target.value) !== 60 && density === "overview")
-                      setDensity("detail");
-                    notify("period");
-                  }}
-                >
-                  {periods.map((n) => (
-                    <option key={n} value={n}>
-                      {n < 12 ? "6 ay" : n / 12 + " yıl (" + n + " ay)"}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {showPeriodFilters && (
+                <>
+                  <label className="pick">
+                    <span>Başlangıç Ayı</span>
+                    <input
+                      type="month"
+                      min={MIN_PLANNING_MONTH}
+                      max={MAX_FILTER_START}
+                      value={start}
+                      onChange={(e) => {
+                        if (
+                          validPlanningMonth(e.target.value) &&
+                          e.target.value >= MIN_PLANNING_MONTH &&
+                          e.target.value <= MAX_FILTER_START &&
+                          e.target.value !== start
+                        ) {
+                          setStart(e.target.value);
+                          notify("startMonth");
+                        }
+                      }}
+                    />
+                  </label>
+                  <label className="pick period">
+                    <span>Görünür Dönem</span>
+                    <select
+                      value={count}
+                      onChange={(e) => {
+                        if (Number(e.target.value) === count) return;
+                        setCount(Number(e.target.value));
+                        if (
+                          Number(e.target.value) !== 60 &&
+                          density === "overview"
+                        )
+                          setDensity("detail");
+                        notify("period");
+                      }}
+                    >
+                      {periods.map((n) => (
+                        <option key={n} value={n}>
+                          {n < 12 ? "6 ay" : n / 12 + " yıl (" + n + " ay)"}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </>
+              )}
             </div>
             <div className="filteractions">
               <button

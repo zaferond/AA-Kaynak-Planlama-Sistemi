@@ -2,7 +2,7 @@ import { directoryTree } from "../../shared/directory-tree";
 import { directoryResponsibilityIndex } from "../../shared/resource-roles";
 import { ownValue } from "../../shared/records";
 import React, { useState } from "react";
-import { Building2, Users } from "lucide-react";
+import { Building2, Users, Pencil } from "lucide-react";
 import type { Data } from "./model";
 import {
   Table,
@@ -69,13 +69,23 @@ export default function TeamDirectory({
           )}
         </div>
       </div>
-      <Table>
+      <Table className="directory-table" aria-label="Organizasyon yapısı">
+        <colgroup>
+          <col className="directory-lead-column" />
+          <col className="directory-team-column" />
+          <col />
+          {canEdit && <col className="directory-action-column" />}
+        </colgroup>
         <TableHeader>
           <TableRow>
-            <TableHead>Liderlik</TableHead>
-            <TableHead>Takım / Birim</TableHead>
-            <TableHead>Yönetici</TableHead>
-            {canEdit && <TableHead>İşlem</TableHead>}
+            <TableHead scope="col">Liderlik</TableHead>
+            <TableHead scope="col">Takım / Birim</TableHead>
+            <TableHead scope="col">Yönetici</TableHead>
+            {canEdit && (
+              <TableHead scope="col" className="directory-action-cell">
+                İşlem
+              </TableHead>
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -90,29 +100,32 @@ export default function TeamDirectory({
               >
                 <TableCell>
                   <span
-                    className="directory-indent"
+                    className="directory-indent directory-unit-title"
                     style={{ paddingLeft: depth * 18 }}
                   >
                     {parent && <span aria-hidden="true">↳ </span>}
+                    <Building2 size={14} aria-hidden="true" />
                     <strong>{lead || "Liderlik Eşleştirilmemiş"}</strong>
                   </span>
-                  <small>{teams.length} takım</small>
+                  <small className="directory-team-count">
+                    {teams.length} takım
+                  </small>
                 </TableCell>
                 <TableCell>
                   {parent ? (
                     <>
-                      <strong>Alt Liderlik</strong>
+                      <span className="directory-unit-kind">Alt Liderlik</span>
                       <small>Bağlı olduğu liderlik · {parent}</small>
                     </>
                   ) : (
-                    "Liderlik"
+                    <span className="directory-unit-kind">Liderlik</span>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="directory-manager-cell">
                   {ownValue(responsibility.leaders, lead) || "—"}
                 </TableCell>
                 {canEdit && (
-                  <TableCell>
+                  <TableCell className="directory-action-cell">
                     <div className="directory-actions">
                       {lead && (
                         <button
@@ -121,6 +134,7 @@ export default function TeamDirectory({
                           aria-label={lead + " liderliğini düzenle"}
                           onClick={() => editor.open("leader", lead)}
                         >
+                          <Pencil size={12} aria-hidden="true" />
                           Düzenle
                         </button>
                       )}
@@ -145,18 +159,19 @@ export default function TeamDirectory({
                   <TableCell>{lead || "—"}</TableCell>
                   <TableCell>
                     <span
-                      className="directory-indent"
+                      className="directory-indent directory-unit-title"
                       style={{ paddingLeft: depth * 18 }}
                     >
                       {parent && <span aria-hidden="true">↳ </span>}
+                      <Users size={13} aria-hidden="true" />
                       <strong>{team.name}</strong>
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="directory-manager-cell">
                     {ownValue(responsibility.teams, team.id) || "—"}
                   </TableCell>
                   {canEdit && (
-                    <TableCell>
+                    <TableCell className="directory-action-cell">
                       <div className="directory-actions">
                         <button
                           type="button"
@@ -164,6 +179,7 @@ export default function TeamDirectory({
                           aria-label={team.name + " takımını düzenle"}
                           onClick={() => editor.open("team", team.id)}
                         >
+                          <Pencil size={12} aria-hidden="true" />
                           Düzenle
                         </button>
                       </div>

@@ -34,10 +34,6 @@ export default function ResourceAccessFields({
         <h3>Hesap ve Yetkiler</h3>
         <span>{linked ? linked.username : "Hesap eşleştirilmedi"}</span>
       </div>
-      <p className="access-admin-note">
-        Çalışan rolü ile uygulama yetkisi ayrı yönetilir. Yetki değişikliği
-        Kaydet ile uygulanır.
-      </p>
       {posting && !form ? (
         <p className="access-admin-note">İlan kaydına hesap tanımlanamaz.</p>
       ) : (

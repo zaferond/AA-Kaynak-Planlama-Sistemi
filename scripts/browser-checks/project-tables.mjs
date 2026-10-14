@@ -40,9 +40,25 @@ async function checkFreeze(page, tableSelector, capture) {
   await page.waitForTimeout(60);
   let g = await geometry();
   assert(Math.abs(g.rows[0].top - g.headerBottom) < 2, JSON.stringify(g));
-  await table.evaluate((table) => {
+  const firstId = g.rows[0].id;
+  let nextId;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    nextId = (await geometry()).rows.find((row) => row.id !== firstId)?.id;
+    if (nextId) break;
+    await container.evaluate((c) => {
+      c.scrollTop += 300;
+    });
+    await page.waitForTimeout(50);
+  }
+  assert(
+    nextId,
+    "Next project becomes mounted while scrolling through virtual chunks",
+  );
+  await table.evaluate((table, nextId) => {
     const c = table.parentElement,
-      next = table.querySelectorAll("[data-project-heading]")[1];
+      next = [...table.querySelectorAll("[data-project-heading]")].find(
+        (row) => row.dataset.projectHeading === nextId,
+      );
     const zoom =
       Number.parseFloat(getComputedStyle(document.documentElement).zoom) || 1;
     c.scrollTop +=
@@ -54,12 +70,14 @@ async function checkFreeze(page, tableSelector, capture) {
         )) /
         zoom +
       5;
-  });
+  }, nextId);
   await page.waitForTimeout(60);
   g = await geometry();
-  assert(Math.abs(g.rows[1].top - g.headerBottom) < 2, JSON.stringify(g));
+  const nextRow = g.rows.find((row) => row.id === nextId);
+  const previousRow = g.rows.find((row) => row.id === firstId);
+  assert(Math.abs(nextRow.top - g.headerBottom) < 2, JSON.stringify(g));
   assert(
-    g.rows[0].bottom <= g.rows[1].top + 2,
+    !previousRow || previousRow.bottom <= nextRow.top + 2,
     "Previous project must leave its group's sticky area: " + JSON.stringify(g),
   );
   const oldWidth = await container.evaluate((c) => {
@@ -76,7 +94,10 @@ async function checkFreeze(page, tableSelector, capture) {
     "The horizontal freeze check must actually scroll",
   );
   g = await geometry();
-  assert(Math.abs(g.rows[1].labelLeft - g.left) < 2, JSON.stringify(g));
+  assert(
+    Math.abs(g.rows.find((row) => row.id === nextId).labelLeft - g.left) < 2,
+    JSON.stringify(g),
+  );
   await container.evaluate((c, width) => {
     c.style.width = width;
   }, oldWidth);

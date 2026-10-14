@@ -1,3 +1,4 @@
+import { revealTableItem } from "./fixture.mjs";
 import assert from "node:assert/strict";
 import { applyLeaderChange } from "../../backend/operations.mjs";
 import { directoryRevision } from "../../shared/directory-policy.ts";
@@ -48,11 +49,21 @@ export async function checkPlanningPermissions(f) {
     await f.check(
       "manager planning: all teams visible, descendants editable, outside team read-only",
       async () => {
-        await input(owner).waitFor();
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(owner),
+        );
         assert.equal(await input(owner).isEnabled(), true);
         assert.equal(await input("qa-grand-team").isEnabled(), true);
-        await input(f.teamB.id).scrollIntoViewIfNeeded();
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(f.teamB.id),
+        );
         assert.equal(await input(f.teamB.id).isDisabled(), true);
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(owner),
+        );
         await input(owner).fill("0,5");
         await input(owner).press("Enter");
         await f.wait(
@@ -64,6 +75,10 @@ export async function checkPlanningPermissions(f) {
           async () => await input(owner).isEnabled(),
           "write completed",
         );
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(f.teamB.id),
+        );
         assert.equal(await input(f.teamB.id).isDisabled(), true);
       },
     );
@@ -72,6 +87,10 @@ export async function checkPlanningPermissions(f) {
       async () => {
         const cell = (m) =>
           page.locator(`[data-plan-cell="${owner}|p-a|2026-${m}"]`);
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          cell("02"),
+        );
         await cell("02").click();
         await cell("03").click({ modifiers: ["Control"] });
         await f.wait(
@@ -87,11 +106,22 @@ export async function checkPlanningPermissions(f) {
             (m) => d.allocations[owner + "|p-a|2026-" + m] === 0.7,
           );
         }, "bulk descendant save");
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(f.teamB.id),
+        );
         assert.equal(await input(f.teamB.id).isDisabled(), true);
         await f.capture(page, "manager-planning-permissions");
         await page.reload();
-        await input(owner).waitFor();
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(owner),
+        );
         assert.equal(await input(owner).inputValue(), "0,5");
+        await revealTableItem(
+          page.locator(".workspace-dock > [data-slot=table-container]"),
+          input(f.teamB.id),
+        );
         assert.equal(await input(f.teamB.id).isDisabled(), true);
       },
     );

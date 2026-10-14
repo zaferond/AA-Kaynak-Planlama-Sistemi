@@ -12,6 +12,7 @@
   "reports/topics-and-charts.css",
   "reports/resource-planning.css",
   "reports/monthly-activity.css",
+  "reports/headcount.css",
   "projects/timeline.css",
   "resources/editors.css",
   "workspace/navigation-layout.css",

@@ -1,12 +1,15 @@
 /* Login is intentionally isolated from the portal's dense planning UI. */
 .auth-screen {
-  min-height: 100dvh;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: calc(100dvh / var(--app-page-scale, 1));
   display: grid;
   place-items: center;
   padding: 32px;
-  background:
-    radial-gradient(circle at 12% 10%, #e4e9dd 0, transparent 34%),
-    radial-gradient(circle at 88% 88%, #ecebdf 0, transparent 30%), #f3f4ef;
+  background: url("/assets/login-background.png") center / contain no-repeat
+    #f5f5f2;
+  background-blend-mode: multiply;
   color: #19344d;
   font-family:
     Inter,
@@ -17,16 +20,16 @@
 }
 .auth-shell {
   display: grid;
-  grid-template-columns: minmax(0, 0.91fr) minmax(0, 1.09fr);
-  width: min(100%, 980px);
-  min-height: 510px;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+  width: min(100%, 800px);
+  min-height: 420px;
   overflow: hidden;
-  border: 1px solid #d6e1e9;
+  border: 1px solid #ffffffb3;
   border-radius: 18px;
-  background: #fff;
+  background: transparent;
   box-shadow:
-    0 28px 70px #183a5620,
-    0 3px 12px #183a560a;
+    0 28px 70px #29372d30,
+    0 3px 12px #29372d12;
 }
 .auth-brand {
   position: relative;
@@ -34,8 +37,15 @@
   flex-direction: column;
   justify-content: space-between;
   overflow: hidden;
-  padding: 38px 40px 34px;
-  background: linear-gradient(147deg, #29372d 0%, #405341 60%, #617052 100%);
+  padding: 24px;
+  background: linear-gradient(
+    147deg,
+    #29372de0 0%,
+    #405341d9 60%,
+    #617052cc 100%
+  );
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
   color: #fff;
   isolation: isolate;
 }
@@ -82,17 +92,19 @@
 .auth-brand h1 {
   margin: 0;
   color: #fff;
-  font-size: clamp(28px, 3vw, 39px);
+  font-size: clamp(24px, 2.3vw, 28px);
   font-weight: 720;
   line-height: 1.18;
   letter-spacing: -0.035em;
+  text-shadow: 0 2px 14px #0008;
 }
 .auth-brand p {
   max-width: 320px;
-  margin: 20px 0 0;
+  margin: 14px 0 0;
   color: #e9eee4;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.65;
+  text-shadow: 0 1px 8px #0009;
 }
 .auth-brand-footer {
   display: flex;
@@ -123,8 +135,10 @@
 .auth-panel {
   display: grid;
   place-items: center;
-  padding: 40px 58px;
-  background: #fff;
+  padding: 26px 30px;
+  background: #ffffffc9;
+  -webkit-backdrop-filter: blur(1px);
+  backdrop-filter: blur(1px);
 }
 .auth-panel-inner {
   width: min(100%, 360px);
@@ -148,7 +162,7 @@
   padding: 0 10px 0 14px;
   border: 1px solid #ccd9e4;
   border-radius: 8px;
-  background: #fff;
+  background: #ffffffd9;
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
@@ -267,15 +281,15 @@
   .auth-shell {
     grid-template-columns: 1fr;
     min-height: 0;
-    max-width: 470px;
+    max-width: 420px;
   }
   .auth-brand {
-    min-height: 215px;
-    padding: 26px 30px;
-    gap: 26px;
+    min-height: 180px;
+    padding: 22px 26px;
+    gap: 20px;
   }
   .auth-brand h1 {
-    font-size: 26px;
+    font-size: 24px;
   }
   .auth-brand p {
     margin-top: 10px;
@@ -285,7 +299,7 @@
     display: none;
   }
   .auth-panel {
-    padding: 34px 30px 40px;
+    padding: 26px 28px 30px;
   }
   .auth-panel-inner {
     max-width: none;
@@ -293,21 +307,12 @@
 }
 @media (max-width: 420px) {
   .auth-screen {
-    padding: 0;
-    background: #fff;
-  }
-  .auth-shell {
-    min-height: 100dvh;
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    padding: 16px;
   }
   .auth-brand {
-    min-height: 205px;
-    padding: 24px;
+    padding: 20px;
   }
   .auth-panel {
-    align-items: start;
-    padding: 28px 24px 36px;
+    padding: 24px;
   }
 }

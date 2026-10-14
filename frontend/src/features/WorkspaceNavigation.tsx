@@ -12,6 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Principal } from "../access";
 import { RISK_MANAGEMENT_ENABLED, TAB_LABELS } from "../settings";
 export type WorkspaceDensity = "detail" | "compact" | "overview";
+export type ReportView = "resources" | "headcount";
 type Props = {
   user: Principal | null;
   tab: string;
@@ -28,6 +29,8 @@ type Props = {
   hasProjects: boolean;
   organizationView: string;
   setOrganizationView: (view: string) => void;
+  reportView: ReportView;
+  setReportView: (view: ReportView) => void;
 };
 export default function WorkspaceNavigation({
   user,
@@ -45,6 +48,8 @@ export default function WorkspaceNavigation({
   hasProjects,
   organizationView,
   setOrganizationView,
+  reportView,
+  setReportView,
 }: Props) {
   const isAdmin = user?.role === "admin",
     isManager = user?.role === "manager";
@@ -105,6 +110,20 @@ export default function WorkspaceNavigation({
       </TabsList>
       {!["access", "teams", "critical", "risk", "activity"].includes(tab) && (
         <div className="workspace-nav-actions">
+          {tab === "overview" && (
+            <Tabs
+              value={reportView}
+              onValueChange={(value) => setReportView(value as ReportView)}
+            >
+              <TabsList
+                className="organization-view-switch"
+                aria-label="Kaynak raporu görünümü"
+              >
+                <TabsTrigger value="resources">Kaynak Raporları</TabsTrigger>
+                <TabsTrigger value="headcount">Head Count</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
           {tab === "resources" && (
             <Tabs value={organizationView} onValueChange={setOrganizationView}>
               <TabsList
@@ -118,24 +137,25 @@ export default function WorkspaceNavigation({
               </TabsList>
             </Tabs>
           )}
-          {["plan", "actual", "projects", "overview"].includes(tab) && (
-            <label className="densitycontrol">
-              Görünüm
-              <select
-                aria-label="Takvim yoğunluğu"
-                value={density}
-                onChange={(e) => {
-                  const mode = e.target.value as typeof density;
-                  setDensity(mode);
-                  if (mode === "overview") setCount(60);
-                }}
-              >
-                <option value="detail">Ayrıntılı</option>
-                <option value="compact">Kompakt</option>
-                <option value="overview">5 Yıllık Genel Bakış</option>
-              </select>
-            </label>
-          )}
+          {["plan", "actual", "projects", "overview"].includes(tab) &&
+            !(tab === "overview" && reportView === "headcount") && (
+              <label className="densitycontrol">
+                Görünüm
+                <select
+                  aria-label="Takvim yoğunluğu"
+                  value={density}
+                  onChange={(e) => {
+                    const mode = e.target.value as typeof density;
+                    setDensity(mode);
+                    if (mode === "overview") setCount(60);
+                  }}
+                >
+                  <option value="detail">Ayrıntılı</option>
+                  <option value="compact">Kompakt</option>
+                  <option value="overview">5 Yıllık Genel Bakış</option>
+                </select>
+              </label>
+            )}
           {tab === "plan" && (
             <Tabs value={view} onValueChange={setView}>
               <TabsList
@@ -170,7 +190,9 @@ export default function WorkspaceNavigation({
               {tab === "projects"
                 ? "Proje Raporunu İndir"
                 : tab === "overview"
-                  ? "Kaynak Raporu İndir"
+                  ? reportView === "headcount"
+                    ? "Head Count Excel'e Aktar"
+                    : "Kaynak Raporu İndir"
                   : "Excel'e Aktar"}
             </button>
           )}

@@ -166,7 +166,6 @@ export function useWindowedSections(
     for (const section of sections) {
       const height = measured.current.get(section.key) || section.height;
       const visible =
-        sections.length <= 10 ||
         viewport.held.includes(section.key) ||
         (position + height >= viewport.top - 800 &&
           position <= viewport.top + viewport.height + 800);

@@ -47,9 +47,7 @@ export default function PersonalCalendarSection({
   return (
     <section className="work-calendar-personal">
       <h3>
-        {editing
-          ? "İzin / Eğitim Aralığını Düzenle"
-          : "İzin ve Eğitim Kayıtları"}
+        {editing ? "İzin / Eğitim Aralığını Düzenle" : "Yeni İzin / Eğitim"}
       </h3>
       {canEdit && (
         <div className="work-calendar-fields work-calendar-personal-fields">
@@ -114,25 +112,27 @@ export default function PersonalCalendarSection({
               placeholder="İsteğe bağlı"
             />
           </label>
-          <button
-            type="button"
-            className="button primary"
-            disabled={busy}
-            onClick={() => void savePersonal()}
-          >
-            {editing ? <Pencil size={14} /> : <Plus size={14} />}
-            {editing ? "Güncelle" : "Kaydet"}
-          </button>
-          {editing && (
+          <div className="work-calendar-form-actions">
             <button
               type="button"
-              className="button work-calendar-cancel-edit"
+              className="button primary"
               disabled={busy}
-              onClick={cancelEdit}
+              onClick={() => void savePersonal()}
             >
-              Vazgeç
+              {editing ? <Pencil size={14} /> : <Plus size={14} />}
+              {editing ? "Güncelle" : "Kaydet"}
             </button>
-          )}
+            {editing && (
+              <button
+                type="button"
+                className="button work-calendar-cancel-edit"
+                disabled={busy}
+                onClick={cancelEdit}
+              >
+                Vazgeç
+              </button>
+            )}
+          </div>
         </div>
       )}
       {canEdit && preview && (
@@ -147,16 +147,8 @@ export default function PersonalCalendarSection({
             `${preview.days} çalışma günü · ${preview.hours.toLocaleString("tr-TR")} saat · Dönüş günü hariç`}
         </p>
       )}
-      <p className="work-calendar-help">
-        Ayrılış/başlangıç günü dahil, dönüş günü hariçtir. Günlük saat
-        aralıktaki her çalışma gününe uygulanır; yarım gün tatillerde
-        çalışılabilir saatle sınırlanır. Hafta sonları ve tam gün tatiller
-        atlanır. Aynı tarihe izin ve eğitim ayrı ayrı girilebilir; günlük toplam
-        en fazla {HOURS_PER_WORKDAY} saattir. İzin çalışılabilir aylık saatten
-        düşer; eğitim bu saatin içinde kalır ve dağıtılan kaynak yüzdesine
-        eklenir.
-      </p>
       <div className="work-calendar-list">
+        <h3>Kayıtlı İzin ve Eğitimler</h3>
         {personalEntries.length ? (
           <ul>
             {personalEntries.map((range) => {

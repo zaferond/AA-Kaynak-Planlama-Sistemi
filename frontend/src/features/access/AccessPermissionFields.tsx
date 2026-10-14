@@ -119,12 +119,6 @@ export default function AccessPermissionFields({
               {directory.error}
             </p>
           )}
-          {!directory.busy && !directory.error && !directory.configured && (
-            <p className="access-admin-note" role="status">
-              Active Directory bağlantısı henüz tanımlanmadı. Bağlantı
-              etkinleştirildiğinde kurumsal kullanıcılar burada listelenecek.
-            </p>
-          )}
           {directory.configured &&
             !directory.busy &&
             !directory.users.length && (
@@ -215,10 +209,6 @@ export default function AccessPermissionFields({
             E-posta
             <input readOnly value={form.directoryUser?.email || ""} />
           </label>
-          <p className="access-admin-note">
-            Kullanıcı bilgileri AD tarafından yönetilir. Şifre burada girilmez
-            veya saklanmaz; giriş sırasında AD'ye doğrulatılır.
-          </p>
           {!boundResource && (
             <label className="access-field">
               Uygulamadaki Çalışan Kaydı

@@ -1,3 +1,4 @@
+import { revealTableItem } from "./fixture.mjs";
 import assert from "node:assert/strict";
 import { selectWorkspaceTab } from "./fixture.mjs";
 import { applyLeaderChange } from "../../backend/operations.mjs";
@@ -129,7 +130,12 @@ export async function checkTeamPlanningPermissions(f) {
             manager.page.locator(
               `[data-plan-cell="${id}|p-a|2026-${month}"] input`,
             );
-          await input("qa-permission-child-team").waitFor();
+          await revealTableItem(
+            manager.page.locator(
+              ".workspace-dock > [data-slot=table-container]",
+            ),
+            input("qa-permission-child-team"),
+          );
           assert(await input("qa-permission-child-team").isEnabled());
           await input("qa-permission-child-team").fill("0,5");
           await input("qa-permission-child-team").press("Enter");
@@ -159,7 +165,12 @@ export async function checkTeamPlanningPermissions(f) {
                 d.allocations["qa-permission-child-team|p-a|2026-" + m] === 0.7,
             );
           }, "team grant bulk save");
-          await input(f.teamA.id).scrollIntoViewIfNeeded();
+          await revealTableItem(
+            manager.page.locator(
+              ".workspace-dock > [data-slot=table-container]",
+            ),
+            input(f.teamA.id),
+          );
           assert(await input(f.teamA.id).isDisabled());
           const me = await (
             await manager.context.request.get(f.origin + "/api/auth/me")

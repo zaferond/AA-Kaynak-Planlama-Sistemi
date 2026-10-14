@@ -642,7 +642,8 @@
 
 /* Match the application workspace to an initial 90% page scale. */
 html {
-  zoom: 90%;
+  --app-page-scale: 0.9;
+  zoom: var(--app-page-scale);
 }
 
 .filter-applied-toast {

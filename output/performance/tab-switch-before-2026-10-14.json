@@ -1,0 +1,166 @@
+[
+  {
+    "tab": "AA Planlanan Kaynak Dağılımı",
+    "cycle": 0,
+    "readyMs": 193,
+    "scriptMs": 55,
+    "layoutMs": 11,
+    "domCells": 820,
+    "inputs": 732,
+    "requests": []
+  },
+  {
+    "tab": "AA Mühendislik Liderliği Projeler",
+    "cycle": 0,
+    "readyMs": 70,
+    "scriptMs": 17,
+    "layoutMs": 2,
+    "domCells": 208,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "AA Gerçekleşen Kaynak Dağılımı",
+    "cycle": 0,
+    "readyMs": 227,
+    "scriptMs": 83,
+    "layoutMs": 20,
+    "domCells": 2613,
+    "inputs": 1200,
+    "requests": []
+  },
+  {
+    "tab": "AA Aylık Aktivite Raporu",
+    "cycle": 0,
+    "readyMs": 179,
+    "scriptMs": 27,
+    "layoutMs": 7,
+    "domCells": 1500,
+    "inputs": 0,
+    "requests": [
+      "/api/activity-report"
+    ]
+  },
+  {
+    "tab": "AA Kritik Proje Konuları",
+    "cycle": 0,
+    "readyMs": 47,
+    "scriptMs": 10,
+    "layoutMs": 0,
+    "domCells": 0,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "AA Kaynak Planlama Raporları",
+    "cycle": 0,
+    "readyMs": 75,
+    "scriptMs": 21,
+    "layoutMs": 8,
+    "domCells": 265,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "Çalışan & Yetki Tanımlama",
+    "cycle": 0,
+    "readyMs": 85,
+    "scriptMs": 11,
+    "layoutMs": 4,
+    "domCells": 700,
+    "inputs": 49,
+    "requests": []
+  },
+  {
+    "tab": "Organizasyon Yapısı",
+    "cycle": 0,
+    "readyMs": 98,
+    "scriptMs": 10,
+    "layoutMs": 2,
+    "domCells": 248,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "AA Planlanan Kaynak Dağılımı",
+    "cycle": 1,
+    "readyMs": 122,
+    "scriptMs": 35,
+    "layoutMs": 7,
+    "domCells": 820,
+    "inputs": 732,
+    "requests": []
+  },
+  {
+    "tab": "AA Mühendislik Liderliği Projeler",
+    "cycle": 1,
+    "readyMs": 69,
+    "scriptMs": 20,
+    "layoutMs": 3,
+    "domCells": 208,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "AA Gerçekleşen Kaynak Dağılımı",
+    "cycle": 1,
+    "readyMs": 318,
+    "scriptMs": 110,
+    "layoutMs": 23,
+    "domCells": 2613,
+    "inputs": 1200,
+    "requests": []
+  },
+  {
+    "tab": "AA Aylık Aktivite Raporu",
+    "cycle": 1,
+    "readyMs": 188,
+    "scriptMs": 40,
+    "layoutMs": 6,
+    "domCells": 1500,
+    "inputs": 0,
+    "requests": [
+      "/api/activity-report"
+    ]
+  },
+  {
+    "tab": "AA Kritik Proje Konuları",
+    "cycle": 1,
+    "readyMs": 35,
+    "scriptMs": 9,
+    "layoutMs": 0,
+    "domCells": 0,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "AA Kaynak Planlama Raporları",
+    "cycle": 1,
+    "readyMs": 76,
+    "scriptMs": 19,
+    "layoutMs": 6,
+    "domCells": 265,
+    "inputs": 0,
+    "requests": []
+  },
+  {
+    "tab": "Çalışan & Yetki Tanımlama",
+    "cycle": 1,
+    "readyMs": 93,
+    "scriptMs": 13,
+    "layoutMs": 5,
+    "domCells": 700,
+    "inputs": 49,
+    "requests": []
+  },
+  {
+    "tab": "Organizasyon Yapısı",
+    "cycle": 1,
+    "readyMs": 72,
+    "scriptMs": 7,
+    "layoutMs": 1,
+    "domCells": 248,
+    "inputs": 0,
+    "requests": []
+  }
+]

@@ -190,7 +190,7 @@ export function useWorkCalendarEditor({
       return {
         ...previous,
         from,
-        to: previous.to > from ? previous.to : next,
+        to: next,
       };
     });
   }
@@ -198,7 +198,7 @@ export function useWorkCalendarEditor({
     setSharedForm((previous) => ({
       ...previous,
       from,
-      to: previous.to || from,
+      to: from,
     }));
   }
   function addDates() {

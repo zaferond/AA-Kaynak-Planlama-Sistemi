@@ -422,13 +422,17 @@ export async function checkAccess(f) {
           })
           .click();
         const form = page.locator('[data-slot="dialog-content"]');
+        const directoryResponse = page.waitForResponse((response) =>
+          response.url().includes("/api/directory/users?"),
+        );
         await form
           .getByLabel("Hesap Eşleştirmesi", { exact: true })
           .selectOption("new-ad");
+        await directoryResponse;
         await form
           .getByRole("status")
-          .filter({ hasText: "bağlantısı henüz tanımlanmadı" })
-          .waitFor();
+          .filter({ hasText: "AD kullanıcıları yükleniyor…" })
+          .waitFor({ state: "hidden" });
         assert.equal(
           await form
             .getByLabel("Hesap Açılacak Çalışan", { exact: true })

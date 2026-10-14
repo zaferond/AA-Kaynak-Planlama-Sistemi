@@ -49,14 +49,22 @@ export default function PlannedAllocationTable(
     [props.data, todayDate],
   );
   const cellSet = useMemo(() => new Set(props.cells), [props.cells]);
+  // Bound each render chunk by its editable cell count, without limiting records.
+  const chunkSize = Math.max(
+    4,
+    Math.min(20, Math.floor(200 / Math.max(1, months.length))),
+  );
   const sections: WindowedSection[] =
     view === "team"
       ? groups.flatMap((g) => {
           const t = teams[g.outer];
           return Array.from(
-            { length: Math.ceil(g.inners.length / 20) },
+            { length: Math.max(1, Math.ceil(g.inners.length / chunkSize)) },
             (_, part) => {
-              const chunk = g.inners.slice(part * 20, (part + 1) * 20);
+              const chunk = g.inners.slice(
+                part * chunkSize,
+                (part + 1) * chunkSize,
+              );
               const first = part === 0;
               const key = `${t.id}:${part}`;
               return {
@@ -99,77 +107,97 @@ export default function PlannedAllocationTable(
             },
           );
         })
-      : groups.map((g) => {
+      : groups.flatMap((g) => {
           const p = projects[g.outer];
-          return {
-            key: p.id,
-            height:
-              130 +
-              g.inners.reduce(
-                (sum, i) =>
-                  sum + (actualRowsVisible(props, teams[i].id) ? 100 : 60),
-                0,
-              ),
-            render: () => (
-              <TableBody
-                key={p.id}
-                data-window-key={p.id}
-                className="project-row-group"
-                data-project-group={p.id}
-              >
-                <TableRow
-                  className="group project-phase-group project-freeze-row"
-                  data-project-heading={p.id}
+          const parts = Math.max(1, Math.ceil(g.inners.length / chunkSize));
+          return Array.from({ length: parts }, (_, part) => {
+            const chunk = g.inners.slice(
+              part * chunkSize,
+              (part + 1) * chunkSize,
+            );
+            const first = part === 0,
+              last = part === parts - 1;
+            const key = first ? p.id : `${p.id}:${part}`;
+            return {
+              key,
+              headingKey: p.id,
+              height:
+                (first ? 90 : 0) +
+                (last ? 40 : 0) +
+                chunk.reduce(
+                  (sum, i) =>
+                    sum + (actualRowsVisible(props, teams[i].id) ? 100 : 60),
+                  0,
+                ),
+              render: () => (
+                <TableBody
+                  key={key}
+                  data-window-key={key}
+                  className="project-row-group"
+                  data-project-group={p.id}
                 >
-                  <TableCell className="project-group-name">
-                    <strong>{p.name}</strong>
-                    <ProjectResponsible project={p} />
-                    <span>
-                      {p.start} — {p.end}
-                    </span>
-                  </TableCell>
-                  {months.map((m) => (
-                    <TableCell key={m}>
-                      <PlannedPhaseButton project={p} month={m} {...props} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-                {g.inners.map((i) => (
-                  <PlannedAllocationRow
-                    key={teams[i].id + p.id}
-                    team={teams[i]}
-                    managerName={
-                      ownValue(managerNames, teams[i].id) || "Atanmamış"
-                    }
-                    project={p}
-                    cellSet={cellSet}
-                    {...props}
-                  />
-                ))}
-                <TableRow className="summary s2">
-                  <TableCell>Bu projeye tahsis · seçili takımlar</TableCell>
-                  {months.map((m) => (
-                    <TableCell
-                      key={m}
-                      title={
-                        monthLabel(m) +
-                        ": " +
-                        fmt(projectTotals[p.id + "|" + m] || 0)
-                      }
+                  {first && (
+                    <TableRow
+                      className="group project-phase-group project-freeze-row"
+                      data-project-heading={p.id}
                     >
-                      {fmt(projectTotals[p.id + "|" + m] || 0)}
-                    </TableCell>
+                      <TableCell className="project-group-name">
+                        <strong>{p.name}</strong>
+                        <ProjectResponsible project={p} />
+                        <span>
+                          {p.start} — {p.end}
+                        </span>
+                      </TableCell>
+                      {months.map((m) => (
+                        <TableCell key={m}>
+                          <PlannedPhaseButton
+                            project={p}
+                            month={m}
+                            {...props}
+                          />
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )}
+                  {chunk.map((i) => (
+                    <PlannedAllocationRow
+                      key={teams[i].id + p.id}
+                      team={teams[i]}
+                      managerName={
+                        ownValue(managerNames, teams[i].id) || "Atanmamış"
+                      }
+                      project={p}
+                      cellSet={cellSet}
+                      {...props}
+                    />
                   ))}
-                </TableRow>
-              </TableBody>
-            ),
-          };
+                  {last && (
+                    <TableRow className="summary s2">
+                      <TableCell>Bu projeye tahsis · seçili takımlar</TableCell>
+                      {months.map((m) => (
+                        <TableCell
+                          key={m}
+                          title={
+                            monthLabel(m) +
+                            ": " +
+                            fmt(projectTotals[p.id + "|" + m] || 0)
+                          }
+                        >
+                          {fmt(projectTotals[p.id + "|" + m] || 0)}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  )}
+                </TableBody>
+              ),
+            };
+          });
         });
   const windowedRows = useWindowedSections(
     planTableRef,
     sections,
     months.length + 1,
-    `${view}|${props.density}|${months.join("|")}|${props.showAllActual}|${props.expandedActualTeams.join("|")}`,
+    `${view}|${props.density}|${months.join("|")}|${props.showAllActual}|${props.expandedActualTeams.join("|")}|${teams.map((t) => t.id).join("|")}|${projects.map((p) => p.id).join("|")}`,
   );
   return (
     <Table

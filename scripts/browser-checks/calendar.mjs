@@ -1,5 +1,9 @@
 import { selectWorkspaceTab } from "./fixture.mjs";
 import assert from "node:assert/strict";
+import {
+  calendarHoursInMonth,
+  personCalendarHoursInMonth,
+} from "../../shared/actual-units.ts";
 
 const actualTab = (page) =>
   page.getByRole("tab", {
@@ -7,8 +11,19 @@ const actualTab = (page) =>
     exact: true,
   });
 const dialog = (page) => page.getByRole("dialog");
-const calendarMonth = (page) =>
-  dialog(page).locator(".work-calendar-months > div").first();
+async function personalMonth(f) {
+  const data = await f.state();
+  return personCalendarHoursInMonth(
+    "2026-01",
+    "r-own",
+    data.workCalendar,
+    data.personCalendar,
+  );
+}
+async function personalAvailableHours(f) {
+  const month = await personalMonth(f);
+  return month.baseHours - month.leaveHours;
+}
 
 export async function checkCalendar(f) {
   const { page } = await f.client("root-admin");
@@ -20,7 +35,14 @@ export async function checkCalendar(f) {
         await page
           .getByRole("button", { name: "Çalışma Takvimi'ni aç", exact: true })
           .click();
-        assert((await calendarMonth(page).innerText()).includes("198 saat"));
+        assert.equal(
+          await dialog(page).locator(".work-calendar-summary").count(),
+          0,
+        );
+        assert.equal(
+          calendarHoursInMonth("2026-01", (await f.state()).workCalendar),
+          198,
+        );
         async function add(date, fraction, label) {
           await dialog(page)
             .getByLabel("Başlangıç", { exact: true })
@@ -40,12 +62,19 @@ export async function checkCalendar(f) {
         await add("2026-01-07", "1", "Shared full day");
         await add("2026-01-08", "0.5", "Shared half day");
         await add("2026-01-10", "1", "Weekend marker");
-        assert((await calendarMonth(page).innerText()).includes("184,5 saat"));
+        assert.equal(
+          await dialog(page).locator(".work-calendar-range-row").count(),
+          3,
+        );
         assert.equal((await f.state()).workCalendar["2026-01-07"], undefined);
         await dialog(page)
           .getByRole("button", { name: "Takvimi Kaydet", exact: true })
           .click();
         await dialog(page).waitFor({ state: "hidden" });
+        assert.equal(
+          calendarHoursInMonth("2026-01", (await f.state()).workCalendar),
+          184.5,
+        );
         assert.equal(
           (await f.state()).workCalendar["2026-01-08"].fraction,
           0.5,
@@ -168,7 +197,16 @@ export async function checkCalendar(f) {
             .count(),
           0,
         );
-        assert((await calendarMonth(p).innerText()).includes("184,5 saat"));
+        assert.equal(
+          await dialog(p).locator(".work-calendar-summary").count(),
+          0,
+        );
+        assert.equal(await dialog(p).locator(".work-calendar-help").count(), 0);
+        assert.equal(
+          await dialog(p).locator('[data-slot="dialog-description"]').count(),
+          0,
+        );
+        assert.equal(await personalAvailableHours(f), 184.5);
       },
     );
     await f.check(
@@ -228,12 +266,10 @@ export async function checkCalendar(f) {
           (await f.state()).personCalendar["r-own|2026-01-10|leave"],
           undefined,
         );
-        assert(
-          (await calendarMonth(p).innerText()).includes(
-            "İzin 4 sa · Eğitim 2 sa",
-          ),
-        );
-        assert((await calendarMonth(p).innerText()).includes("180,5 saat"));
+        const month = await personalMonth(f);
+        assert.equal(month.leaveHours, 4);
+        assert.equal(month.trainingHours, 2);
+        assert.equal(await personalAvailableHours(f), 180.5);
         await dialog(p)
           .getByLabel(/(?:Ayrılış|Başlangıç) Tarihi/)
           .fill("2026-01-05");
@@ -252,7 +288,7 @@ export async function checkCalendar(f) {
           (await f.state()).personCalendar["r-own|2026-01-05|training"].hours,
           2,
         );
-        assert((await calendarMonth(p).innerText()).includes("180,5 saat"));
+        assert.equal(await personalAvailableHours(f), 180.5);
       },
     );
     await f.check(
@@ -394,9 +430,8 @@ export async function checkCalendar(f) {
           undefined,
         );
         await f.wait(
-          async () =>
-            (await calendarMonth(p).innerText()).includes("153,5 saat"),
-          "range monthly hours rendered",
+          async () => (await personalAvailableHours(f)) === 153.5,
+          "range monthly hours calculated",
         );
         await f.capture(p, "personal-calendar-range");
         const rangeRow = dialog(p)
@@ -435,9 +470,8 @@ export async function checkCalendar(f) {
           "range edit settled",
         );
         await f.wait(
-          async () =>
-            (await calendarMonth(p).innerText()).includes("171,5 saat"),
-          "edited range monthly hours rendered after scoped refresh",
+          async () => (await personalAvailableHours(f)) === 171.5,
+          "edited range monthly hours calculated",
         );
         await f.capture(p, "personal-calendar-grouped-range");
         await dialog(p)
@@ -460,9 +494,8 @@ export async function checkCalendar(f) {
           "range removal settled",
         );
         await f.wait(
-          async () =>
-            (await calendarMonth(p).innerText()).includes("180,5 saat"),
-          "removed range monthly hours rendered after scoped refresh",
+          async () => (await personalAvailableHours(f)) === 180.5,
+          "removed range monthly hours calculated",
         );
         await dialog(p)
           .getByRole("button", { name: "Kapat", exact: true })

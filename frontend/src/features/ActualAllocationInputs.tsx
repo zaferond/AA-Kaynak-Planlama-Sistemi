@@ -228,7 +228,10 @@ export function ActualAmount({
       </div>
     );
   return (
-    <div className="person-amount">
+    <div
+      className="person-amount"
+      data-window-keep={busy || dirty || !!error ? "true" : undefined}
+    >
       <input
         ref={inputRef}
         aria-label={label + " / " + unitLabels[unit]}

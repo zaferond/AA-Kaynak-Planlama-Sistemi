@@ -1,4 +1,8 @@
-import React from "react";
+import React, { useRef } from "react";
+import {
+  useWindowedSections,
+  type WindowedSection,
+} from "../workspace/useWindowedSections";
 import { CalendarDays } from "lucide-react";
 import type { Data, Project, Resource } from "../../model";
 import { phaseStyle } from "../../model";
@@ -75,102 +79,73 @@ export default function ActualAllocationTable({
       0
     );
   }
-  return (
-    <Table
-      stickyProjectRows
-      todayDate={todayDate}
-      todayMonthsKey={months.join("|")}
-      className="matrix planning-grid allocation-grid"
-      style={{ width: 200 + months.length * monthWidth }}
-    >
-      <colgroup>
-        <col style={{ width: 200 }} />
-        {months.map((month) => (
-          <col key={month} style={{ width: monthWidth }} />
-        ))}
-      </colgroup>
-      <TableHeader>
-        <TableRow className="yearrow">
-          <TableHead>Yıl</TableHead>
-          {years.map((year, index) => (
-            <TableHead
-              key={year}
-              colSpan={months.filter((month) => month.startsWith(year)).length}
-              className={"year-band-" + (index % 6)}
-            >
-              {year}
-            </TableHead>
-          ))}
-        </TableRow>
-        <TableRow>
-          <TableHead>Proje / Kişi</TableHead>
-          {months.map((month) => (
-            <TableHead
-              key={month}
-              data-month={month}
-              className={
-                "monthhead year-band-" + (years.indexOf(month.slice(0, 4)) % 6)
-              }
-              title={
-                month +
-                " · " +
-                workdaysInMonth(month) +
-                " hafta içi gün · ortak takvime göre saat hesabı"
-              }
-            >
-              <span>
-                {fullMonthFormat.format(new Date(month + "-01T12:00:00"))}
-              </span>
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      {groups.map((group) => {
-        const project = projects[group.outer];
-        return (
+  const tableRef = useRef<HTMLTableElement>(null);
+  const chunkSize = Math.max(
+    4,
+    Math.min(20, Math.floor(200 / Math.max(1, months.length))),
+  );
+  const sections: WindowedSection[] = groups.flatMap((group) => {
+    const project = projects[group.outer];
+    const parts = Math.max(1, Math.ceil(group.inners.length / chunkSize));
+    const headingKey = project.id + ":" + (group.inners[0] ?? "empty");
+    return Array.from({ length: parts }, (_, part) => {
+      const chunk = group.inners.slice(
+        part * chunkSize,
+        (part + 1) * chunkSize,
+      );
+      const first = part === 0;
+      const key = project.id + ":" + (chunk[0] ?? "empty");
+      return {
+        key,
+        headingKey,
+        height: (first ? 80 : 0) + chunk.length * 80,
+        render: () => (
           <TableBody
-            key={project.id}
+            key={key}
+            data-window-key={key}
             className="project-row-group"
             data-project-group={project.id}
           >
-            <TableRow
-              className="group actual-project-group project-freeze-row"
-              data-project-heading={project.id}
-            >
-              <TableCell className="actual-project-name">
-                <strong>{project.name}</strong>
-                <ProjectResponsible project={project} />
-                <span>
-                  {project.start} — {project.end}
-                </span>
-              </TableCell>
-              {months.map((month) => {
-                const text =
-                  month >= project.start && month <= project.end
-                    ? project.phases[month]?.trim()
-                    : "";
-                return (
-                  <TableCell key={month} className="actual-phase-cell">
-                    {text && (
-                      <button
-                        type="button"
-                        className="actual-phase-button"
-                        style={phaseStyle(project, month)}
-                        title={text}
-                        aria-label={
-                          project.name + " / " + month + " aşaması: " + text
-                        }
-                        onClick={() => onPhaseDetail({ project, month })}
-                      >
-                        {text}
-                      </button>
-                    )}
-                  </TableCell>
-                );
-              })}
-            </TableRow>
+            {first && (
+              <TableRow
+                className="group actual-project-group project-freeze-row"
+                data-project-heading={project.id}
+              >
+                <TableCell className="actual-project-name">
+                  <strong>{project.name}</strong>
+                  <ProjectResponsible project={project} />
+                  <span>
+                    {project.start} — {project.end}
+                  </span>
+                </TableCell>
+                {months.map((month) => {
+                  const text =
+                    month >= project.start && month <= project.end
+                      ? project.phases[month]?.trim()
+                      : "";
+                  return (
+                    <TableCell key={month} className="actual-phase-cell">
+                      {text && (
+                        <button
+                          type="button"
+                          className="actual-phase-button"
+                          style={phaseStyle(project, month)}
+                          title={text}
+                          aria-label={
+                            project.name + " / " + month + " aşaması: " + text
+                          }
+                          onClick={() => onPhaseDetail({ project, month })}
+                        >
+                          {text}
+                        </button>
+                      )}
+                    </TableCell>
+                  );
+                })}
+              </TableRow>
+            )}
             {people.length > 0 &&
-              group.inners.map((index) => {
+              chunk.map((index) => {
                 const resource = people[index];
                 return (
                   <React.Fragment key={project.id + "|" + resource.id}>
@@ -364,8 +339,68 @@ export default function ActualAllocationTable({
                 );
               })}
           </TableBody>
-        );
-      })}
+        ),
+      };
+    });
+  });
+  const windowedRows = useWindowedSections(
+    tableRef,
+    sections,
+    months.length + 1,
+    view.scopeKey + ":" + view.visiblePage,
+  );
+  return (
+    <Table
+      ref={tableRef}
+      stickyProjectRows
+      todayDate={todayDate}
+      todayMonthsKey={months.join("|")}
+      className="matrix planning-grid allocation-grid"
+      style={{ width: 200 + months.length * monthWidth }}
+    >
+      <colgroup>
+        <col style={{ width: 200 }} />
+        {months.map((month) => (
+          <col key={month} style={{ width: monthWidth }} />
+        ))}
+      </colgroup>
+      <TableHeader>
+        <TableRow className="yearrow">
+          <TableHead>Yıl</TableHead>
+          {years.map((year, index) => (
+            <TableHead
+              key={year}
+              colSpan={months.filter((month) => month.startsWith(year)).length}
+              className={"year-band-" + (index % 6)}
+            >
+              {year}
+            </TableHead>
+          ))}
+        </TableRow>
+        <TableRow>
+          <TableHead>Proje / Kişi</TableHead>
+          {months.map((month) => (
+            <TableHead
+              key={month}
+              data-month={month}
+              className={
+                "monthhead year-band-" + (years.indexOf(month.slice(0, 4)) % 6)
+              }
+              title={
+                month +
+                " · " +
+                workdaysInMonth(month) +
+                " hafta içi gün · ortak takvime göre saat hesabı"
+              }
+            >
+              <span>
+                {fullMonthFormat.format(new Date(month + "-01T12:00:00"))}
+              </span>
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      {windowedRows}
     </Table>
   );
 }

@@ -205,7 +205,7 @@ html[data-theme="military"]
   .navtabs
   [role="tab"][data-state="active"],
 html[data-theme="military"]
-  .app:is(.tab-plan, .tab-resources)
+  .app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch)
   [role="tab"][data-state="active"] {
@@ -223,7 +223,7 @@ html[data-theme="military"]
 }
 html[data-theme="military"] .app .workspace-nav-actions [role="tablist"],
 html[data-theme="military"]
-  .app:is(.tab-plan, .tab-resources)
+  .app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch) {
   background: var(--brand-surface);
@@ -234,7 +234,7 @@ html[data-theme="military"] .app .workspace-nav-actions [role="tab"] {
   color: var(--brand-primary);
 }
 html[data-theme="military"]
-  .app:is(.tab-plan, .tab-resources)
+  .app:is(.tab-plan, .tab-resources, .tab-overview)
   .workspace-nav-actions
   :is(.plan-view-switch, .organization-view-switch)
   [role="tab"] {
@@ -853,7 +853,6 @@ html[data-theme="military"]
   :is(
     .work-calendar-personal,
     .work-calendar-form,
-    .work-calendar-summary,
     .work-calendar-list,
     .work-calendar-year,
     .work-calendar-actions
@@ -861,11 +860,7 @@ html[data-theme="military"]
   border-color: var(--brand-border);
 }
 html[data-theme="military"]
-  :is(
-    .work-calendar-personal,
-    .work-calendar-months > div,
-    .work-calendar-year button
-  ) {
+  :is(.work-calendar-personal, .work-calendar-year button) {
   background: var(--brand-surface-soft);
   border-color: var(--brand-border);
 }
@@ -873,11 +868,8 @@ html[data-theme="military"]
   :is(
     .work-calendar-year,
     .work-calendar-personal h3,
-    .work-calendar-summary h3,
     .work-calendar-list h3,
     .work-calendar-form-title,
-    .work-calendar-months strong,
-    .work-calendar-months b,
     .work-calendar-year button,
     .work-calendar-list time
   ) {

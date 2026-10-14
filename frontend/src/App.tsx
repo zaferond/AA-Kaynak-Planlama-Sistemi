@@ -14,7 +14,9 @@ import { usePortalRefresh } from "./features/usePortalRefresh";
 import { usePortalEditor } from "./features/usePortalEditor";
 import { useWorkspaceNavigation } from "./features/workspace/useWorkspaceNavigation";
 import WorkspaceHeader, { FullPlanHeader } from "./features/WorkspaceHeader";
-import WorkspaceNavigation from "./features/WorkspaceNavigation";
+import WorkspaceNavigation, {
+  type ReportView,
+} from "./features/WorkspaceNavigation";
 import WorkspaceFilters from "./features/WorkspaceFilters";
 import PlannedAllocationPanel from "./features/PlannedAllocationPanel";
 import WorkspaceFilterSummary from "./features/workspace/WorkspaceFilterSummary";
@@ -35,11 +37,12 @@ import { useActualView } from "./features/actual-allocation/useActualView";
 import { useActivityReport } from "./features/activity-report/useActivityReport";
 import MonthlyActivityReport from "./features/activity-report/MonthlyActivityReport";
 import WorkspaceReports from "./features/workspace/WorkspaceReports";
+import HeadcountReports from "./features/resource-reports/HeadcountReports";
 import ActivePostingPlanningToggle from "./features/workspace/ActivePostingPlanningToggle";
 import AccessPanel from "./AccessPanel";
 import PortalEditorDialog from "./features/PortalEditorDialog";
 import { usePlannedGrid } from "./features/usePlannedGrid";
-import { fmt, monthLabel } from "./format";
+import { fmt, monthLabel, fullDateLabel } from "./format";
 import { Project, phaseStyle } from "./model";
 import PersonAllocationPanel from "./PersonAllocationPanel";
 import ProjectInfoReport from "./ProjectInfoReport";
@@ -61,6 +64,7 @@ export default function Portal() {
   const [directoryEditing, setDirectoryEditing] = useState(false);
   const [accountEditing, setAccountEditing] = useState(false);
   const [organizationView, setOrganizationView] = useState("employees");
+  const [reportView, setReportView] = useState<ReportView>("resources");
   const mainTabsRef = useRef<HTMLDivElement>(null),
     capacityTableRef = useRef<HTMLTableElement>(null),
     planTableRef = useRef<HTMLTableElement>(null);
@@ -389,6 +393,8 @@ export default function Portal() {
     actualMonthSummaries: actualView.value?.monthSummaries,
     user,
     tab,
+    reportView,
+    todayDate,
     teams,
     projects,
     months,
@@ -459,6 +465,7 @@ export default function Portal() {
       saving={saving}
       resetAll={resetAll}
       notice={notice}
+      showPeriodFilters={tab !== "overview" || reportView !== "headcount"}
     />
   );
   return (
@@ -527,6 +534,8 @@ export default function Portal() {
             hasProjects={!!projects.length}
             organizationView={organizationView}
             setOrganizationView={setOrganizationView}
+            reportView={reportView}
+            setReportView={setReportView}
           />
           {!data ? (
             <div className="loading">
@@ -546,24 +555,39 @@ export default function Portal() {
                         : "Raporlarda uygulanan filtreler"
                     }
                     className="reports-filter-summary"
-                    filters={[
-                      ...capacityFilters.filter(
-                        (filter) =>
-                          tab === "activity" || filter.label !== "Proje",
-                      ),
-                      {
-                        label: "Bitiş Ayı",
-                        values: [monthLabel(months.at(-1)!)],
-                        active: true,
-                      },
-                      {
-                        label: "Dönem",
-                        values: [months.length + " ay"],
-                        active: true,
-                      },
-                    ]}
+                    filters={
+                      tab === "overview" && reportView === "headcount"
+                        ? [
+                            ...capacityFilters.filter(
+                              (filter) =>
+                                filter.label === "Liderlik" ||
+                                filter.label === "Takım",
+                            ),
+                            {
+                              label: "Rapor Tarihi",
+                              values: [fullDateLabel(todayDate)],
+                              active: true,
+                            },
+                          ]
+                        : [
+                            ...capacityFilters.filter(
+                              (filter) =>
+                                tab === "activity" || filter.label !== "Proje",
+                            ),
+                            {
+                              label: "Bitiş Ayı",
+                              values: [monthLabel(months.at(-1)!)],
+                              active: true,
+                            },
+                            {
+                              label: "Dönem",
+                              values: [months.length + " ay"],
+                              active: true,
+                            },
+                          ]
+                    }
                   />
-                  {tab === "overview" && (
+                  {tab === "overview" && reportView === "resources" && (
                     <ActivePostingPlanningToggle
                       data={data}
                       canEdit={!!isAdmin}
@@ -882,23 +906,32 @@ export default function Portal() {
               )}
               {(isAdmin || isManager) && tab === "overview" && (
                 <TabsContent value="overview">
-                  <WorkspaceReports
-                    data={data}
-                    teams={teams}
-                    months={months}
-                    monthWidth={monthWidth}
-                    todayDate={todayDate}
-                    currentMonth={currentMonth}
-                    currentTeamMembers={currentTeamMembers}
-                    metric={metric}
-                    leaderReportGroups={leaderReportGroups}
-                    teamReportGroups={teamReportGroups}
-                    capacity={cache}
-                    actualTotals={actualTotals}
-                    teamIds={ids}
-                    selectedTeamIds={teamIds}
-                    leads={leads}
-                  />
+                  {reportView === "headcount" ? (
+                    <HeadcountReports
+                      data={data}
+                      teams={teams}
+                      groups={leaderReportGroups}
+                      date={todayDate}
+                    />
+                  ) : (
+                    <WorkspaceReports
+                      data={data}
+                      teams={teams}
+                      months={months}
+                      monthWidth={monthWidth}
+                      todayDate={todayDate}
+                      currentMonth={currentMonth}
+                      currentTeamMembers={currentTeamMembers}
+                      metric={metric}
+                      leaderReportGroups={leaderReportGroups}
+                      teamReportGroups={teamReportGroups}
+                      capacity={cache}
+                      actualTotals={actualTotals}
+                      teamIds={ids}
+                      selectedTeamIds={teamIds}
+                      leads={leads}
+                    />
+                  )}
                 </TabsContent>
               )}
               <div className="bottomnote">

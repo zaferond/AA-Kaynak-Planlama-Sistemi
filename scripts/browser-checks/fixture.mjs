@@ -257,3 +257,36 @@ export async function selectWorkspaceTab(page, name) {
     await page.getByRole("tab", { name, exact: true }).click();
   }
 }
+
+/** Reveal an offscreen record through the real scroll viewport, as a user would.
+ * A locator cannot scrollIntoView until its virtual section has been mounted. */
+export async function revealTableItem(container, item) {
+  if (await item.count()) {
+    await item.scrollIntoViewIfNeeded();
+    return;
+  }
+  await container.evaluate((c) => {
+    c.scrollTop = 0;
+  });
+  let edges = 0;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    await container.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    if (await item.count()) {
+      await item.scrollIntoViewIfNeeded();
+      return;
+    }
+    const moved = await container.evaluate((c) => {
+      const old = c.scrollTop;
+      c.scrollTop += Math.max(100, c.clientHeight * 0.75);
+      return Math.abs(c.scrollTop - old) > 1;
+    });
+    edges = moved ? 0 : edges + 1;
+    if (edges >= 3) break;
+  }
+  throw Error("Record was not reachable through the table viewport");
+}

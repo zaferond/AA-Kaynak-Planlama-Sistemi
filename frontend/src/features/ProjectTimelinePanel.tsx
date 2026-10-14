@@ -218,6 +218,7 @@ export default function ProjectTimelinePanel({
       <div className="workspace-record-count">{projects.length} proje</div>
       <Table
         stickyProjectRows
+        todayOverlay
         ref={selection.tableRef}
         todayDate={todayDate}
         todayMonthsKey={projectPeriods.map((period) => period.key).join("|")}

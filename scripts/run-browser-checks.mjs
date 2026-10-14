@@ -1,3 +1,6 @@
+import { checkTabTransitions } from "./browser-checks/tab-transitions.mjs";
+import { checkHeadcountReports } from "./browser-checks/headcount-reports.mjs";
+import { checkTodayLineVisibility } from "./browser-checks/today-line-visibility.mjs";
 import { checkHorizontalScroll } from "./browser-checks/horizontal-scroll.mjs";
 import { checkTeamPlanningPermissions } from "./browser-checks/team-planning-permissions.mjs";
 import { checkAdAdminRole } from "./browser-checks/ad-admin-role.mjs";
@@ -56,6 +59,9 @@ import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
 
 for (const check of [
+  checkHeadcountReports,
+  checkTodayLineVisibility,
+  checkTabTransitions,
   checkHorizontalScroll,
   checkTeamPlanningPermissions,
   checkActivePostingPlanning,

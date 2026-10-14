@@ -58,13 +58,21 @@ const jsName = await asset(
   "js",
   await fs.readFile(path.join(root, ".compiled/app.js")),
 );
+const loginBackgroundName = await asset(
+  "login-background",
+  "png",
+  await fs.readFile(path.join(root, "assets/login-background.png")),
+);
 const bundledCss = (await fs.readdir(path.join(root, ".compiled")))
   .filter((file) => file.endsWith(".css"))
   .sort();
 const css = [
   await fs.readFile(path.join(root, "assets/base.css"), "utf8"),
   await readWorkspaceStyles(),
-  await fs.readFile(path.join(root, "src/login.css"), "utf8"),
+  (await fs.readFile(path.join(root, "src/login.css"), "utf8")).replaceAll(
+    "/assets/login-background.png",
+    "/assets/" + loginBackgroundName,
+  ),
   ...(await Promise.all(
     bundledCss.map((file) =>
       fs.readFile(path.join(root, ".compiled", file), "utf8"),
@@ -81,6 +89,7 @@ await writeDeploymentManifest(packageRoot, sourceHashes, {
     "site/index.html",
     "site/index.html.gz",
     "site/assets/otokar-logo.svg",
+    "site/assets/" + loginBackgroundName,
     ...[jsName, cssName].flatMap((name) => [
       "site/assets/" + name,
       "site/assets/" + name + ".gz",

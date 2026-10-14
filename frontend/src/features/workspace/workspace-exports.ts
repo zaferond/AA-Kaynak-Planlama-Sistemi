@@ -5,6 +5,9 @@ import {
 } from "../../allocation-export";
 import { downloadProjects } from "../../project-export";
 import { downloadResourceReport } from "../../resource-report-export";
+import { downloadHeadcountReport } from "../../headcount-report-export";
+import { buildHeadcountReport } from "../resource-reports/headcount-report-data";
+import { currentPlanningDate } from "../../resource-dates";
 import type { Principal } from "../../access";
 import type { Metric } from "../../metrics";
 import type { ReportGroup } from "../RemainingResourceTable";
@@ -21,6 +24,8 @@ type Props = {
   >;
   user: Principal | null;
   tab: string;
+  reportView?: "resources" | "headcount";
+  todayDate?: string;
   teams: Team[];
   projects: Project[];
   months: string[];
@@ -43,6 +48,8 @@ export function createWorkspaceExports({
   actualMonthSummaries,
   user,
   tab,
+  reportView = "resources",
+  todayDate = currentPlanningDate(),
   teams,
   projects,
   months,
@@ -93,6 +100,11 @@ export function createWorkspaceExports({
           density,
           projectWeekly,
           showProjectCodes,
+        );
+      else if (tab === "overview" && reportView === "headcount" && data)
+        downloadHeadcountReport(
+          buildHeadcountReport(data, teams, leaderReportGroups, todayDate),
+          resourceReportFilterSummary(leads, teamIds),
         );
       else if (tab === "overview") exportResourceReport();
       else if (tab === "plan" && data)
