@@ -434,7 +434,11 @@ export async function checkCalendar(f) {
               .isDisabled()),
           "range edit settled",
         );
-        assert((await calendarMonth(p).innerText()).includes("171,5 saat"));
+        await f.wait(
+          async () =>
+            (await calendarMonth(p).innerText()).includes("171,5 saat"),
+          "edited range monthly hours rendered after scoped refresh",
+        );
         await f.capture(p, "personal-calendar-grouped-range");
         await dialog(p)
           .getByRole("button", {
@@ -455,7 +459,11 @@ export async function checkCalendar(f) {
               .isDisabled()),
           "range removal settled",
         );
-        assert((await calendarMonth(p).innerText()).includes("180,5 saat"));
+        await f.wait(
+          async () =>
+            (await calendarMonth(p).innerText()).includes("180,5 saat"),
+          "removed range monthly hours rendered after scoped refresh",
+        );
         await dialog(p)
           .getByRole("button", { name: "Kapat", exact: true })
           .click();
@@ -504,7 +512,10 @@ export async function checkCalendar(f) {
           ) < 1e-7,
         );
         await amount.click();
-        assert.equal((await total.innerText()).trim(), "%51,11");
+        await f.wait(
+          async () => (await total.innerText()).trim() === "%51,11",
+          "saved actual percent and training total rendered",
+        );
         await hours.fill("80");
         await hours.press("Enter");
         await p
