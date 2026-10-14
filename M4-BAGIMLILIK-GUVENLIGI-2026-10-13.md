@@ -1,5 +1,7 @@
 # M4 — Backend bağımlılık güvenliği
 
+> **14 Ekim 2026 — M6 ek doğrulaması:** Tedious 20.3.8 / MSSQL 12.7.2, şema 35 ve iki bağımsız havuzla **40/40 native kontrol** geçti. Bağımlılık güncellemesinin bu kaynak için geçici SQL Server kabulü artık mevcut; gerçek kurum CA/NTLM/servis kabulü ayrıca gerekir. Test edilen bütünleşik kaynak `0193506`; [M6 kanıtı](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md). Aşağıdaki özgün kayıt 13 Ekim’deki yerel aşamayı anlatır.
+
 Tarih: 13.10.2026. Başlangıç kaynak commit'i: `ee4ebbd3d014454fadf7dbfaba40892028fea1f0`; çalışma ağacındaki M1–M3 değişiklikleri korundu. Node **24.21.0**, npm **11.19.0**.
 
 ## Sonuç

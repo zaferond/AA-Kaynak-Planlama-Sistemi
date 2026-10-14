@@ -8,15 +8,15 @@
 
 **Tarihsel durum — 2 Ekim 2026:** bu bilgisayarda SQL Server/Docker veya ayrılmış test bağlantısı olmadığı için o tarihte native sonuç yoktu. Bu sınırlama 4 Ekim'de GitHub'ın geçici test ortamıyla giderildi; bu bilgisayarda veya kurumda native test yapılmış sayılmaz. Yerel güvenlik testleri gerçek MSSQL çalıştırması değildir.
 
-## 13 Ekim 2026 — aynı commit için yayın kabulü
+## 13–14 Ekim 2026 — aynı commit için CI kabulü
 
 Push ve pull request sonrasında `Quality checks`, yeniden kullanılabilir native workflow'u da çalıştırır. `Release acceptance` yalnız Ubuntu kalite, Windows sentetik ve native MSSQL işlerinin **aynı commit için** başarılı olmasıyla geçer. Yayın öncesi bu kontrolün başarısı aranmalıdır; GitHub branch protection/ruleset ve kurum dağıtım yetkisi ayrıca yönetilir. İş akışı tek başına manuel dağıtımı engellemez.
 
-Native artifact'i, güncel şema kataloğu, kilit dosyasındaki MSSQL/Tedious sürümleri, uygulama/test/workflow kaynak hash'leri, beş güncel kabul kontrolü ve veritabanı temizliğiyle otomatik karşılaştırılır. Başka commit/şema/kaynak için sonuç kabul edilmez. Artifact saklama süresi 90 gündür; uzun süreli kanıt için seçilen JSON ve koşu metadata'sı depodaki arşive ayrıca alınır. Güncel koşu durumu: [M6 raporu](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md).
+Native artifact'i, güncel şema kataloğu, kilit dosyasındaki MSSQL/Tedious sürümleri, uygulama/test/workflow kaynak hash'leri, beş güncel kabul kontrolü ve veritabanı temizliğiyle otomatik karşılaştırılır. Başka commit/şema/kaynak için sonuç kabul edilmez. Artifact saklama süresi 90 gündür; uzun süreli kanıt için seçilen JSON ve koşu metadata'sı depodaki arşive ayrıca alınır. 14 Ekim’de `0193506` için 40/40 native, 405/405 Windows, 811/811 Ubuntu ve 233 Chromium kontrol grubu başarılı; şema 35 ve 600 kaynak hash’i doğrulandı. Kullanıcı kararıyla dal koruması kurulmadı. Ayrıntılar: [M6 raporu](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md).
 
 Ek kontroller: güncel liderlik hiyerarşisi ve Leader/Product Owner benzersizliği, günlük kişisel takvimlerin gizliliği, dar rapor okumalarının tam snapshot sonuçlarıyla eşitliği, iki bağımsız SQL havuzunda sentetik AD oturum iptali/geçici kesinti davranışı ve SQL Server'ın bildirdiği bağlantı şifrelemesi. Yerel SQL.js karşılığı native havuz/TLS kanıtı olarak kabul edilmez. Dondurulmuş eski validator yalnız kendi şemasına indirgenen veriyle karşılaştırılır; güncel şema ayrıca doğrulanır.
 
-Dosya üzerinden kanıt doğrulama (DB bağlantısı açmaz):
+Aynı kaynak checkout’unda dosya üzerinden kanıt doğrulama (DB bağlantısı açmaz):
 
 ```sh
 node scripts/verify-native-evidence.mjs --report native-mssql-report.json --commit <test-edilen-tam-commit-SHA>

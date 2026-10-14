@@ -1,5 +1,7 @@
 # M5 — Gerçekleşen dağılım ve aktivite raporu okuma maliyeti
 
+> **14 Ekim 2026 — M6 ek doğrulaması:** Dar gerçekleşen/aktivite SQL okumaları, tam snapshot referansıyla **native MSSQL üzerinde** karşılaştırıldı; Windows ve tarayıcı regresyonları da geçti. Aşağıdaki performans sayıları yerel SQL.js ölçümüdür; gerçek yük/SLA ve kalan tam yazma snapshot/kilit maliyeti doğrulanmış veya giderilmiş sayılmaz. Test edilen bütünleşik kaynak `0193506`; [M6 kanıtı](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md). Aşağıdaki özgün kayıt 13 Ekim’deki yerel aşamayı anlatır.
+
 Tarih: 13.10.2026. Başlangıç commit'i: `ee4ebbd3d014454fadf7dbfaba40892028fea1f0`; M1–M4 çalışma ağacı değişiklikleri korundu. Node 24.21.0.
 
 ## Durum

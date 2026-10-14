@@ -1,8 +1,17 @@
 # CI kanıt arşivi
 
-## 13 Ekim 2026 — M1–M6 güncel sürüm kabulü
+## 14 Ekim 2026 — M1–M6 aynı kaynak için native/Windows kabulü
 
-[M6 kabul raporu](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md). Yerel 811/811 kontrol başarılı; aynı commit için güncel GitHub Ubuntu/Windows/native koşusu bekleniyor. Önceki native kayıtlar bu yeni kaynak için başarı kanıtı olarak kullanılmaz.
+Test edilen kod **`01935066146382be29a615452e45d9bd831d9a6f`**. [M6 raporu](M6-NATIVE-CI-YAYIN-KABULU-2026-10-13.md).
+
+| Kayıt | Sonuç | Koşu |
+|---|---|---|
+| Bütünleşik kalite ve kabul | **Başarılı:** Ubuntu 811/811, Windows 405/405, Chromium 233 kontrol grubu; biçim/domain/TypeScript/build/manifest/paket ve iki audit 0; `Release acceptance` başarılı | [38536198380](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/38536198380) |
+| Native MSSQL (aynı koşu/commit) | **40/40**, şema **35**, SQL Server 2022 Developer; MSSQL 12.7.2 / Tedious 20.3.8; iki havuz, güncel beş kabul kontrolü ve temizlik doğrulandı | [Koşu kaydı](ci-evidence/m6-release-0193506-receipt.json) |
+
+[Native JSON](ci-evidence/native-mssql-0193506.json), [otomatik doğrulama](ci-evidence/native-mssql-0193506-verification.json). JSON SHA-256: `a4793edf7a815602e902f5a9758e1ef321084f76ffd995e2e70f985ec7c55c33`. **600** uygulama/derleme/test/workflow girdisi test edilen Git commit’iyle eşit; aynı dosyalar güncel kaynakla da doğrulandı. Hash eşitliği tüm işlevlerin native testi değildir. Ham loglar arşivlenmez; metadata ve hash’ler korunur. Artifact süresi 90 gün; seçilen JSON burada ayrıca tutulur.
+
+Önceki altı başarısız bütünleşik koşu ayrı `m6-release-*-receipt.json` kayıtlarında saklanır; native/ünit başarıları tam yayın kabulü diye sunulmaz. Taslak kaybı ve test uyumsuzlukları M6 raporunda açıklanır. Kullanıcı kararıyla kabul kontrolü **yalnız CI’da** kalır; GitHub dal koruması/manuel yayın engeli kurulmadı. Kurum AD/NTLM/CA/proxy/servis/yedek/gerçek yük kabulü açık; N3 tam yazma snapshot/kilit maliyeti de sürer. Sonraki kanıt/dokümantasyon commit’i kodu değiştirmez ve yeni bir CI başarısı iddiası değildir.
 
 ## 9 Ekim 2026 — N3 mutasyon aşamaları ve takvim JSON eşitliği
 
