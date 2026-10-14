@@ -53,15 +53,16 @@ export async function checkPlannedTeamFreeze(f) {
         if ((await row.count()) !== 1) return false;
         const { headBottom } = await dimensions();
         const box = await row.boundingBox();
-        return Math.abs(box.y - headBottom) < 2;
-      }, "team heading pinned below year/month headers");
-      const painted = await row.evaluate((row) => {
-        const label = row.querySelector(".team-group-label");
-        const rect = label.getBoundingClientRect();
-        const top = document.elementFromPoint(rect.left + 25, rect.top + 10);
-        return row.contains(top);
-      });
-      assert(painted, "Team heading must be painted above allocation cells");
+        if (Math.abs(box.y - headBottom) >= 2) return false;
+        // Virtual chunks and sticky offsets can settle on adjacent frames.
+        // Require both geometry and painting; do not assert between two renders.
+        return row.evaluate((row) => {
+          const label = row.querySelector(".team-group-label");
+          const rect = label.getBoundingClientRect();
+          const top = document.elementFromPoint(rect.left + 25, rect.top + 10);
+          return row.contains(top);
+        });
+      }, "team heading pinned below headers and painted above allocation cells");
     }
     await f.check(
       "planning team view: heading persists across virtual chunks and stays fixed horizontally",

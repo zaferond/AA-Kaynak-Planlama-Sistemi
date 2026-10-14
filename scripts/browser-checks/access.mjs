@@ -184,9 +184,16 @@ export async function checkAccess(f) {
       },
     );
     await f.check(
-      "access: selecting employee replaces leadership with current assignment",
+      "access: normal role hides grants; manager can edit leadership scope without changing employee identity",
       async () => {
         const form = await editAccount(page, "employee");
+        assert.equal(
+          await form
+            .getByRole("textbox", { name: "Liderlik ara", exact: true })
+            .count(),
+          0,
+        );
+        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         await form
           .getByRole("textbox", { name: "Liderlik ara", exact: true })
           .fill(f.teamB.lead);
@@ -321,12 +328,18 @@ export async function checkAccess(f) {
             .count(),
           0,
         );
+        assert.equal(
+          await form
+            .getByRole("textbox", { name: "Liderlik ara", exact: true })
+            .count(),
+          0,
+        );
+        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         assert(
           await form
             .getByRole("checkbox", { name: f.teamA.lead, exact: true })
             .isChecked(),
         );
-        await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         await f.capture(page, "access-create-directory-employee");
         await form
           .getByRole("button", {
@@ -362,9 +375,15 @@ export async function checkAccess(f) {
         await f.capture(manager.page, "access-manager-own-actual");
         await manager.page
           .locator(".person-allocation tbody tr")
-          .filter({ hasText: "Browser New Account" })
+          .filter({ hasText: "Directory New Account" })
           .first()
           .waitFor();
+        assert.equal(
+          (await f.state()).resources.find(
+            (resource) => resource.id === "r-new-account",
+          ).name,
+          "Directory New Account",
+        );
         await manager.context.close();
       },
     );
