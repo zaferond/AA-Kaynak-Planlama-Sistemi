@@ -71,6 +71,12 @@ Yerel tam pakette eski hiyerarşi beklentisi de yenilendi: alt liderlik raporda 
 
 `95fc6bc` / [38534624925](https://github.com/zaferond/AA-Kaynak-Planlama-Sistemi/actions/runs/38534624925), 811/811, 405/405 ve 40/40 geçti; 177 tarayıcı kontrol grubundan sonra kişisel takvimde kayıt sonrası aylık saat metninin erken okunmasında durdu. [Kayıt](ci-evidence/m6-release-95fc6bc-receipt.json). Güncel gerçekleşen görünüm ayrı scoped GET ile yenilendiği için formun kaydetme kilidinin kalkması, aylık metnin de yenilendiği anlamına gelmez. `0193506`, aynı **171,5 / 180,5 saat** ve **%51,11** sonuçlarını mevcut 10 saniyelik sınırda bekler; beklenen değerler, DB/doğrulama assert’leri ve süre sınırı değiştirilmedi. Ayrı taze fixture’da takvim **9/9** kontrol grubu geçti.
 
+## Çalıştırma kopyasının kaynak eşitliği
+
+14 Ekim’de çalışma alanının dış çalıştırma klasörü ile Git kaynak klasörü ayrıca karşılaştırıldı. Uygulama/derleme/workflow dosyaları eşitti; yalnız testlerde **3 eksik, 11 eski ve 9 yinelenen kopya** bulundu. Eski içerikler `output/m6-test-copy-before-sync-2026-10-14-bdb55ab0/` altında SHA-256’lı yerel kayıtla korundu; 14 canonical test dosyası eşitlendi ve 9 yinelenen dosya etkin test envanterinden bu arşive taşındı. Hiçbir çalışan DB veya yapılandırma dosyası bu işleme dahil edilmedi.
+
+Ardından `verify-native-evidence.mjs`, hem Git klasöründe hem dış çalıştırma klasöründe aynı **600 kaynak girdisi** için başarılı oldu. İki kopyanın derleme/manifest kontrolleri de doğrulandı. Yerel eski-test arşivi Git’e eklenmez; devredilecek kaynak Git’teki doğrulanmış dosyalardır. README’deki önceden var olan belge farkı, bu kod/test envanterinin dışındadır ve üzerine yazılmadı.
+
 ## Kapsam sınırları
 
 Geçici SQL Server 2022 Developer, SQL kimlik doğrulaması ve şifreli/self-signed test bağlantısı; sentetik LDAP adapter'ı ve sentetik veri. Kurum CA/hostname, gerçek AD/NTLM, en az yetkili kurum SQL hesabı, Windows servis/ACL, proxy, kurumsal backup/restore, atomik dağıtım ve gerçek yük/SLA kabulü bu koşularla doğrulanmaz. Hash eşitliği tüm işlevlerin native test edildiği anlamına gelmez. Üretim/çalışan DB'sine yazılmadı.
