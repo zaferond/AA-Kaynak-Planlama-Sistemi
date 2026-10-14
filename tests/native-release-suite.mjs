@@ -1,3 +1,4 @@
+import { allowedPlanningTeam, allowedActualTeam } from "../shared/access.ts";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { hashPassword, publicUser, digest } from "../backend/auth.mjs";
@@ -64,6 +65,36 @@ export async function nativeReleaseSuite(stores, checked) {
       await bootstrap("admin", "admin");
       await bootstrap("normal", "normal", own.id);
       await bootstrap("manager", "manager", "", [team.lead]);
+      await bootstrap("team-planner", "manager");
+      await store.transaction((c) =>
+        store.saveUser(
+          { ...users["team-planner"], planningTeams: [child.id] },
+          c,
+        ),
+      );
+      users["team-planner"] = await peerStore.findUser({ id: "team-planner" });
+      assert.deepEqual(users["team-planner"].planningTeams, [child.id]);
+      assert(
+        allowedPlanningTeam(
+          initial,
+          publicUser(users["team-planner"]),
+          child.id,
+        ),
+      );
+      assert(
+        !allowedPlanningTeam(
+          initial,
+          publicUser(users["team-planner"]),
+          team.id,
+        ),
+      );
+      assert(
+        !allowedActualTeam(
+          initial,
+          publicUser(users["team-planner"]),
+          child.id,
+        ),
+      );
       await store.mutate(users.admin, (data) => {
         data.leaderParents[child.lead] = team.lead;
         data.resources.find((r) => r.id === own.id).versions[0].assignmentRole =
@@ -86,7 +117,20 @@ export async function nativeReleaseSuite(stores, checked) {
           ],
         });
       });
+      await store.mutate(users.admin, (data) => {
+        data.resources.push({
+          ...structuredClone(own),
+          id: "release-coe",
+          name: "Synthetic CoE",
+          versions: own.versions.map((v) => ({ ...v, assignmentRole: "coe" })),
+        });
+      });
       const before = await store.read();
+      assert.equal(
+        before.data.resources.find((r) => r.id === "release-coe").versions[0]
+          .assignmentRole,
+        "coe",
+      );
       assert.equal(before.data.leaderParents[child.lead], team.lead);
       assert.equal(
         before.data.resources.find((r) => r.id === own.id).versions[0]

@@ -440,16 +440,20 @@ export async function checkResourceReports(f) {
         await report.waitFor();
         assert.match(await report.innerText(), /Synthetic report leave/);
         assert.equal(await report.locator("tbody tr").count(), 1);
+        await selectWorkspaceTab(page, "AA Kaynak Planlama Raporları");
         await page
           .locator('.planning-filterbar input[type="month"]')
           .fill("2026-12");
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         assert.match(
           await report.innerText(),
           /Seçili dönemde izin veya eğitim kaydı yok/,
         );
+        await selectWorkspaceTab(page, "AA Kaynak Planlama Raporları");
         await page
           .locator('.planning-filterbar input[type="month"]')
           .fill("2026-10");
+        await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
         await report.screenshot({
           path: path.join(f.dir, "moved-absence-report.png"),
         });

@@ -189,13 +189,19 @@ export async function checkAccess(f) {
         const form = await editAccount(page, "employee");
         assert.equal(
           await form
-            .getByRole("textbox", { name: "Liderlik ara", exact: true })
+            .getByRole("textbox", {
+              name: "Liderlik veya takım ara",
+              exact: true,
+            })
             .count(),
           0,
         );
         await form.getByLabel("Rol", { exact: true }).selectOption("manager");
         await form
-          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .getByRole("textbox", {
+            name: "Liderlik veya takım ara",
+            exact: true,
+          })
           .fill(f.teamB.lead);
         await form
           .getByRole("checkbox", { name: f.teamB.lead, exact: true })
@@ -330,7 +336,10 @@ export async function checkAccess(f) {
         );
         assert.equal(
           await form
-            .getByRole("textbox", { name: "Liderlik ara", exact: true })
+            .getByRole("textbox", {
+              name: "Liderlik veya takım ara",
+              exact: true,
+            })
             .count(),
           0,
         );
@@ -447,16 +456,27 @@ export async function checkAccess(f) {
         await openAccess(page);
         const form = await editAccount(page, "manager");
         await form
-          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .getByRole("textbox", {
+            name: "Liderlik veya takım ara",
+            exact: true,
+          })
           .fill(f.teamA.lead);
         await form
-          .getByRole("button", { name: "Tüm Liderlikleri Seç", exact: true })
+          .getByRole("button", { name: "Tümünü Seç", exact: true })
           .click();
         await form
-          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .getByRole("textbox", {
+            name: "Liderlik veya takım ara",
+            exact: true,
+          })
           .fill("");
         const boxes = form.locator('input[type="checkbox"]');
-        assert.equal(await boxes.count(), (await f.state()).leaders.length);
+        assert.equal(
+          await boxes.count(),
+          (await f.state()).leaders.length +
+            (await f.state()).teams.filter((team) => team.kind !== "leadership")
+              .length,
+        );
         for (const box of await boxes.all()) assert(await box.isChecked());
         await form
           .getByRole("button", { name: "Seçimi Temizle", exact: true })

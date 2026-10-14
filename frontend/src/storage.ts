@@ -373,6 +373,7 @@ export type UserInput = {
   id: string;
   role: "admin" | "manager" | "normal";
   leaders: string[];
+  planningTeams?: string[];
   resourceId: string;
   revision: number;
   reactivate?: boolean;
@@ -389,6 +390,7 @@ export type CreateUserInput = {
   directoryId: string;
   role: "admin" | "manager" | "normal";
   leaders: string[];
+  planningTeams?: string[];
   resourceId: string;
 };
 export async function createUser(input: CreateUserInput): Promise<Data> {

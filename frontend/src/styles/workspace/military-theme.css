@@ -5,7 +5,7 @@
 html[data-theme="military"] {
   --brand-dark: #29372d;
   --brand-primary: #405341;
-  --brand-hover: #334535;
+  --brand-hover: #263c28;
   --brand-mid: #617052;
   --brand-text: #293a2d;
   --brand-muted: #60715e;
@@ -1272,4 +1272,15 @@ html[data-theme="military"] [data-slot="table-container"] > .today-date-line {
   box-shadow:
     0 0 0 1px #ffffffa6,
     0 0 4px #61705259;
+}
+
+/* Stronger pointer feedback for action buttons, including portalled dialogs.
+   Tabs, switches and color-bearing timeline controls retain their own states. */
+@media (hover: hover) {
+  html[data-theme="military"]
+    button:not(:disabled):not([aria-disabled="true"]):not([role="tab"]):not(
+      [role="switch"]
+    ):not([data-timeline-item]):not(.phasebutton):hover {
+    filter: brightness(0.84);
+  }
 }

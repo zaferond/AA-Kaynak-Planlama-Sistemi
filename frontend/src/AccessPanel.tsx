@@ -69,6 +69,7 @@ export default function AccessPanel({
       id: user.id,
       role: user.role,
       leaders: [...user.leaders],
+      planningTeams: [...(user.planningTeams || [])],
       resourceId: user.resourceId || "",
       revision: data.revisions["user:" + user.id] || 0,
     });
@@ -83,6 +84,7 @@ export default function AccessPanel({
         id: form.id,
         role: form.role,
         leaders: form.leaders,
+        planningTeams: form.planningTeams || [],
         resourceId: form.resourceId,
         revision: form.revision,
         ...(!selected.active ? { reactivate: true } : {}),

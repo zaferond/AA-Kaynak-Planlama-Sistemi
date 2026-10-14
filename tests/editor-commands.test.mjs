@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { captureEditorRevisions } from "../frontend/src/features/editor-revisions.ts";
 import { prepareEditorChanges } from "../frontend/src/features/editor-commands.ts";
 import { applyChanges } from "../backend/operations.mjs";
-import { validate } from "../shared/server-domain.ts";
+import { validate, buildCapacityIndex } from "../shared/server-domain.ts";
 const context = { start: "2026-10", resourceIds: [] };
 const admin = { _id: "root-admin", role: "admin", leaders: [] };
 const version = {
@@ -200,7 +200,7 @@ test("critical topic preparation rejects missing projects and overlapping date r
     /Proje bulunamadı/,
   );
 });
-test("new resource and team leadership are prepared as one valid batch", () => {
+test("new resource uses its team leadership without binding an independent team", () => {
   const data = freeze(fixture());
   const editor = freeze({
     baseRevisions: captureEditorRevisions(data),
@@ -212,13 +212,14 @@ test("new resource and team leadership are prepared as one valid batch", () => {
   const changes = prepareEditorChanges(data, editor, context);
   assert.deepEqual(
     changes.map((c) => c.kind),
-    ["team", "resource"],
+    ["resource"],
   );
-  assert.equal(changes[1].value.versions[0].effective, "2026-04");
+  assert.equal(changes[0].value.versions[0].effective, "2026-04");
+  assert.equal(changes[0].value.versions[0].lead, "");
   const saved = structuredClone(data);
   applyChanges(saved, admin, changes);
   validate(saved);
-  assert.equal(saved.teams.find((t) => t.id === "unassigned").lead, "A");
+  assert.equal(saved.teams.find((t) => t.id === "unassigned").lead, "");
   assert.equal(data.teams[1].lead, "");
 });
 test("resource edits retain date and leadership checks and explain stale team selections", () => {
@@ -234,7 +235,6 @@ test("resource edits retain date and leadership checks and explain stale team se
     [{ start: "" }, /İşbaşı Tarihi/],
     [{ status: "İşten Ayrıldı", end: "" }, /iki|işten ayrılış/],
     [{ end: "2025-12-31" }, /önce olamaz/],
-    [{ lead: "B" }, /bu liderliğe bağlı değil/],
     [{ team: "missing" }, /takım bulunamadı/],
   ])
     assert.throws(
@@ -392,7 +392,7 @@ test("all entity editor drafts retain opening revisions after a background snaps
   }
 });
 
-test("resource drafts also keep the opening revision of a previously unassigned team", () => {
+test("resource saves use the current team leadership without overwriting a concurrently updated team", () => {
   const data = fixture();
   const draft = {
     kind: "resource",
@@ -401,14 +401,18 @@ test("resource drafts also keep the opening revision of a previously unassigned 
     value: { id: "new", name: "Synthetic", note: "", versions: [] },
     version: { ...version, team: "unassigned" },
   };
+  data.teams[1].lead = "B";
   data.revisions["team:unassigned"] = 1;
+  const teamBefore = structuredClone(data.teams[1]);
   const commands = prepareEditorChanges(data, draft, context);
-  assert.equal(commands[0].revision, 0);
-  assert.throws(
-    () => applyChanges(data, admin, commands),
-    (error) => error.status === 409,
+  assert.deepEqual(
+    commands.map((c) => c.kind),
+    ["resource"],
   );
-  assert.equal(data.resources.length, 1);
+  assert.equal(commands[0].value.versions[0].lead, "B");
+  applyChanges(data, admin, commands);
+  assert.deepEqual(data.teams[1], teamBefore);
+  assert.equal(data.revisions["team:unassigned"], 1);
 });
 
 test("leader resource selects a direct leadership owner without a team; member still requires a real team", async () => {
@@ -448,7 +452,7 @@ test("leader resource selects a direct leadership owner without a team; member s
         },
         context,
       ),
-    /Product Owner ve Team Member/,
+    /Product Owner, Team Member ve CoE/,
   );
   assert.throws(
     () =>
@@ -557,3 +561,136 @@ test("linked AD employee commands retain the authoritative account name while lo
     "Manual override",
   );
 });
+
+for (const status of ["Aktif İlan", "Pasif İlan"]) {
+  test(`${status}: a nameless posting saves without an employee role and respects capacity rules`, () => {
+    const data = freeze(fixture());
+    const editor = freeze({
+      baseRevisions: captureEditorRevisions(data),
+      kind: "resource",
+      isNew: true,
+      assignmentKind: "leader", // A previously selected hidden role must not redirect the vacancy.
+      value: { id: "posting", name: "", note: "", versions: [] },
+      version: {
+        ...version,
+        status,
+        assignmentRole: "leader",
+        start: "2026-10-16",
+        included: true,
+      },
+    });
+    const changes = prepareEditorChanges(data, editor, context);
+    const saved = structuredClone(data);
+    applyChanges(saved, admin, changes);
+    validate(saved);
+    const posting = saved.resources.find((r) => r.id === "posting");
+    assert.equal(posting.name, status);
+    const v = posting.versions[0];
+    assert.equal(v.team, "t");
+    assert.equal(v.assignmentRole, undefined);
+    assert.equal(v.start, status === "Aktif İlan" ? "2026-10-16" : "");
+    assert.equal(v.included, status === "Aktif İlan");
+    const capacity = buildCapacityIndex(saved, ["2026-10"])["t|2026-10"]
+      .current;
+    assert.equal(capacity, status === "Aktif İlan" ? 1 + 16 / 31 : 1);
+    assert.equal(editor.value.name, "");
+    assert.equal(editor.version.included, true);
+  });
+}
+
+test("active postings still require an estimated start only when included in planning", () => {
+  const data = fixture();
+  const editor = {
+    baseRevisions: captureEditorRevisions(data),
+    kind: "resource",
+    isNew: true,
+    value: { id: "posting", name: "", note: "", versions: [] },
+    version: { ...version, status: "Aktif İlan", start: "", included: true },
+  };
+  assert.throws(
+    () => prepareEditorChanges(data, editor, context),
+    /İşbaşı Tarihi/,
+  );
+  const changes = prepareEditorChanges(
+    data,
+    {
+      ...editor,
+      version: { ...editor.version, included: false },
+    },
+    context,
+  );
+  const saved = structuredClone(data);
+  applyChanges(saved, admin, changes);
+  validate(saved);
+  assert.equal(saved.resources.at(-1).versions[0].included, false);
+});
+
+test("switching an existing employee to passive posting keeps the name and previous employment history", () => {
+  const data = fixture();
+  const resource = data.resources[0];
+  const editor = {
+    baseRevisions: captureEditorRevisions(data),
+    kind: "resource",
+    isNew: false,
+    value: resource,
+    version: { ...version, effective: "2026-10", status: "Pasif İlan" },
+  };
+  const changes = prepareEditorChanges(data, editor, context);
+  const saved = structuredClone(data);
+  applyChanges(saved, admin, changes);
+  validate(saved);
+  assert.equal(saved.resources[0].name, resource.name);
+  assert.deepEqual(saved.resources[0].versions[0], resource.versions[0]);
+  assert.equal(saved.resources[0].versions[1].included, false);
+  assert.equal(saved.resources[0].versions[1].start, "");
+});
+
+for (const status of [
+  "Aktif Çalışan",
+  "Gear Up",
+  "SAAT Ücretli Ofis Ç.",
+  "İşten Ayrıldı",
+  "Aktif İlan",
+  "Pasif İlan",
+]) {
+  test(`${status}: assignment follows the selected team's leadership and clears stale leadership for independent teams`, () => {
+    const data = fixture();
+    data.teams.push({ id: "b", name: "Team B", lead: "B", excelCapacity: 0 });
+    const editor = {
+      kind: "resource",
+      baseRevisions: captureEditorRevisions(data),
+      isNew: true,
+      assignmentKind: "productOwner",
+      value: {
+        id: "new",
+        name: status.includes("İlan") ? "" : "Synthetic",
+        note: "",
+        versions: [],
+      },
+      version: {
+        ...version,
+        team: "b",
+        lead: "A",
+        status,
+        end: status === "İşten Ayrıldı" ? "2026-12-31" : "",
+      },
+    };
+    for (const [team, lead] of [
+      ["b", "B"],
+      ["unassigned", ""],
+    ]) {
+      const changes = prepareEditorChanges(
+        data,
+        { ...editor, version: { ...editor.version, team } },
+        context,
+      );
+      assert.equal(changes.length, 1);
+      assert.equal(changes[0].kind, "resource");
+      assert.equal(changes[0].value.versions[0].lead, lead);
+      const saved = structuredClone(data);
+      applyChanges(saved, admin, changes);
+      validate(saved);
+      assert.deepEqual(saved.teams, data.teams);
+    }
+  });
+}

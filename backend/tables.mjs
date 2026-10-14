@@ -194,6 +194,10 @@ export const tables = {
     key: ["user_id", "leader_name"],
     columns: { user_id: "nvarchar(120)", leader_name: "nvarchar(200)" },
   },
+  user_planning_teams: {
+    key: ["user_id", "team_id"],
+    columns: { user_id: "nvarchar(120)", team_id: "nvarchar(120)" },
+  },
   sessions: {
     key: ["token_hash"],
     columns: {

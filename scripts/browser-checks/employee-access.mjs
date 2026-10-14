@@ -226,7 +226,6 @@ export async function checkEmployeeAccess(f) {
         await dialog()
           .getByLabel("Ad Soyad", { exact: true })
           .fill("Manual name to replace");
-        await choose("Liderlik", f.teamA.lead);
         await choose("Takım", f.teamA.name);
         await dialog()
           .getByLabel("Hesap Eşleştirmesi", { exact: true })
@@ -313,7 +312,7 @@ export async function checkEmployeeAccess(f) {
       "employee access: conflict preserves resource and permission drafts",
       async () => {
         await edit("Directory New Account");
-        const note = dialog().getByRole("textbox", { name: /^İK Notu/ });
+        const note = dialog().getByRole("textbox", { name: /^Açıklama/ });
         await note.fill("QA Preserved Draft");
         await dialog()
           .getByLabel("Rol", { exact: true })

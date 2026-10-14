@@ -25,6 +25,16 @@ export function selectedLeadershipScope(
   }
   return result;
 }
+
+/** The same parent/descendant filter for workspace and assignment pickers. */
+export function leadershipScopedUnits(
+  data: Hierarchy,
+  units: readonly Team[],
+  selected: readonly string[],
+): Team[] {
+  const scope = selectedLeadershipScope(data, selected, true);
+  return units.filter((unit) => !selected.length || scope.has(unit.lead));
+}
 /** Keep each unit exactly once, in parent/child pre-order. Never synthesize capacity owners. */
 export function orderedPlanningUnits(
   data: Hierarchy,

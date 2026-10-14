@@ -1,6 +1,9 @@
-import { directoryResponsibilityIndex } from "../../../shared/resource-roles";
 import { currentPlanningDate } from "../../../shared/resource-dates";
-import { ownValue } from "../../../shared/records";
+import { organizationPickerItems } from "./organization-picker-items";
+import {
+  useFilterAppliedToast,
+  type FilterNotice,
+} from "./workspace/useFilterAppliedToast";
 import { useMemo } from "react";
 import { selectedLeadershipScope } from "../../../shared/leadership-planning";
 import type { Dispatch, SetStateAction } from "react";
@@ -71,14 +74,29 @@ export default function WorkspaceFilters({
   notice,
 }: Props) {
   const isAdmin = user?.role === "admin";
+  const { notify, toast } = useFilterAppliedToast();
+  function applySelection(
+    current: string[],
+    next: string[],
+    set: (value: string[]) => void,
+    kind: FilterNotice,
+  ) {
+    if (
+      current.length === next.length &&
+      current.every((id) => next.includes(id))
+    )
+      return;
+    set(next);
+    notify(kind);
+  }
   const today = currentPlanningDate();
-  const responsibility = useMemo(
-    () => directoryResponsibilityIndex(data, today),
-    [data, today],
+  const organizationItems = useMemo(
+    () => organizationPickerItems(data, leaderItems, availableTeams, today),
+    [data, leaderItems, availableTeams, today],
   );
   return (
     <>
-      {!["access", "teams", "critical", "risk"].includes(tab) && (
+      {!["access", "teams", "critical", "risk", "resources"].includes(tab) && (
         <>
           <div
             className="planning-filterbar"
@@ -95,6 +113,11 @@ export default function WorkspaceFilters({
                   label="Liderlik"
                   value={leads}
                   onChange={(v) => {
+                    if (
+                      leads.length === v.length &&
+                      leads.every((id) => v.includes(id))
+                    )
+                      return;
                     setLeads(v);
                     const selected = selectedLeadershipScope(data, v, true);
                     setTeamIds((old) =>
@@ -106,29 +129,28 @@ export default function WorkspaceFilters({
                           ),
                       ),
                     );
+                    notify("leader");
                   }}
-                  items={leaderItems.map((item) => ({
-                    ...item,
-                    description: ownValue(responsibility.leaders, item.id),
-                  }))}
+                  items={organizationItems.leaders}
                 />
               )}
               {tab !== "projects" && (
                 <Picker
                   label="Takım"
                   value={teamIds}
-                  onChange={setTeamIds}
-                  items={availableTeams.map((team) => ({
-                    ...team,
-                    description: ownValue(responsibility.teams, team.id),
-                  }))}
+                  onChange={(v) =>
+                    applySelection(teamIds, v, setTeamIds, "team")
+                  }
+                  items={organizationItems.teams}
                 />
               )}
               {tab !== "resources" && tab !== "overview" && (
                 <Picker
                   label="Proje"
                   value={projectIds}
-                  onChange={setProjectIds}
+                  onChange={(v) =>
+                    applySelection(projectIds, v, setProjectIds, "project")
+                  }
                   items={data.projects}
                 />
               )}
@@ -136,7 +158,9 @@ export default function WorkspaceFilters({
                 <Picker
                   label="Kişi"
                   value={personIds}
-                  onChange={setPersonIds}
+                  onChange={(v) =>
+                    applySelection(personIds, v, setPersonIds, "person")
+                  }
                   items={availablePeople}
                 />
               )}
@@ -151,9 +175,12 @@ export default function WorkspaceFilters({
                     if (
                       validPlanningMonth(e.target.value) &&
                       e.target.value >= MIN_PLANNING_MONTH &&
-                      e.target.value <= MAX_FILTER_START
-                    )
+                      e.target.value <= MAX_FILTER_START &&
+                      e.target.value !== start
+                    ) {
                       setStart(e.target.value);
+                      notify("startMonth");
+                    }
                   }}
                 />
               </label>
@@ -162,9 +189,11 @@ export default function WorkspaceFilters({
                 <select
                   value={count}
                   onChange={(e) => {
+                    if (Number(e.target.value) === count) return;
                     setCount(Number(e.target.value));
                     if (Number(e.target.value) !== 60 && density === "overview")
                       setDensity("detail");
+                    notify("period");
                   }}
                 >
                   {periods.map((n) => (
@@ -179,7 +208,10 @@ export default function WorkspaceFilters({
               <button
                 className="button resetfilters"
                 title="Tüm seçimleri ve aramaları temizler; varsayılan döneme döner."
-                onClick={resetFilters}
+                onClick={() => {
+                  resetFilters();
+                  notify("reset");
+                }}
               >
                 Filtreleri Sıfırla
               </button>
@@ -204,6 +236,7 @@ export default function WorkspaceFilters({
           )}
         </>
       )}
+      {toast}
     </>
   );
 }

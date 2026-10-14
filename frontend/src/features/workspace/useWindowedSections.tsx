@@ -51,7 +51,7 @@ export function useWindowedSections(
       const focused = document.activeElement?.closest<HTMLElement>(
         "tbody[data-window-key]",
       );
-      setViewport({
+      const next = {
         top: container.scrollTop,
         height: container.clientHeight,
         held: [
@@ -69,10 +69,25 @@ export function useWindowedSections(
             ].filter(Boolean),
           ),
         ],
-      });
+      };
+      setViewport((previous) =>
+        previous.top === next.top &&
+        previous.height === next.height &&
+        previous.held.length === next.held.length &&
+        previous.held.every((key, i) => key === next.held[i])
+          ? previous
+          : next,
+      );
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(update);
+    };
+    let scrollTop = container.scrollTop;
+    const onScroll = () => {
+      const nextTop = container.scrollTop;
+      if (nextTop === scrollTop) return;
+      scrollTop = nextTop;
+      schedule();
     };
     const hold = (event: PointerEvent) => {
       held =
@@ -87,7 +102,7 @@ export function useWindowedSections(
     };
     const observer = new ResizeObserver(schedule);
     observer.observe(container);
-    container.addEventListener("scroll", schedule, { passive: true });
+    container.addEventListener("scroll", onScroll, { passive: true });
     container.addEventListener("pointerdown", hold);
     container.addEventListener("focusin", schedule);
     container.addEventListener("focusout", schedule);
@@ -97,7 +112,7 @@ export function useWindowedSections(
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      container.removeEventListener("scroll", schedule);
+      container.removeEventListener("scroll", onScroll);
       container.removeEventListener("pointerdown", hold);
       container.removeEventListener("focusin", schedule);
       container.removeEventListener("focusout", schedule);

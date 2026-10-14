@@ -77,7 +77,7 @@ export default function AbsenceReport({
           </p>
           <p>
             {months.length
-              ? `${monthLabel(months[0])} – ${monthLabel(months.at(-1)!)} · ${teamIds.length} takım · Üstteki liderlik, takım ve dönem filtreleri uygulanır.`
+              ? `${monthLabel(months[0])} – ${monthLabel(months.at(-1)!)} · ${teamIds.length} takım · Kaynak planlama ekranlarında seçilen liderlik, takım ve rapor dönemi uygulanır.`
               : "Dönem seçilmedi."}
           </p>
         </div>

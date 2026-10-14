@@ -241,6 +241,14 @@
 .editor .resource-editor-form .pick-compact > span {
   font-size: 11px;
 }
+.editor .resource-derived-leadership {
+  font-size: 11px;
+}
+.editor .resource-editor-form .resource-derived-leadership input {
+  font-size: 11px;
+  background: var(--brand-surface-soft, #f6f8f4);
+  cursor: default;
+}
 .editor .resource-editor-form .pick-compact .pickerbutton {
   height: auto;
   min-height: 36px;
@@ -267,5 +275,10 @@
 }
 .pickerpanel.pickerpanel-compact .option {
   white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.app.tab-resources .resource-table .resource-description {
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }

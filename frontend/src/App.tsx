@@ -35,6 +35,7 @@ import { useActualView } from "./features/actual-allocation/useActualView";
 import { useActivityReport } from "./features/activity-report/useActivityReport";
 import MonthlyActivityReport from "./features/activity-report/MonthlyActivityReport";
 import WorkspaceReports from "./features/workspace/WorkspaceReports";
+import ActivePostingPlanningToggle from "./features/workspace/ActivePostingPlanningToggle";
 import AccessPanel from "./AccessPanel";
 import PortalEditorDialog from "./features/PortalEditorDialog";
 import { usePlannedGrid } from "./features/usePlannedGrid";
@@ -92,7 +93,6 @@ export default function Portal() {
   } = usePortalData(assertSessionRef);
   const isAdmin = user?.role === "admin";
   const isManager = user?.role === "manager";
-  const readOnlyAllLeaders = !isAdmin && !(isManager && !!user?.leaders.length);
   const {
     tab,
     defaultTab,
@@ -214,7 +214,7 @@ export default function Portal() {
     saving,
     start,
     count,
-    leads,
+    leads: tab === "resources" ? [] : leads,
     resourceIds,
     batch,
     saveEmployee,
@@ -563,8 +563,17 @@ export default function Portal() {
                       },
                     ]}
                   />
+                  {tab === "overview" && (
+                    <ActivePostingPlanningToggle
+                      data={data}
+                      canEdit={!!isAdmin}
+                      saving={saving}
+                      onSave={batch}
+                      onError={setError}
+                    />
+                  )}
                 </div>
-              ) : tab !== "resources" || organizationView === "employees" ? (
+              ) : tab !== "resources" ? (
                 workspaceFilters
               ) : null}
               {(isAdmin || isManager) && tab === "plan" && (
@@ -818,9 +827,6 @@ export default function Portal() {
                             access={access}
                             data={data}
                             start={start}
-                            ids={ids}
-                            teamIds={teamIds}
-                            leads={leads}
                             search={search}
                             onSearchChange={setSearch}
                             page={resourcePage}
@@ -830,6 +836,7 @@ export default function Portal() {
                             showImport={showImport}
                             onImportVisibilityChange={setShowImport}
                             saving={saving}
+                            notice={notice}
                             onEdit={openResource}
                             onBulkEdit={openBulk}
                             onDelete={deleteResources}

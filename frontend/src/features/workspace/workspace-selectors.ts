@@ -1,7 +1,7 @@
 import { orderedLeaderships } from "../../../../shared/leadership-hierarchy.ts";
 import {
   orderedPlanningUnits,
-  selectedLeadershipScope,
+  leadershipScopedUnits,
 } from "../../../../shared/leadership-planning.ts";
 import { topLevelReportGroups } from "../resource-report-groups.ts";
 import type { Data, Team, Project } from "../../model.ts";
@@ -29,10 +29,9 @@ export function selectWorkspaceScope(
   },
 ) {
   const allLeads = data?.leaders || [];
-  const selectedLeaders = selectedLeadershipScope(data || {}, leads, true);
-  const availableUnits =
-    data?.teams.filter((t) => !leads.length || selectedLeaders.has(t.lead)) ||
-    [];
+  const availableUnits = data
+    ? leadershipScopedUnits(data, data.teams, leads)
+    : [];
   const availableTeams = availableUnits.filter(
     (team) => team.kind !== "leadership",
   );

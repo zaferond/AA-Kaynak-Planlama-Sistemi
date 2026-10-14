@@ -68,6 +68,7 @@ test("old resource roles remain compatible and explicit roles must match real te
     ["leader", "unit"],
     ["productOwner", "t"],
     ["member", "t"],
+    ["coe", "t"],
   ])
     assert.equal(
       validate(fixture(person("p", role, { team }))).resources[0].versions[0]
@@ -78,6 +79,8 @@ test("old resource roles remain compatible and explicit roles must match real te
     ["leader", "t"],
     ["productOwner", "unit"],
     ["member", "unit"],
+    ["coe", "unit"],
+    ["coe", ""],
     ["productOwner", ""],
   ])
     assert.throws(
@@ -426,8 +429,8 @@ test("planning unit managers derive team Product Owners and leadership Leaders w
   });
 });
 
-test("Team Member and Product Owner can save with only a team, including independent teams", () => {
-  for (const role of ["member", "productOwner"]) {
+test("Team Member, Product Owner and CoE can save with only a team, including independent teams", () => {
+  for (const role of ["member", "productOwner", "coe"]) {
     for (const standalone of [false, true]) {
       const d = fixture();
       if (standalone) d.teams.find((t) => t.id === "t").lead = "";
@@ -494,4 +497,31 @@ test("independent Product Owners still conflict and leader assignments still req
   assert.doesNotThrow(() =>
     validate({ ...one, resources: [changes[0].value] }),
   );
+});
+
+test("CoE behaves like a member: multiple assignments allowed, no directory manager or extra access", async () => {
+  const { scopeData } = await import("../shared/access.ts");
+  const { resourceCapacity } = await import("../shared/model.ts");
+  const d = fixture(
+    person("coe-a", "coe"),
+    person("coe-b", "coe"),
+    person("peer", "member"),
+  );
+  const valid = validate(d);
+  assert.deepEqual(directoryResponsibilityIndex(valid, "2026-10-14"), {
+    leaders: {},
+    teams: {},
+  });
+  assert.equal(
+    resourceCapacity(valid.resources[0].versions[0], "2026-10"),
+    resourceCapacity(valid.resources[2].versions[0], "2026-10"),
+  );
+  const user = { id: "u", role: "normal", resourceId: "coe-a", leaders: [] };
+  const member = structuredClone(valid);
+  member.resources[0].versions[0].assignmentRole = "member";
+  const coeScope = scopeData(valid, user),
+    memberScope = scopeData(member, user);
+  coeScope.resources.find((r) => r.id === "coe-a").versions[0].assignmentRole =
+    "member";
+  assert.deepEqual(coeScope, memberScope);
 });

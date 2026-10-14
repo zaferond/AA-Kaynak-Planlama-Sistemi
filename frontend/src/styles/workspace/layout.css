@@ -645,6 +645,32 @@ html {
   zoom: 90%;
 }
 
+.filter-applied-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 120;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 40px);
+  padding: 11px 16px;
+  border: 1px solid #a7cbb0;
+  border-radius: 10px;
+  background: #f3faf4;
+  color: #28633a;
+  box-shadow: 0 5px 20px rgb(31 69 41 / 14%);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  pointer-events: none;
+}
+.filter-applied-toast.filter-reset-toast {
+  border-color: #b8cbe1;
+  background: #f2f6fc;
+  color: #365e90;
+  box-shadow: 0 5px 20px rgb(45 72 107 / 14%);
+}
 .write-recovery-notice {
   display: flex;
   align-items: center;

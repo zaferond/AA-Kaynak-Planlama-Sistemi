@@ -26,6 +26,20 @@ export async function persistPlanningSnapshot(
           ". Önce Yetki Kontrol Ekranı'ndaki liderlik eşleştirmelerini güncelleyin.",
       );
   }
+  const nextTeamIds = new Set(next.teams.map((team) => team.id));
+  const removedTeams = new Set(
+    before.teams.filter((team) => !nextTeamIds.has(team.id)).map((t) => t.id),
+  );
+  if (
+    removedTeams.size &&
+    (
+      await c.query("SELECT DISTINCT team_id FROM kp_user_planning_teams")
+    ).rows.some((row) => removedTeams.has(row.team_id))
+  )
+    fail(
+      409,
+      "Kaldırılacak takım veya liderlik kaynak satırı kullanıcı yetkilerinde kullanılıyor. Önce Çalışan & Yetki Tanımlama ekranından takım yetkisini kaldırın.",
+    );
   const changed = dataChanges(before, next, { settings });
   await c.upsert(
     "leaders",

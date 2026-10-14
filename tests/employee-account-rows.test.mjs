@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { employeeAccountRows } from "../frontend/src/features/access/employee-account-rows.ts";
+import {
+  employeeAccountRows,
+  employeeSearchField,
+} from "../frontend/src/features/access/employee-account-rows.ts";
 const account = (id, resourceId = "", patch = {}) => ({
   id,
   resourceId,
@@ -94,4 +97,26 @@ test("root leadership filters retain authorized descendant employees without adm
   assert(rows.some((r) => r.resource?.id === "a"));
   assert(!rows.some((r) => r.resource?.id === "b"));
   assert(rows.some((r) => r.account?.id === "root-admin"));
+});
+
+test("quick search matches team names, actual team leadership and ancestor leadership without mutating records", () => {
+  const d = data();
+  d.leaders = ["Engineering", "A", "B"];
+  d.leaderParents = { A: "Engineering" };
+  d.teams[0].name = "Yapısal Tasarım";
+  d.resources[0].versions[0].lead = "";
+  const before = structuredClone(d);
+  for (const search of ["yapisal tasarim", " Engineering ", "A"]) {
+    const rows = employeeAccountRows(d, { ...filter, search });
+    assert(rows.some((r) => r.resource?.id === "a"));
+  }
+  assert(
+    !employeeAccountRows(d, { ...filter, search: "Engineering" }).some(
+      (r) => r.resource?.id === "b",
+    ),
+  );
+  assert.equal(employeeSearchField(d, "yapisal"), "team");
+  assert.equal(employeeSearchField(d, "Engineering"), "leader");
+  assert.equal(employeeSearchField(d, "Worker a"), "search");
+  assert.deepEqual(d, before);
 });

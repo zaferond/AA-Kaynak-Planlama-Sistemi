@@ -1,4 +1,6 @@
 import { directoryEmployeeName } from "../access/employee-access-draft";
+import { organizationPickerItems } from "../organization-picker-items";
+import { currentPlanningDate } from "../../../../shared/resource-dates";
 import {
   resourceRole,
   resourceRoleLabels,
@@ -30,93 +32,133 @@ export default function ResourceEditorFields({
 }: Props) {
   const directoryName = directoryEmployeeName(data, editor.account?.form);
   const directoryManaged = directoryName !== undefined;
-  const assignmentKind =
-    editor.assignmentKind ||
-    resourceRole({ teams: data?.teams || [] }, editor.version);
+  const posting =
+    editor.version.status === "Aktif İlan" ||
+    editor.version.status === "Pasif İlan";
+  const passivePosting = editor.version.status === "Pasif İlan";
+  const assignmentKind = posting
+    ? "member"
+    : editor.assignmentKind ||
+      resourceRole({ teams: data?.teams || [] }, editor.version);
+  const selectedTeam = data?.teams.find(
+    (team) => team.id === editor.version.team,
+  );
   const startDateLabel =
     editor.version.status === "Aktif İlan" ||
     editor.version.status === "Pasif İlan"
       ? "Tahmini İşbaşı Tarihi"
       : "İşbaşı Tarihi";
+  const organizationItems = data
+    ? organizationPickerItems(
+        data,
+        leaderItems,
+        editTeams.filter((team) => team.kind !== "leadership"),
+        currentPlanningDate(),
+      )
+    : { leaders: [], teams: [] };
   return (
     <>
-      <label>
-        Ad Soyad
-        <input
-          maxLength={200}
-          autoFocus
-          value={directoryName ?? editor.value.name}
-          readOnly={directoryManaged}
-          aria-readonly={directoryManaged || undefined}
-          placeholder={directoryManaged ? "AD kullanıcısı seçin" : undefined}
-          title={
-            directoryManaged
-              ? "Ad Soyad Active Directory tarafından yönetilir."
-              : undefined
-          }
-          onChange={(e) =>
-            !directoryManaged &&
-            setEditor({
-              ...editor,
-              value: { ...editor.value, name: e.target.value },
-            })
-          }
-        />
-      </label>
-      <label>
-        Kaynak Rolü
-        <select
-          aria-label="Kaynak Rolü"
-          value={assignmentKind}
-          onChange={(event) => {
-            const next = event.target.value as ResourceRole;
-            setEditor({
-              ...editor,
-              assignmentKind: next,
-              version: {
-                ...editor.version,
-                assignmentRole: next,
-                team:
+      <Single
+        label="Statü"
+        value={editor.version.status}
+        onChange={chooseResourceStatus}
+        items={statuses.map((s) => ({ id: s, name: s }))}
+      />
+      {!posting && (
+        <>
+          <label>
+            Ad Soyad
+            <input
+              maxLength={200}
+              autoFocus
+              value={directoryName ?? editor.value.name}
+              readOnly={directoryManaged}
+              aria-readonly={directoryManaged || undefined}
+              placeholder={
+                directoryManaged ? "AD kullanıcısı seçin" : undefined
+              }
+              title={
+                directoryManaged
+                  ? "Ad Soyad Active Directory tarafından yönetilir."
+                  : undefined
+              }
+              onChange={(e) =>
+                !directoryManaged &&
+                setEditor({
+                  ...editor,
+                  value: { ...editor.value, name: e.target.value },
+                })
+              }
+            />
+          </label>
+          <label>
+            Kaynak Rolü
+            <select
+              aria-label="Kaynak Rolü"
+              value={assignmentKind}
+              onChange={(event) => {
+                const next = event.target.value as ResourceRole;
+                const lead =
                   next === "leader"
-                    ? ownValue(
-                        data?.leadershipUnits,
-                        editor.version.lead || "",
-                      ) || ""
+                    ? selectedTeam?.lead || editor.version.lead || ""
                     : assignmentKind === "leader"
                       ? ""
-                      : editor.version.team,
-              },
-            });
-          }}
-        >
-          {Object.entries(resourceRoleLabels).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </label>
+                      : selectedTeam?.lead || "";
+                setEditor({
+                  ...editor,
+                  assignmentKind: next,
+                  version: {
+                    ...editor.version,
+                    assignmentRole: next,
+                    lead,
+                    team:
+                      next === "leader"
+                        ? ownValue(data?.leadershipUnits, lead) || ""
+                        : assignmentKind === "leader"
+                          ? ""
+                          : editor.version.team,
+                  },
+                });
+              }}
+            >
+              {Object.entries(resourceRoleLabels).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
       <div className="resource-form-grid">
-        <Single
-          label="Liderlik"
-          compact
-          empty={assignmentKind === "leader" ? "Seçin" : "İsteğe bağlı"}
-          value={editor.version.lead || ""}
-          onChange={(l) =>
-            setEditor({
-              ...editor,
-              version: {
-                ...editor.version,
-                lead: l,
-                team:
-                  assignmentKind === "leader"
-                    ? ownValue(data?.leadershipUnits, l) || ""
-                    : "",
-              },
-            })
-          }
-          items={leaderItems}
-        />
+        {assignmentKind === "leader" ? (
+          <Single
+            label="Liderlik"
+            compact
+            value={editor.version.lead || ""}
+            onChange={(lead) =>
+              setEditor({
+                ...editor,
+                version: {
+                  ...editor.version,
+                  lead,
+                  team: ownValue(data?.leadershipUnits, lead) || "",
+                },
+              })
+            }
+            items={organizationItems.leaders}
+          />
+        ) : (
+          <label className="resource-derived-leadership">
+            Liderlik
+            <input
+              type="text"
+              value={selectedTeam?.lead || ""}
+              readOnly
+              placeholder={selectedTeam ? "Liderlik atanmamış" : "Takım seçin"}
+            />
+          </label>
+        )}
         {assignmentKind !== "leader" && (
           <Single
             label="Takım"
@@ -128,23 +170,11 @@ export default function ResourceEditorFields({
                 version: {
                   ...editor.version,
                   team: t,
-                  lead:
-                    data?.teams.find((x) => x.id === t)?.lead ||
-                    editor.version.lead ||
-                    "",
+                  lead: data?.teams.find((x) => x.id === t)?.lead || "",
                 },
               })
             }
-            items={editTeams
-              .filter(
-                (t) =>
-                  t.kind !== "leadership" &&
-                  (!editor.version.lead || t.lead === editor.version.lead),
-              )
-              .map((t) => ({
-                ...t,
-                name: t.name + (!t.lead ? " (Bağımsız takım)" : ""),
-              }))}
+            items={organizationItems.teams}
           />
         )}
       </div>
@@ -154,97 +184,66 @@ export default function ResourceEditorFields({
           hesaplanır. Kullanıcı yetkisi ayrıca tanımlanır.
         </small>
       )}
-      {editor.version.team &&
-        !data?.teams.find((t) => t.id === editor.version.team)?.lead && (
+      {!passivePosting && (
+        <>
+          <div className="resource-date-grid">
+            <label>
+              {startDateLabel}
+              <input
+                type="date"
+                value={editor.version.start}
+                onChange={(e) =>
+                  setEditor({
+                    ...editor,
+                    version: {
+                      ...editor.version,
+                      start: e.target.value,
+                    },
+                  })
+                }
+              />
+            </label>
+            {editor.version.status === "İşten Ayrıldı" && (
+              <label>
+                İşten Ayrılış Tarihi
+                <input
+                  type="date"
+                  value={editor.version.end}
+                  onChange={(e) =>
+                    setEditor({
+                      ...editor,
+                      version: {
+                        ...editor.version,
+                        end: e.target.value,
+                      },
+                    })
+                  }
+                />
+              </label>
+            )}
+          </div>
           <small>
-            {editor.version.lead
-              ? "Bu takım seçtiğiniz liderliğe bağlanacak."
-              : "Bu kaynak bağımsız takıma kaydedilecek; liderlik seçimi zorunlu değildir."}
+            Aktif İlan için Tahmini İşbaşı Tarihi boş başlar; diğer statülerde
+            bu yılın 1 Ocak günü önerilir. Tarihi değiştirebilirsiniz. İşten
+            Ayrıldı için iki tarih, dahil edilen Aktif İlan için Tahmini İşbaşı
+            Tarihi zorunludur. İşbaşı ve ayrılış ayları gün oranıyla hesaplanır.
           </small>
-        )}
-      <div className="resource-form-grid">
-        <Single
-          label="Statü"
-          value={editor.version.status}
-          onChange={chooseResourceStatus}
-          items={statuses.map((s) => ({ id: s, name: s }))}
-        />
-        <label>
-          Kişi Eşdeğeri
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="0.05"
-            value={editor.version.amount}
-            onChange={(e) =>
-              setEditor({
-                ...editor,
-                version: {
-                  ...editor.version,
-                  amount: Number(e.target.value),
-                },
-              })
-            }
-          />
-        </label>
-      </div>
-      <div className="resource-date-grid">
-        <label>
-          {startDateLabel}
-          <input
-            type="date"
-            value={editor.version.start}
-            onChange={(e) =>
-              setEditor({
-                ...editor,
-                version: {
-                  ...editor.version,
-                  start: e.target.value,
-                },
-              })
-            }
-          />
-        </label>
-        {editor.version.status === "İşten Ayrıldı" && (
-          <label>
-            İşten Ayrılış Tarihi
-            <input
-              type="date"
-              value={editor.version.end}
-              onChange={(e) =>
+          <label className="switchrow">
+            <Switch
+              checked={editor.version.included}
+              onCheckedChange={(v) =>
                 setEditor({
                   ...editor,
-                  version: {
-                    ...editor.version,
-                    end: e.target.value,
-                  },
+                  version: { ...editor.version, included: v },
                 })
               }
             />
+            Kaynak Planlamasına Dahil
           </label>
-        )}
-      </div>
-      <small>
-        İlanlarda Tahmini İşbaşı Tarihi boş başlar; diğer statülerde bu yılın 1
-        Ocak günü önerilir. Tarihi değiştirebilirsiniz. İşten Ayrıldı için iki
-        tarih, dahil edilen Aktif İlan için Tahmini İşbaşı Tarihi zorunludur.
-        İşbaşı ve ayrılış ayları gün oranıyla hesaplanır.
-      </small>
-      <label className="switchrow">
-        <Switch
-          checked={editor.version.included}
-          onCheckedChange={(v) =>
-            setEditor({
-              ...editor,
-              version: { ...editor.version, included: v },
-            })
-          }
-        />
-        Kaynak Planlamasına Dahil
-      </label>
+        </>
+      )}
       <label>
-        İK Notu
+        Açıklama
         <textarea
           rows={3}
           value={editor.value.note}

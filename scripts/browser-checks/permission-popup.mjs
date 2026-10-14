@@ -172,7 +172,9 @@ export async function checkPermissionPopup(f) {
         for (const cell of await table.locator("th,td").all()) {
           assert.equal(
             await cell.evaluate((el) => getComputedStyle(el).whiteSpace),
-            "normal",
+            (await cell.getAttribute("class"))?.includes("resource-description")
+              ? "pre-wrap"
+              : "normal",
           );
           assert.equal(
             await cell.evaluate((el) => getComputedStyle(el).overflowWrap),

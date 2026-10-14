@@ -93,7 +93,6 @@ export async function checkLeadershipFilterRoots(f) {
           "AA Kaynak Planlama Raporları",
           "AA Gerçekleşen Kaynak Dağılımı",
           "AA Aylık Aktivite Raporu",
-          "Çalışan & Yetki Tanımlama",
         ]) {
           await selectWorkspaceTab(page, tab);
           const panel = await open("Liderlik");
@@ -184,17 +183,6 @@ export async function checkLeadershipFilterRoots(f) {
             );
           }
           await page.keyboard.press("Escape");
-          if (tab === "Çalışan & Yetki Tanımlama") {
-            for (const resource of resources.slice(0, 2))
-              await page
-                .getByText(resource.name, { exact: true })
-                .first()
-                .waitFor();
-            assert.equal(
-              await page.getByText(resources[2].name, { exact: true }).count(),
-              0,
-            );
-          }
           if (tab === "AA Aylık Aktivite Raporu")
             await page
               .locator('[data-activity-resource="qa-filter-worker-1"]')
@@ -242,8 +230,7 @@ export async function checkLeadershipFilterRoots(f) {
       "permission grants: manager hierarchy matches filters and searching does not add parent grants",
       async () => {
         await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
-        await select("Liderlik", []);
-        await select("Takım", []);
+        assert.equal(await page.locator(".planning-filterbar").count(), 0);
         await page
           .locator('tr[data-account-id="employee"]')
           .getByRole("button", { name: "Düzenle", exact: true })
@@ -283,17 +270,29 @@ export async function checkLeadershipFilterRoots(f) {
                 .getAttribute("data-leadership-depth"),
             ),
         );
+        await grants
+          .getByRole("button", { name: "Seçimi Temizle", exact: true })
+          .click();
         const initialChecked = await grants
           .locator('input[type="checkbox"]:checked')
           .count();
         await grants
-          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .getByRole("textbox", {
+            name: "Liderlik veya takım ara",
+            exact: true,
+          })
           .fill(grand);
-        assert.equal(await grants.getByRole("checkbox").count(), 1);
+        assert.equal(
+          await grants.locator('[data-permission-kind="leader"] input').count(),
+          3,
+        );
         await grandBox.check();
         await grandBox.uncheck();
         await grants
-          .getByRole("textbox", { name: "Liderlik ara", exact: true })
+          .getByRole("textbox", {
+            name: "Liderlik veya takım ara",
+            exact: true,
+          })
           .fill("");
         assert.equal(
           await grants.locator('input[type="checkbox"]:checked').count(),
@@ -316,6 +315,7 @@ export async function checkLeadershipFilterRoots(f) {
             exact: true,
           })
           .click();
+        await select("Takım", []);
         await select("Liderlik", []);
         const report = page.locator(".leader-report");
         for (const team of units.slice(2))
@@ -386,10 +386,10 @@ export async function checkLeadershipFilterRoots(f) {
       },
     );
     await f.check(
-      "resource editor filters: choosing a leadership hides unassigned teams in single and bulk editors",
+      "resource editor: team drives read-only leadership without narrowing teams; bulk editor retains its filter",
       async () => {
         await selectWorkspaceTab(page, "Çalışan & Yetki Tanımlama");
-        await select("Liderlik", []);
+        assert.equal(await page.locator(".planning-filterbar").count(), 0);
         const dialog = page.getByRole("dialog");
         const chooseSingle = async (label, value) => {
           await dialog
@@ -434,10 +434,35 @@ export async function checkLeadershipFilterRoots(f) {
           })
           .click();
         await checkTeams("Takım", false);
-        await chooseSingle("Liderlik", f.teamA.lead);
-        await checkTeams("Takım", true);
-        await chooseSingle("Liderlik", "İsteğe bağlı");
+        assert.equal(
+          await dialog
+            .getByRole("button", { name: "Liderlik", exact: true })
+            .count(),
+          0,
+        );
+        assert.equal(
+          await dialog
+            .getByLabel("Liderlik", { exact: true })
+            .getAttribute("readonly"),
+          "",
+        );
+        await chooseSingle("Takım", f.teamA.name);
+        assert.equal(
+          await dialog.getByLabel("Liderlik", { exact: true }).inputValue(),
+          f.teamA.lead,
+        );
         await checkTeams("Takım", false);
+        await chooseSingle("Takım", f.teamB.name);
+        assert.equal(
+          await dialog.getByLabel("Liderlik", { exact: true }).inputValue(),
+          f.teamB.lead,
+        );
+        await checkTeams("Takım", false);
+        await chooseSingle("Takım", "Seçin");
+        assert.equal(
+          await dialog.getByLabel("Liderlik", { exact: true }).inputValue(),
+          "",
+        );
         await dialog
           .getByRole("button", { name: "Close", exact: true })
           .click();
@@ -473,6 +498,9 @@ export async function checkLeadershipFilterRoots(f) {
           })
           .click();
         const dialog = page.getByRole("dialog");
+        await dialog
+          .getByLabel("Kaynak Rolü", { exact: true })
+          .selectOption("leader");
         await dialog
           .getByRole("button", { name: "Liderlik", exact: true })
           .click();

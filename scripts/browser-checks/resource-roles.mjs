@@ -41,13 +41,13 @@ export async function checkResourceRoles(f) {
         .getByLabel("Kaynak Rolü", { exact: true })
         .locator("option")
         .allTextContents(),
-      ["Lider", "Product Owner", "Team Member"],
+      ["Lider", "Product Owner", "Team Member", "CoE"],
     );
     await dialog()
       .getByLabel("Kaynak Rolü", { exact: true })
       .selectOption(role);
-    await choose("Liderlik", f.teamA.lead);
-    if (role !== "leader") await choose("Takım", f.teamA.name);
+    if (role === "leader") await choose("Liderlik", f.teamA.lead);
+    else await choose("Takım", f.teamA.name);
   }
   async function cancel() {
     await page.keyboard.press("Escape");

@@ -230,9 +230,13 @@ export async function checkDirectoryManagement(f) {
             exact: true,
           })
           .click();
-        await scrollPicker("Liderlik");
+        assert.equal(
+          await dialog()
+            .getByLabel("Liderlik", { exact: true })
+            .getAttribute("readonly"),
+          "",
+        );
         await scrollPicker("Takım");
-        await choose("Liderlik", leaderName);
         await choose("Takım", teamName);
         await dialog()
           .getByRole("button", { name: "Close", exact: true })
@@ -245,7 +249,6 @@ export async function checkDirectoryManagement(f) {
             exact: true,
           })
           .click();
-        await choose("Liderlik", leaderName);
         await choose("Takım", teamName);
         await dialog()
           .getByRole("button", { name: "Close", exact: true })

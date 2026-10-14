@@ -1,0 +1,42 @@
+[
+  {
+    "tab": "AA Planlanan Kaynak Dağılımı",
+    "scrollRange": 1299,
+    "rectReads": 0,
+    "windowQueries": 0,
+    "stickyWrites": 0,
+    "markerStable": true,
+    "p95FrameMs": 30,
+    "maxFrameMs": 31
+  },
+  {
+    "tab": "AA Mühendislik Liderliği Projeler",
+    "scrollRange": 1331,
+    "rectReads": 0,
+    "windowQueries": 0,
+    "stickyWrites": 0,
+    "markerStable": true,
+    "p95FrameMs": 18,
+    "maxFrameMs": 20
+  },
+  {
+    "tab": "AA Gerçekleşen Kaynak Dağılımı",
+    "scrollRange": 463,
+    "rectReads": 0,
+    "windowQueries": 0,
+    "stickyWrites": 0,
+    "markerStable": true,
+    "p95FrameMs": 18,
+    "maxFrameMs": 22
+  },
+  {
+    "tab": "AA Kaynak Planlama Raporları",
+    "scrollRange": 1501,
+    "rectReads": 0,
+    "windowQueries": 0,
+    "stickyWrites": 0,
+    "markerStable": true,
+    "p95FrameMs": 23,
+    "maxFrameMs": 23
+  }
+]

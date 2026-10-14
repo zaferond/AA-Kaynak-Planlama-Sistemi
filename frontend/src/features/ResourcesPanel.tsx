@@ -1,3 +1,4 @@
+import { planningGrantSummary } from "./access/planning-permission-tree";
 import {
   resourceRole,
   resourceRoleLabels,
@@ -7,7 +8,9 @@ import type { AccessControls } from "./access/access-controls";
 import {
   employeeAccountRows,
   accountRoleLabels,
+  employeeSearchField,
 } from "./access/employee-account-rows";
+import { useFilterAppliedToast } from "./workspace/useFilterAppliedToast";
 import type { Dispatch, SetStateAction } from "react";
 import { Info, Plus } from "lucide-react";
 import {
@@ -28,9 +31,6 @@ type Props = {
   access: AccessControls;
   data: Data;
   start: string;
-  ids: string[];
-  teamIds: string[];
-  leads: string[];
   search: string;
   onSearchChange: (value: string) => void;
   page: number;
@@ -40,6 +40,7 @@ type Props = {
   showImport: boolean;
   onImportVisibilityChange: Dispatch<SetStateAction<boolean>>;
   saving: boolean;
+  notice: string;
   onEdit: (resource?: Resource) => void;
   onBulkEdit: () => void;
   onDelete: (ids: string[]) => Promise<void>;
@@ -49,9 +50,6 @@ export default function ResourcesPanel({
   access,
   data,
   start,
-  ids,
-  teamIds,
-  leads,
   search,
   onSearchChange: setSearch,
   page: resourcePage,
@@ -61,16 +59,18 @@ export default function ResourcesPanel({
   showImport,
   onImportVisibilityChange: setShowImport,
   saving,
+  notice,
   onEdit: openResource,
   onBulkEdit: openBulk,
   onDelete: deleteResources,
   onImported,
 }: Props) {
+  const { notify, toast } = useFilterAppliedToast();
   const rows = employeeAccountRows(data, {
     start,
-    ids,
-    teamIds,
-    leads,
+    ids: data.teams.map((team) => team.id),
+    teamIds: [],
+    leads: [],
     search,
   });
   const visibleResources = [
@@ -87,6 +87,7 @@ export default function ResourcesPanel({
   );
   return (
     <section className="panel employee-access-panel">
+      {toast}
       <div className="panelhead">
         <div>
           <h2>Çalışan & Yetki Tanımlama</h2>
@@ -96,10 +97,15 @@ export default function ResourcesPanel({
         </div>
         <div className="actions resource-toolbar">
           <input
-            placeholder="Çalışan, kullanıcı adı, e-posta, statü veya liderlik ara…"
+            placeholder="Çalışan, liderlik, takım, kullanıcı adı, e-posta veya statü ara…"
             aria-label="Kaynak ara"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === search) return;
+              setSearch(value);
+              notify(value.trim() ? employeeSearchField(data, value) : "reset");
+            }}
           />
           <button className="button" onClick={() => setShowImport((v) => !v)}>
             Excel İçe Aktar
@@ -177,9 +183,9 @@ export default function ResourcesPanel({
           Seçimi Temizle
         </button>
       </div>
-      {access.notice && (
+      {(access.notice || notice) && (
         <p className="access-notice employee-access-message" role="status">
-          {access.notice}
+          {access.notice || notice}
         </p>
       )}
       {access.error && (
@@ -190,9 +196,11 @@ export default function ResourcesPanel({
       <div className="employee-access-table-wrap accesstable">
         <Table className="resource-table employee-access-table">
           <colgroup>
-            {[3, 11, 10, 9, 7, 4, 6, 6, 9, 11, 7, 8, 9].map((width, index) => (
-              <col key={index} style={{ width: width + "%" }} />
-            ))}
+            {[3, 10, 9, 8, 7, 6, 6, 6, 8, 10, 6, 7, 9, 5].map(
+              (width, index) => (
+                <col key={index} style={{ width: width + "%" }} />
+              ),
+            )}
           </colgroup>
           <TableHeader>
             <TableRow>
@@ -202,13 +210,14 @@ export default function ResourcesPanel({
                 "Liderlik",
                 "Takım",
                 "Statü",
-                "Dahil",
+                "Kaynak Planına Dahil",
                 "İşbaşı Tarihi",
                 "İşten Ayrılış Tarihi",
                 "Hesap",
                 "E-posta Adresi",
                 "Rol / Yetki",
                 "Yetki Kapsamı",
+                "Açıklama",
                 "İşlemler",
               ].map((h) => (
                 <TableHead key={h}>{h}</TableHead>
@@ -348,17 +357,10 @@ export default function ResourcesPanel({
                       )}
                     </TableCell>
                     <TableCell className="account-scope">
-                      {account
-                        ? account.role === "admin" ||
-                          (!!data.leaders?.length &&
-                            data.leaders.every((leader) =>
-                              account.leaders.includes(leader),
-                            ))
-                          ? "Tüm Liderlikler"
-                          : account.leaders.length
-                            ? account.leaders.join(", ")
-                            : "Tüm Liderlikler · Plan salt okunur"
-                        : "—"}
+                      {account ? planningGrantSummary(data, account) : "—"}
+                    </TableCell>
+                    <TableCell className="resource-description">
+                      {r?.note || "—"}
                     </TableCell>
                     <TableCell>
                       <div className="employee-row-actions">

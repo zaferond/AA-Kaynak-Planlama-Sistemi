@@ -49,9 +49,6 @@ export function usePlannedGrid({
   const cellSet = new Set(cells);
   const selectionRef = useRef(cells);
   selectionRef.current = cells;
-  const isAdmin = user?.role === "admin";
-  const readOnlyAllLeaders =
-    !isAdmin && !(user?.role === "manager" && user.leaders.length);
   const planPastePending = useRef(false),
     planFocusFrame = useRef<number | null>(null),
     planMenuRef = useRef<HTMLDivElement | null>(null);
@@ -145,7 +142,6 @@ export function usePlannedGrid({
       team = data?.teams.find((item) => item.id === teamId);
     return (
       !saving &&
-      !readOnlyAllLeaders &&
       !!team &&
       !!data &&
       !!user &&

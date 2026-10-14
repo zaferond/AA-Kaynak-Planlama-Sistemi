@@ -70,6 +70,29 @@ export async function checkTeamOnlyResource(f) {
             .count(),
           1,
         );
+        assert.equal(
+          await page
+            .getByRole("columnheader", {
+              name: "Kaynak Planına Dahil",
+              exact: true,
+            })
+            .count(),
+          1,
+        );
+        assert.equal(
+          await page
+            .getByRole("columnheader", { name: "Açıklama", exact: true })
+            .count(),
+          1,
+        );
+        const description = page.locator(
+          '[data-resource-id="r-own"] .resource-description',
+        );
+        assert.equal(await description.innerText(), "PRIVATE_HR_TEST_NOTE");
+        assert.equal(
+          await description.evaluate((e) => getComputedStyle(e).whiteSpace),
+          "pre-wrap",
+        );
         const cell = page.locator(
           '[data-account-id="employee"] .account-email',
         );
@@ -108,7 +131,7 @@ export async function checkTeamOnlyResource(f) {
         await f.capture(page, "employee-status-colors");
       },
     );
-    for (const role of ["member", "productOwner"]) {
+    for (const role of ["member", "productOwner", "coe"]) {
       for (const team of [f.teamA, independent]) {
         await f.check(
           `resource ${role}: only ${team === independent ? "independent" : "assigned"} team required, no leadership choice`,
@@ -120,6 +143,20 @@ export async function checkTeamOnlyResource(f) {
                 exact: true,
               })
               .click();
+            assert.equal(
+              await dialog()
+                .getByLabel("Kişi Eşdeğeri", { exact: true })
+                .count(),
+              0,
+            );
+            const firstField = dialog()
+              .locator(".employee-resource-fields")
+              .locator(".pick, label")
+              .first();
+            assert.equal(
+              (await firstField.innerText()).split("\n")[0],
+              "Statü",
+            );
             await dialog().getByLabel("Ad Soyad", { exact: true }).fill(name);
             await dialog()
               .getByLabel("Kaynak Rolü", { exact: true })
@@ -131,10 +168,36 @@ export async function checkTeamOnlyResource(f) {
             await picker.getByRole("textbox").fill(team.name);
             await picker
               .getByRole("button", {
-                name: team.name + (team.lead ? "" : " (Bağımsız takım)"),
+                name: team.name,
                 exact: true,
               })
               .click();
+            const leadership = dialog().getByLabel("Liderlik", { exact: true });
+            assert.equal(await leadership.getAttribute("readonly"), "");
+            assert.equal(await leadership.inputValue(), team.lead || "");
+            assert.equal(
+              await dialog()
+                .getByRole("button", { name: "Liderlik", exact: true })
+                .count(),
+              0,
+            );
+            await dialog()
+              .getByRole("button", { name: "Takım", exact: true })
+              .click();
+            const allTeams = page.locator('.pickerpanel[data-state="open"]');
+            assert.equal(
+              await allTeams
+                .getByRole("button", { name: f.teamB.name, exact: true })
+                .count(),
+              1,
+            );
+            assert.equal(
+              await allTeams
+                .getByRole("button", { name: independent.name, exact: true })
+                .count(),
+              1,
+            );
+            await page.keyboard.press("Escape");
             const response = page.waitForResponse(
               (r) =>
                 r.url().endsWith("/api/changes") &&
@@ -149,11 +212,141 @@ export async function checkTeamOnlyResource(f) {
               (r) => r.name === name,
             );
             assert(saved);
+            assert.equal(saved.versions.at(-1).assignmentRole, role);
             assert.equal(saved.versions.at(-1).team, team.id);
             assert.equal(saved.versions.at(-1).lead || "", team.lead || "");
           },
         );
       }
+    }
+    for (const status of ["Aktif İlan", "Pasif İlan"]) {
+      await f.check(
+        `resource posting: ${status} hides employee fields and saves inline without a name or role`,
+        async () => {
+          await page
+            .getByRole("button", {
+              name: "Kaynak Ekle / Yetki Tanımla",
+              exact: true,
+            })
+            .click();
+          const chooseStatus = async (next) => {
+            await dialog()
+              .getByRole("button", { name: "Statü", exact: true })
+              .click();
+            await page
+              .locator('.pickerpanel[data-state="open"]')
+              .getByRole("button", { name: next, exact: true })
+              .click();
+          };
+          await chooseStatus(status);
+          assert.equal(
+            await dialog().getByLabel("Ad Soyad", { exact: true }).count(),
+            0,
+          );
+          assert.equal(
+            await dialog().getByLabel("Kaynak Rolü", { exact: true }).count(),
+            0,
+          );
+          const passive = status === "Pasif İlan";
+          assert.equal(
+            await dialog()
+              .getByLabel("Tahmini İşbaşı Tarihi", { exact: true })
+              .count(),
+            passive ? 0 : 1,
+          );
+          assert.equal(
+            await dialog().getByRole("switch").count(),
+            passive ? 0 : 1,
+          );
+          // Changing back to an employee restores the fields and employee defaults.
+          await chooseStatus("Aktif Çalışan");
+          assert.equal(
+            await dialog().getByLabel("Ad Soyad", { exact: true }).count(),
+            1,
+          );
+          assert.equal(
+            await dialog().getByLabel("Kaynak Rolü", { exact: true }).count(),
+            1,
+          );
+          assert.equal(
+            await dialog()
+              .getByLabel("İşbaşı Tarihi", { exact: true })
+              .inputValue(),
+            "2026-01-01",
+          );
+          assert.equal(
+            await dialog().getByRole("switch").getAttribute("aria-checked"),
+            "true",
+          );
+          await chooseStatus(status);
+          if (!passive) {
+            assert.equal(
+              await dialog()
+                .getByLabel("Tahmini İşbaşı Tarihi", { exact: true })
+                .inputValue(),
+              "",
+            );
+            await dialog()
+              .getByLabel("Tahmini İşbaşı Tarihi", { exact: true })
+              .fill("2026-10-16");
+            await dialog().getByRole("switch").click();
+          }
+          await dialog()
+            .getByRole("button", { name: "Takım", exact: true })
+            .click();
+          const picker = page.locator('.pickerpanel[data-state="open"]');
+          await picker.getByRole("textbox").fill(f.teamA.name);
+          await picker
+            .getByRole("button", { name: f.teamA.name, exact: true })
+            .click();
+          assert.equal(
+            await dialog().getByLabel("Liderlik", { exact: true }).inputValue(),
+            f.teamA.lead,
+          );
+          assert.equal(
+            await dialog()
+              .getByLabel("Liderlik", { exact: true })
+              .getAttribute("readonly"),
+            "",
+          );
+          assert.equal(
+            await dialog()
+              .getByRole("button", { name: "Liderlik", exact: true })
+              .count(),
+            0,
+          );
+          await dialog()
+            .getByRole("button", { name: "Takım", exact: true })
+            .click();
+          assert.equal(
+            await page
+              .locator('.pickerpanel[data-state="open"]')
+              .getByRole("button", { name: f.teamB.name, exact: true })
+              .count(),
+            1,
+          );
+          await page.keyboard.press("Escape");
+          const response = page.waitForResponse(
+            (r) =>
+              r.url().endsWith("/api/changes") &&
+              r.request().method() === "POST",
+          );
+          await dialog()
+            .getByRole("button", { name: "Kaydet", exact: true })
+            .click();
+          assert.equal((await response).status(), 200);
+          await dialog().waitFor({ state: "hidden" });
+          const saved = (await f.state()).resources.find(
+            (r) => r.name === status,
+          );
+          assert(saved);
+          const v = saved.versions.at(-1);
+          assert.equal(v.status, status);
+          assert.equal(v.assignmentRole, undefined);
+          assert.equal(v.included, !passive);
+          assert.equal(v.start, passive ? "" : "2026-10-16");
+        },
+      );
     }
   } finally {
     await page.close();

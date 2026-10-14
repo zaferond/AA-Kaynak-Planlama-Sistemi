@@ -15,6 +15,7 @@ export function accountForm(data: Data, id: string): PermissionForm | null {
         id: user.id,
         role: user.role,
         leaders: [...user.leaders],
+        planningTeams: [...(user.planningTeams || [])],
         resourceId: user.resourceId || "",
         revision: data.revisions["user:" + user.id] || 0,
       }
@@ -49,6 +50,7 @@ export function employeePermission(
       directoryId: form.directoryUser.id,
       role: form.role,
       leaders: form.leaders,
+      planningTeams: form.planningTeams || [],
       resourceId,
     };
   }
@@ -57,6 +59,7 @@ export function employeePermission(
     id: form.id,
     role: form.role,
     leaders: form.leaders,
+    planningTeams: form.planningTeams || [],
     resourceId,
     revision: form.revision,
     ...(!user?.active ? { reactivate: true } : {}),

@@ -1,4 +1,8 @@
+import { checkHorizontalScroll } from "./browser-checks/horizontal-scroll.mjs";
+import { checkTeamPlanningPermissions } from "./browser-checks/team-planning-permissions.mjs";
 import { checkAdAdminRole } from "./browser-checks/ad-admin-role.mjs";
+import { checkActivePostingPlanning } from "./browser-checks/active-posting-planning.mjs";
+import { checkFilterAppliedToast } from "./browser-checks/filter-applied-toast.mjs";
 import { checkActualManagerHierarchy } from "./browser-checks/actual-manager-hierarchy.mjs";
 import { checkActualRemainingHours } from "./browser-checks/actual-remaining-hours.mjs";
 import { checkTeamCapacityHeader } from "./browser-checks/team-capacity-header.mjs";
@@ -52,6 +56,10 @@ import { checkPortalRefresh } from "./browser-checks/portal-refresh.mjs";
 import { checkMutationAdmission } from "./browser-checks/mutation-admission.mjs";
 
 for (const check of [
+  checkHorizontalScroll,
+  checkTeamPlanningPermissions,
+  checkActivePostingPlanning,
+  checkFilterAppliedToast,
   checkAdAdminRole,
   checkActualManagerHierarchy,
   checkActualRemainingHours,

@@ -64,6 +64,7 @@ export const publicUser = (u) => ({
     ? { authSource: "ldap", directoryId: u.directoryId, email: u.email || "" }
     : {}),
   leaders: u.leaders,
+  planningTeams: u.planningTeams || [],
   active: u.active,
 });
 export function fail(status, message) {

@@ -15,6 +15,7 @@ export const resourceRoleLabels: Record<ResourceRole, string> = {
   leader: "Lider",
   productOwner: "Product Owner",
   member: "Team Member",
+  coe: "CoE",
 };
 /** Old direct-leadership assignments remain leaders without rewriting their history. */
 export function resourceRole(
@@ -49,7 +50,7 @@ export function assertResourceRole(
     throw Error(
       version.assignmentRole === "leader"
         ? "Lider doğrudan liderlik satırına atanmalıdır."
-        : "Product Owner ve Team Member için takım seçimi zorunludur.",
+        : "Product Owner, Team Member ve CoE için takım seçimi zorunludur.",
     );
 }
 /** Names are a projection of current employment, never a manually synchronized copy.

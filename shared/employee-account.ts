@@ -4,6 +4,7 @@ export type EmployeePermission =
       directoryId: string;
       role: "normal" | "manager" | "admin";
       leaders: string[];
+      planningTeams?: string[];
       resourceId: string;
     }
   | {
@@ -11,6 +12,7 @@ export type EmployeePermission =
       id: string;
       role: "normal" | "manager" | "admin";
       leaders: string[];
+      planningTeams?: string[];
       resourceId: string;
       revision: number;
       reactivate?: boolean;

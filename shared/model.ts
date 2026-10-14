@@ -87,7 +87,12 @@ export type Risk = {
   updatedAt: string;
 };
 export type RiskSystem = { id: string; name: string };
-export const resourceRoles = ["leader", "productOwner", "member"] as const;
+export const resourceRoles = [
+  "leader",
+  "productOwner",
+  "member",
+  "coe",
+] as const;
 export type ResourceRole = (typeof resourceRoles)[number];
 export type Version = {
   assignmentRole?: ResourceRole;

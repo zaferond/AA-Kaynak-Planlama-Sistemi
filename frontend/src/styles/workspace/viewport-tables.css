@@ -70,6 +70,16 @@
   line-height: 1.3;
   cursor: pointer;
 }
+.app .report-posting-options {
+  border: 1px solid var(--brand-border, #d5dfcf);
+  border-radius: 8px;
+  margin: 4px 0 0;
+}
+.app .report-posting-options > small {
+  color: var(--brand-dark, #344736);
+  font-size: 10px;
+  line-height: 1.4;
+}
 
 /* Empty sections preserve the height of records outside the viewport. */
 .app .matrix .windowed-table-spacer,
@@ -90,12 +100,12 @@
   border-bottom: 1px solid var(--brand-border, #d5dfcf);
 }
 
-/* Keep report filter controls and their summary together above the reports. */
+/* Keep report filters, summary and vacancy option together above the reports. */
 .app.tab-overview .reports-filter-dock {
   position: sticky;
   top: 0;
   z-index: 20;
-  margin: 0 0 18px;
+  margin: 0 0 10px;
   background: var(--brand-surface-soft, #f6f8f4);
   border-radius: 10px;
   box-shadow: 0 3px 12px #29372d26;

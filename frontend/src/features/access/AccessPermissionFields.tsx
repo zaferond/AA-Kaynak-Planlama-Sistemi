@@ -1,8 +1,11 @@
-import { orderedLeaderships } from "../../../../shared/leadership-hierarchy";
+import {
+  planningPermissionRows,
+  planningRowState,
+  togglePlanningRow,
+} from "./planning-permission-tree";
 import { useMemo } from "react";
 import { Plus, Check } from "lucide-react";
 import type { Data } from "../../model";
-import { fold } from "../../model";
 import type { Account, Role } from "../../access";
 import { isEmployeeResource } from "../../access";
 import type { PermissionForm } from "./employee-access-draft";
@@ -36,10 +39,13 @@ export default function AccessPermissionFields({
   boundResource = false,
 }: Props) {
   const creating = !form.id;
-  const leadershipRows = useMemo(
-    () => orderedLeaderships(data),
-    [data.leaders, data.leaderParents],
+  const permissionRows = useMemo(
+    () => planningPermissionRows(data),
+    [data.leaders, data.leaderParents, data.teams],
   );
+  const selectedCount = permissionRows.filter(
+    (row) => planningRowState(data, form, row).checked,
+  ).length;
   const people = data.resources
     .filter(isEmployeeResource)
     .sort((a, b) => a.name.localeCompare(b.name, "tr"));
@@ -49,8 +55,37 @@ export default function AccessPermissionFields({
       .map((u) => [u.resourceId, u]),
   );
   const availablePeople = people.filter((p) => !linkedUsers.has(p.id));
+  const roleField = (
+    <label className="access-field">
+      Rol
+      <select
+        aria-label="Rol"
+        value={form.role}
+        disabled={busy}
+        onChange={(event) =>
+          setForm({
+            ...form,
+            role: event.target.value as Role,
+            resourceId:
+              event.target.value === "admin" &&
+              !boundResource &&
+              selected?.authSource !== "ldap"
+                ? ""
+                : form.resourceId,
+          })
+        }
+      >
+        <option value="normal">Normal Kullanıcı</option>
+        <option value="manager">Yönetici</option>
+        {(creating || selected?.authSource === "ldap" || !boundResource) && (
+          <option value="admin">Admin</option>
+        )}
+      </select>
+    </label>
+  );
   return (
     <>
+      {creating && roleField}
       {creating && (
         <>
           <div className="access-directory-search">
@@ -215,44 +250,20 @@ export default function AccessPermissionFields({
           Kullanıcı bilgileri kurumsal dizinden alınır.
         </p>
       )}
-      <label className="access-field">
-        Rol
-        <select
-          aria-label="Rol"
-          value={form.role}
-          disabled={busy}
-          onChange={(event) =>
-            setForm({
-              ...form,
-              role: event.target.value as Role,
-              resourceId:
-                event.target.value === "admin" &&
-                !boundResource &&
-                selected?.authSource !== "ldap"
-                  ? ""
-                  : form.resourceId,
-            })
-          }
-        >
-          <option value="normal">Normal Kullanıcı</option>
-          <option value="manager">Yönetici</option>
-          {(creating || selected?.authSource === "ldap" || !boundResource) && (
-            <option value="admin">Admin</option>
-          )}
-        </select>
-      </label>
+      {!creating && roleField}
       {form.role === "manager" && (
         <fieldset className="access-leader-field">
           <legend>Planlanan Kaynak Dağılımı Yetkisi</legend>
           <p>
             Yönetici, planlanan kaynak dağılımında tüm takımları görüntüler.
-            Seçilen liderlikler, bunların alt liderlikleri ve bağlı takımları
+            Seçilen liderlikler ve alt kırılımları veya tek tek seçilen takımlar
             için kaynak girişi yapabilir. Seçim yapılmazsa plan salt okunur
-            kalır.
+            kalır. Üst liderlik seçiliyken alt kırılımlar otomatik seçilir; ayrı
+            seçim yapmak için önce üst liderliğin seçimini kaldırın.
           </p>
           <input
-            aria-label="Liderlik ara"
-            placeholder="Liderlik ara"
+            aria-label="Liderlik veya takım ara"
+            placeholder="Liderlik veya takım ara"
             value={leaderQuery}
             onChange={(event) => setLeaderQuery(event.target.value)}
           />
@@ -262,67 +273,89 @@ export default function AccessPermissionFields({
               className="button"
               disabled={
                 busy ||
-                !data.leaders?.length ||
-                data.leaders.every((leader) => form.leaders.includes(leader))
+                !permissionRows.length ||
+                selectedCount === permissionRows.length
               }
               onClick={() =>
-                setForm({ ...form, leaders: [...(data.leaders || [])] })
+                setForm({
+                  ...form,
+                  leaders: [...(data.leaders || [])],
+                  planningTeams: data.teams
+                    .filter((team) => !team.lead)
+                    .map((team) => team.id),
+                })
               }
             >
-              Tüm Liderlikleri Seç
+              Tümünü Seç
             </button>
             <button
               type="button"
               className="button"
-              disabled={busy || !form.leaders.length}
-              onClick={() => setForm({ ...form, leaders: [] })}
+              disabled={busy || !selectedCount}
+              onClick={() =>
+                setForm({ ...form, leaders: [], planningTeams: [] })
+              }
             >
               Seçimi Temizle
             </button>
             <span>
-              {form.leaders.length} / {data.leaders?.length || 0} seçili
+              {selectedCount} / {permissionRows.length} seçili
             </span>
           </div>
           <div className="accessleaders">
-            {leadershipRows
-              .filter(({ name }) => fold(name).includes(fold(leaderQuery)))
-              .map(({ id: leader, parentId, depth }) => (
+            {planningPermissionRows(data, leaderQuery).map((row) => {
+              const state = planningRowState(data, form, row);
+              return (
                 <label
-                  key={leader}
-                  data-leadership-depth={depth}
-                  data-leadership-parent={parentId || undefined}
-                  style={{ paddingInlineStart: 5 + Math.min(depth, 8) * 14 }}
+                  key={row.kind + ":" + row.id}
+                  data-leadership-depth={row.depth}
+                  data-leadership-parent={row.parentId || undefined}
+                  data-permission-kind={row.kind}
+                  style={{
+                    paddingInlineStart: 5 + Math.min(row.depth, 8) * 14,
+                  }}
                   title={
-                    parentId
-                      ? "Üst liderlik: " + parentId
-                      : "Üst seviye liderlik"
+                    state.inherited
+                      ? "Üst liderlik yetkisine dahil"
+                      : row.parentId
+                        ? "Üst liderlik: " + row.parentId
+                        : undefined
                   }
                 >
                   <input
                     type="checkbox"
-                    aria-label={leader}
-                    disabled={busy}
-                    checked={form.leaders.includes(leader)}
+                    aria-label={
+                      row.name + (row.kind === "team" ? " takımı" : "")
+                    }
+                    disabled={busy || state.inherited}
+                    checked={state.checked}
                     onChange={(event) =>
                       setForm({
                         ...form,
-                        leaders: event.target.checked
-                          ? [...form.leaders, leader]
-                          : form.leaders.filter((value) => value !== leader),
+                        ...togglePlanningRow(
+                          data,
+                          form,
+                          row,
+                          event.target.checked,
+                        ),
                       })
                     }
                   />
-                  {depth > 0 && (
+                  {row.depth > 0 && (
                     <span className="access-leader-branch" aria-hidden="true">
                       ↳
                     </span>
                   )}
                   <span className="access-leader-name">
-                    {leader}
-                    {parentId && <small>Üst: {parentId}</small>}
+                    {row.name}
+                    <small>
+                      {row.kind === "team" ? "Takım" : "Liderlik"}
+                      {state.inherited ? " · Üst liderlikten" : ""}
+                    </small>
                   </span>
                 </label>
-              ))}
+              );
+            })}
           </div>
         </fieldset>
       )}

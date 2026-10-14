@@ -8,6 +8,7 @@ export const permissionInput = z
     id: z.string().regex(/^[a-zA-Z0-9_-]{1,120}$/),
     role: z.enum(["admin", "manager", "normal"]),
     leaders: z.array(z.string()).max(100),
+    planningTeams: z.array(z.string().min(1).max(120)).max(5000).default([]),
     resourceId: z.string().max(120).default(""),
     revision: z.number().int().nonnegative(),
     reactivate: z.boolean().optional(),
@@ -22,6 +23,7 @@ export const accountInput = z
     directoryId: z.string().regex(/^[a-f0-9]{32}$/),
     role: z.enum(["admin", "manager", "normal"]),
     leaders: z.array(z.string()).max(100),
+    planningTeams: z.array(z.string().min(1).max(120)).max(5000).default([]),
     resourceId: z.string().min(1).max(120),
   })
   .strict();
@@ -29,6 +31,12 @@ export const accountInput = z
 async function checkScope(d, session, input, id, authSource) {
   if (input.leaders.some((leader) => !d.leaders.includes(leader)))
     fail(400, "Geçersiz liderlik seçimi.");
+  if (
+    (input.planningTeams || []).some(
+      (id) => !d.teams.some((team) => team.id === id),
+    )
+  )
+    fail(400, "Geçersiz takım yetkisi seçimi.");
   // AD administrators remain employees; local administrator linkage keeps its
   // existing behavior. Role changes must not detach an AD employee record.
   const resourceId =
@@ -75,6 +83,7 @@ export async function updatePermissions(store, d, u, session, input) {
       active: input.reactivate ? true : old.active,
       role: input.role,
       leaders: input.role === "admin" ? [] : input.leaders,
+      planningTeams: input.role === "manager" ? input.planningTeams || [] : [],
       resourceId,
       revision: old.revision + 1,
       version: old.version + 1,
@@ -97,6 +106,7 @@ export async function revokePermissions(store, u, session, input) {
       ...old,
       active: false,
       leaders: [],
+      planningTeams: [],
       resourceId: "",
       revision: old.revision + 1,
       version: old.version + 1,
@@ -137,6 +147,7 @@ export async function createEmployeeAccount(
       directoryId: person.id,
       role: input.role,
       leaders: input.role === "admin" ? [] : input.leaders,
+      planningTeams: input.role === "manager" ? input.planningTeams || [] : [],
       resourceId,
       active: true,
       // A random, undisclosed placeholder preserves the existing backup schema.

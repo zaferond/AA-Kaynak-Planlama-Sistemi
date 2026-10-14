@@ -107,17 +107,24 @@ function resourceChanges(
 ): Change[] {
   const changes: Change[] = [];
 
-  const assignmentKind =
-    editor.assignmentKind || resourceRole(data, editor.version);
+  const posting =
+    editor.version.status === "Aktif İlan" ||
+    editor.version.status === "Pasif İlan";
+  const passivePosting = editor.version.status === "Pasif İlan";
+  const assignmentKind = posting
+    ? "member"
+    : editor.assignmentKind || resourceRole(data, editor.version);
   const selectedTeam = data.teams.find(
     (team) => team.id === editor.version.team,
   );
   const selectedVersion = {
     ...editor.version,
     lead:
-      editor.version.lead ||
-      (assignmentKind !== "leader" ? selectedTeam?.lead || "" : ""),
-    assignmentRole: assignmentKind,
+      assignmentKind === "leader"
+        ? editor.version.lead || ""
+        : selectedTeam?.lead || "",
+    assignmentRole: posting ? undefined : assignmentKind,
+    ...(passivePosting ? { start: "", end: "", included: false } : {}),
     team:
       assignmentKind === "leader"
         ? ownValue(data.leadershipUnits, editor.version.lead || "") || ""
@@ -131,17 +138,22 @@ function resourceChanges(
       "Liderlik seçin. Liderlik kaynak satırı yoksa güncel listeyi yükleyin.",
     );
   if (
+    !posting &&
     assignmentKind !== "leader" &&
     data.teams.find((team) => team.id === selectedVersion.team)?.kind ===
       "leadership"
   )
-    throw Error("Product Owner ve Team Member için bir takım seçin.");
+    throw Error("Product Owner, Team Member ve CoE için bir takım seçin.");
   const directoryName = directoryEmployeeName(data, editor.account?.form);
   if (directoryName === "") throw Error("Active Directory kullanıcısı seçin.");
-  const { resource: resourceForSave, version: v } = resourceVersionForSave(
+  const namedResource =
     directoryName === undefined
       ? editor.value
-      : { ...editor.value, name: directoryName },
+      : { ...editor.value, name: directoryName };
+  const { resource: resourceForSave, version: v } = resourceVersionForSave(
+    posting && !namedResource.name.trim()
+      ? { ...namedResource, name: editor.version.status }
+      : namedResource,
     selectedVersion,
     editor.isNew,
     start,
@@ -153,10 +165,6 @@ function resourceChanges(
     throw Error("Seçilen takım bulunamadı. Verileri yenileyip tekrar deneyin.");
   if (t.lead && t.lead !== v.lead)
     throw Error("Seçilen takım bu liderliğe bağlı değil.");
-  if (!t.lead && v.lead)
-    changes.push(
-      command(editor.baseRevisions, "team", t.id, { ...t, lead: v.lead }),
-    );
   changes.push(
     command(
       editor.baseRevisions,

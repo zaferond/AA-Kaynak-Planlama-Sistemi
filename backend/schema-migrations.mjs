@@ -536,6 +536,18 @@ export async function prepareSchema(c, { provider, auto }) {
       throw Error("Proje kodları için IT npm run db:migrate çalıştırmalı.");
     await executeSqlMigration(c, provider, 35);
   }
+  if (!versions.includes(36)) {
+    if (!auto)
+      throw Error("CoE kaynak rolü için IT npm run db:migrate çalıştırmalı.");
+    await executeSqlMigration(c, provider, 36);
+  }
+  if (!versions.includes(37)) {
+    if (!auto)
+      throw Error(
+        "Takım bazlı planlama yetkisi için IT npm run db:migrate çalıştırmalı.",
+      );
+    await executeSqlMigration(c, provider, 37);
+  }
   assertMigrationHistory(
     (await c.query("SELECT version FROM kp_schema_migrations")).rows.map(
       (row) => Number(row.version),

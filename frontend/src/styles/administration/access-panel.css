@@ -236,7 +236,7 @@
 }
 .access-leader-field .accessleaders {
   margin-top: 7px;
-  max-height: 190px;
+  max-height: min(340px, 40dvh);
 }
 .access-leader-field .accessleaders label {
   display: flex;
@@ -394,7 +394,7 @@
   min-width: 0;
 }
 .resource-account-section .accessleaders {
-  max-height: 180px;
+  max-height: min(320px, 40dvh);
   overflow: auto;
 }
 .resource-account-section .access-leader-field {
@@ -707,7 +707,7 @@
   --resource-status-border: #dfb6c1;
 }
 
-/* Keep related leadership grants together without widening or cascading selections. */
+/* Hierarchical planning grants: teams remain visually distinct from leaderships. */
 .access-leader-field .accessleaders label[data-leadership-depth] {
   border: 1px solid var(--brand-border, #d4decd);
   border-radius: 4px;
@@ -735,4 +735,13 @@
 }
 .access-leader-field .accessleaders input {
   flex: none;
+}
+
+.access-leader-field .accessleaders label[data-permission-kind="team"] {
+  background: #fff;
+  border-style: dashed;
+  font-weight: 400;
+}
+.access-leader-field .accessleaders label:has(input:checked) {
+  border-color: var(--brand-border-strong, #96a889);
 }

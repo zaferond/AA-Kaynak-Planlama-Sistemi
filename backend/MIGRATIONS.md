@@ -1,5 +1,11 @@
 # Migration kaynakları
 
+## CoE kaynak rolü — sürüm 36
+
+36 numaralı migration, `assignment_role` kısıtına `coe` değerini ekler. SQL.js mevcut sürüm satırlarını tüm alanlarıyla yeni tabloya kopyalar, aynı dış anahtarları ve takım/ay indeksini korur; MSSQL yalnız ilgili CHECK kısıtını genişletir. İşlem mevcut migration transaction'ında uygulanır. CoE, takım ataması ve erişim bakımından Team Member ile aynıdır; yönetici rolü veya uygulama yetkisi vermez.
+
+Güncellemeden önce veritabanı yedeği alınmalıdır. MSSQL kurulumu için IT, yedek sonrasında `npm run db:migrate` çalıştırır. Eski kodla geri dönüş, sürüm 35 yedeğini ve ona uygun uygulama paketini birlikte gerektirir; yeni şema eski koda zorla açılmamalıdır.
+
 `migration-catalog.mjs` sürümleri, isteğe bağlı legacy v2 kaydını, SQL dosyalarının adlarını ve kaynak fingerprint'lerini tanımlar. `schema-migrations.mjs` bu SQL'leri ve kodla çalışan dönüşümleri Store'un tek transaction'ı içinde uygular. Tarihsel 24→23 sırası ve 5/6 GO ayrımı korunur.
 
 Yeni sürüm eklerken katalog kaydı, iki provider'ın SQL dosyaları ve gerekiyorsa migration kodu birlikte güncellenir. Katalog/SQL dosyası eşitsizliği uygulama başlangıcını ve yedek araçlarını başarısız yapar. Yeni SQL.js DDL, yedeklerin beklenen sütun/kısıt sözleşmesini otomatik günceller.
@@ -21,3 +27,9 @@ Tam SQL.js yedeklerinde parola salt/hash kayıt biçimi ayrıca denetlenir. Bu k
 ## Store sınırı
 
 `Store.connect` katalog/runner'ı transaction içinde çağırır. Kullanıcı/oturum SQL mapping'i `identity-repository.mjs`, planlama snapshot okuması `planning-reader.mjs`, diff yazması `planning-writer.mjs` içindedir. Repository'ler verilen bağlantıyı kullanır; Store'un transaction/yetki/revision/audit/generation sınırını devralmaz veya ayrı bir commit oluşturmaz. Bu ayrıştırma DDL/veri dönüşümünü değiştirmediği için yeni migration ve yeni uyumlu şema fingerprint'i eklenmez.
+
+## 37 — Takım bazlı planlanan kaynak yetkisi
+
+`kp_user_planning_teams` kullanıcı–takım eşleştirmelerini saklar. Mevcut kullanıcı, liderlik yetkisi, dağılım ve oturum kayıtları değişmez. Liderlik yetkileri mevcut alt liderlik/takım kapsamını korur; takım yetkileri yalnız planlanan dağılıma yazma yetkisi verir. Normal kullanıcı takım yetkisiyle planlama düzenleyemez. Yetki güncellemeleri mevcut revision, audit ve oturum iptali akışından geçer.
+
+Yeni tabloda kullanıcı ve takım yabancı anahtarları bulunur. Kullanıcı silinince takım yetkileri silinir; yetkide kullanılan takım veya liderlik kaynak satırı kaldırılmadan önce yetki eşleştirmesi kaldırılmalıdır. Tam veritabanı yedeği yeni tabloyu içerir. JSON plan yedeği kullanıcı yetkilerini değiştirmez. Üretim MSSQL ortamında dağıtımdan önce IT tarafından `npm run db:migrate` çalıştırılmalıdır; eski pakete dönüş için migration öncesi tam yedek kullanılmalıdır.

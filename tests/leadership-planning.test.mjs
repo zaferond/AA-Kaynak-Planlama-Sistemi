@@ -4,11 +4,14 @@ import {
   orderedPlanningUnits,
   planningUnitHierarchy,
   selectedLeadershipScope,
+  leadershipScopedUnits,
 } from "../shared/leadership-planning.ts";
 import {
   selectWorkspaceScope,
   selectWorkspacePages,
 } from "../frontend/src/features/workspace/workspace-selectors.ts";
+import { organizationPickerItems } from "../frontend/src/features/organization-picker-items.ts";
+import { orderedLeaderships } from "../shared/leadership-hierarchy.ts";
 const unit = (id, lead, kind) => ({
   id,
   name: id,
@@ -193,5 +196,79 @@ test("leadership filters expose all authorized leaderships and team filters omit
   assert.deepEqual(
     childScope.leaderItems.map((x) => x.id),
     ["Alpha Grandchild"],
+  );
+});
+
+test("resource and workspace team pickers share descendant scope and plain independent-team names", () => {
+  for (const selected of [[], ["Root"], ["Zulu Child"], ["Other"]]) {
+    const scope = selectWorkspaceScope(
+      data,
+      { role: "admin", leaders: [] },
+      { ...filters, leads: selected },
+    );
+    const editorTeams = leadershipScopedUnits(
+      data,
+      data.teams,
+      selected,
+    ).filter((t) => t.kind !== "leadership");
+    assert.deepEqual(editorTeams, scope.availableTeams);
+    assert.equal(
+      editorTeams.some((t) => t.id === "orphan"),
+      selected.length === 0,
+    );
+  }
+  assert.deepEqual(
+    leadershipScopedUnits(data, data.teams, ["Root"])
+      .filter((t) => t.kind !== "leadership")
+      .map((t) => t.id),
+    ["rt", "ct", "gt"],
+  );
+});
+
+test("organization picker labels retain hierarchy and use employee-derived leader and Product Owner names", () => {
+  const sample = structuredClone(data);
+  sample.leaderManagers = { Root: "Legacy label" };
+  sample.teams.find((t) => t.id === "ct").managerName = "Legacy team label";
+  const person = (id, name, teamId, assignmentRole) => ({
+    id,
+    name,
+    note: "",
+    versions: [
+      {
+        effective: "2026-01",
+        status: "Aktif Çalışan",
+        start: "2026-01-01",
+        end: "",
+        amount: 1,
+        included: true,
+        assignmentRole,
+        team: teamId,
+        lead: sample.teams.find((t) => t.id === teamId).lead,
+      },
+    ],
+  });
+  sample.resources = [
+    person("leader", "Synthetic leader", "root", "leader"),
+    person("po", "Synthetic owner", "ct", "productOwner"),
+  ];
+  const hierarchy = orderedLeaderships(sample);
+  const items = organizationPickerItems(
+    sample,
+    hierarchy,
+    sample.teams.filter((t) => t.kind !== "leadership"),
+    "2026-10-14",
+  );
+  assert.equal(
+    items.leaders.find((l) => l.id === "Root").description,
+    "Synthetic leader",
+  );
+  assert.equal(
+    items.teams.find((t) => t.id === "ct").description,
+    "Synthetic owner",
+  );
+  assert.equal(items.teams.find((t) => t.id === "orphan").name, "orphan");
+  assert.deepEqual(
+    items.leaders.map(({ description, ...item }) => item),
+    hierarchy,
   );
 });

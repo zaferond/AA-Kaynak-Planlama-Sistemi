@@ -20,6 +20,7 @@ export type Account = {
   directoryId?: string;
   email?: string;
   leaders: string[];
+  planningTeams?: string[];
   active: boolean;
   credential?: Credential;
 };
@@ -72,7 +73,12 @@ export function allowedPlanningTeam(
   u: Principal,
   id: string,
 ) {
-  return allowedHierarchyTeam(d, u, id);
+  return (
+    allowedHierarchyTeam(d, u, id) ||
+    (u.role === "manager" &&
+      !!u.planningTeams?.includes(id) &&
+      d.teams.some((team) => team.id === id))
+  );
 }
 export function allowedActualTeam(
   d: Pick<Data, "teams" | "leaderParents">,

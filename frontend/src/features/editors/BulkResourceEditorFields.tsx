@@ -1,4 +1,7 @@
 import { Single } from "../../components/FilterPicker";
+import { organizationPickerItems } from "../organization-picker-items";
+import { leadershipScopedUnits } from "../../../../shared/leadership-planning";
+import { currentPlanningDate } from "../../../../shared/resource-dates";
 import { monthLabel } from "../../format";
 import { statuses, type Data, type Team } from "../../model";
 import type { EditorFieldProps } from "./editor-field-props";
@@ -16,6 +19,18 @@ export default function BulkResourceEditorFields({
   editTeams,
   resourceIds,
 }: Props) {
+  const organizationItems = data
+    ? organizationPickerItems(
+        data,
+        leaderItems,
+        leadershipScopedUnits(
+          data,
+          editTeams,
+          editor.lead ? [editor.lead] : [],
+        ),
+        currentPlanningDate(),
+      )
+    : { leaders: [], teams: [] };
   return (
     <>
       <div className="bulk-edit-context">
@@ -27,7 +42,7 @@ export default function BulkResourceEditorFields({
           label="Liderlik filtresi"
           value={editor.lead}
           onChange={(l) => setEditor({ ...editor, lead: l, team: "" })}
-          items={leaderItems}
+          items={organizationItems.leaders}
           empty="Tüm liderlikler"
         />
         <Single
@@ -40,15 +55,13 @@ export default function BulkResourceEditorFields({
               lead: data?.teams.find((x) => x.id === t)?.lead || editor.lead,
             })
           }
-          items={editTeams
-            .filter((t) => !editor.lead || t.lead === editor.lead)
-            .map((t) => ({
-              ...t,
-              name:
-                t.kind === "leadership"
-                  ? "Doğrudan Liderlik · " + t.name
-                  : t.name + (!t.lead ? " (Bağımsız takım)" : ""),
-            }))}
+          items={organizationItems.teams.map((t) => ({
+            ...t,
+            name:
+              t.kind === "leadership"
+                ? "Doğrudan Liderlik · " + t.name
+                : t.name,
+          }))}
           empty="Takımı değiştirme"
         />
         <Single

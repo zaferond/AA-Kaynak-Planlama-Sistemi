@@ -63,6 +63,7 @@ export default function ResourceAccessFields({
                           leaders: editor.version.lead
                             ? [editor.version.lead]
                             : [],
+                          planningTeams: [],
                           revision: 0,
                         }
                       : accountForm(data, e.target.value);
