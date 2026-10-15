@@ -68,7 +68,7 @@ export default function PlannedCapacitySummary(
             months={months}
             labelWidth={labelWidth}
             monthWidth={monthWidth}
-            label="Kaynak"
+            label=""
           />
           <TableBody>
             <PlannedSummaryRows {...props} selectedReport />

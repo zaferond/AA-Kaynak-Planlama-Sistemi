@@ -1088,16 +1088,6 @@ html[data-theme="military"]
   .app
   .capacitystrip
   .planning-grid
-  thead
-  tr:last-child
-  th:first-child {
-  background: var(--brand-primary);
-  color: #fff !important;
-}
-html[data-theme="military"]
-  .app
-  .capacitystrip
-  .planning-grid
   tbody
   .summary
   td:first-child {
