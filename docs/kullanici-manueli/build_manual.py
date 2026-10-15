@@ -13,6 +13,11 @@ BASE=Path(__file__).resolve().parent
 OUT=BASE
 SRC=OUT/'AA-Kaynak-Planlama-Sistemi-Kullanici-Manueli.md'
 PDF=OUT/'AA-Kaynak-Planlama-Sistemi-Kullanici-Manueli.pdf'
+source_text=SRC.read_text(encoding='utf-8')
+header=re.match(r'^---\n(.*?)\n---\n',source_text,re.S)
+if header is None:raise ValueError('Manuel üst bilgisi bulunamadı.')
+metadata=dict(line.split(': ',1) for line in header.group(1).splitlines() if ': ' in line)
+VERSION=metadata['document_version'];DATE=metadata['date'];COMMIT=metadata['baseline_commit'][:7]
 import os
 font_sets=[
  (Path(os.environ.get('AA_MANUAL_FONT_DIR','fonts')),['Arial.ttf','Arial Bold.ttf','Arial Italic.ttf','Arial Bold Italic.ttf']),
@@ -29,14 +34,14 @@ pdfmetrics.registerFontFamily('Arial',normal='Arial',bold='Arial-Bold',italic='A
 GREEN=colors.HexColor('#354936');DARK=colors.HexColor('#203527');GOLD=colors.HexColor('#a08142');INK=colors.HexColor('#24322c');MUTED=colors.HexColor('#59665e');PALE=colors.HexColor('#f0f4ee');LINE=colors.HexColor('#d6ded3')
 W,H=A4; LEFT=50; RIGHT=50; WIDTH=W-LEFT-RIGHT
 styles={
- 'body':ParagraphStyle('body',fontName='Arial',fontSize=10.1,leading=14.7,textColor=INK,spaceAfter=8,splitLongWords=True),
- 'h1':ParagraphStyle('h1',fontName='Arial-Bold',fontSize=19.5,leading=24,textColor=DARK,spaceAfter=16,keepWithNext=True),
- 'h2':ParagraphStyle('h2',fontName='Arial-Bold',fontSize=11.8,leading=16,textColor=GREEN,spaceBefore=9,spaceAfter=7,keepWithNext=True),
+ 'body':ParagraphStyle('body',fontName='Arial',fontSize=10,leading=14,textColor=INK,spaceAfter=6,splitLongWords=True),
+ 'h1':ParagraphStyle('h1',fontName='Arial-Bold',fontSize=18.5,leading=23,textColor=DARK,spaceAfter=12,keepWithNext=True),
+ 'h2':ParagraphStyle('h2',fontName='Arial-Bold',fontSize=11.8,leading=15,textColor=GREEN,spaceBefore=7,spaceAfter=5,keepWithNext=True),
  'cell':ParagraphStyle('cell',fontName='Arial',fontSize=9.1,leading=12.6,textColor=INK,spaceAfter=0,splitLongWords=True),
  'headcell':ParagraphStyle('headcell',fontName='Arial-Bold',fontSize=9.0,leading=12.5,textColor=colors.white,spaceAfter=0,splitLongWords=True),
  'small':ParagraphStyle('small',fontName='Arial-Italic',fontSize=8.5,leading=11.8,textColor=MUTED,spaceAfter=10),
  'note':ParagraphStyle('note',fontName='Arial',fontSize=9.5,leading=14,textColor=DARK,spaceAfter=0),
- 'list':ParagraphStyle('list',fontName='Arial',fontSize=10.0,leading=14.5,textColor=INK,spaceAfter=6,leftIndent=19,firstLineIndent=0,bulletIndent=1),
+ 'list':ParagraphStyle('list',fontName='Arial',fontSize=10.0,leading=14,textColor=INK,spaceAfter=5,leftIndent=19,firstLineIndent=0,bulletIndent=1),
 }
 
 def inline(s):
@@ -54,11 +59,12 @@ def table(rows):
  elif n==4:weights=[.34,.22,.22,.22]
  else:weights=[1/n]*n
  if n==2 and rows[0][0] in ('Komut','Bölümler'):weights=[.37,.63]
- if rows[0][0]=='Statü':weights=[.24,.40,.36]
+ if rows[0][0]=='Statü':weights=[.38,.62] if n==2 else [.24,.40,.36]
+ if rows[0][0]=='Rapor / grafik':weights=[.52,.48]
  if rows[0][0]=='Kaynaklardaki eski ifade':weights=[.46,.54]
  data=[[p(c,'headcell' if i==0 else 'cell') for c in row] for i,row in enumerate(rows)]
  t=Table(data,colWidths=[WIDTH*w/sum(weights) for w in weights],hAlign='LEFT',repeatRows=1,spaceAfter=12)
- commands=[('BACKGROUND',(0,0),(-1,0),GREEN),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),9),('RIGHTPADDING',(0,0),(-1,-1),9),('TOPPADDING',(0,0),(-1,-1),8),('BOTTOMPADDING',(0,0),(-1,-1),8),('LINEBELOW',(0,0),(-1,0),.7,GOLD),('LINEBELOW',(0,1),(-1,-1),.4,LINE),('LINEBEFORE',(1,1),(-1,-1),.35,LINE)]
+ commands=[('BACKGROUND',(0,0),(-1,0),GREEN),('VALIGN',(0,0),(-1,-1),'TOP'),('LEFTPADDING',(0,0),(-1,-1),9),('RIGHTPADDING',(0,0),(-1,-1),9),('TOPPADDING',(0,0),(-1,-1),6),('BOTTOMPADDING',(0,0),(-1,-1),6),('LINEBELOW',(0,0),(-1,0),.7,GOLD),('LINEBELOW',(0,1),(-1,-1),.4,LINE),('LINEBEFORE',(1,1),(-1,-1),.35,LINE)]
  for i in range(1,len(rows)):
   if i%2:commands.append(('BACKGROUND',(0,i),(-1,i),PALE))
  t.setStyle(TableStyle(commands));return t
@@ -79,8 +85,8 @@ def page_art(c,doc):
   return
  c.setStrokeColor(LINE);c.setLineWidth(.5);c.line(LEFT,H-36,W-RIGHT,H-36);c.line(LEFT,36,W-RIGHT,36)
  c.setFillColor(MUTED);c.setFont('Arial',8);c.drawString(LEFT,H-26,'AA Kaynak Planlama Sistemi  |  Kullanıcı Manueli')
- c.drawRightString(W-RIGHT,H-26,'Sürüm 1.0  /  13.10.2026')
- c.setFont('Arial',8);c.drawString(LEFT,23,'Kaynak kod ve sentetik ortam doğrulaması')
+ c.drawRightString(W-RIGHT,H-26,'Sürüm '+VERSION+'  /  '+DATE)
+ c.setFont('Arial',8);c.drawString(LEFT,23,'Kısa kullanım rehberi  |  Son kullanıcı ve IT')
  c.setFillColor(GREEN);c.drawRightString(W-RIGHT,23,'Sayfa '+str(doc.page))
 
 doc=ManualDoc(str(PDF),pagesize=A4,leftMargin=LEFT,rightMargin=RIGHT,topMargin=54,bottomMargin=50,title='Askeri Araçlar Kaynak Yönetimi Sistemi - Kullanıcı Manueli',author='AA Kaynak Planlama Sistemi',subject='Doğrulanmış Türkçe son kullanıcı ve IT kullanım kılavuzu',pageCompression=1)
@@ -89,11 +95,11 @@ cover_title=ParagraphStyle('cover',fontName='Arial-Bold',fontSize=27,leading=35,
 cover_kicker=ParagraphStyle('kicker',fontName='Arial',fontSize=11,leading=16,textColor=colors.HexColor('#dce5d6'))
 cover_big=ParagraphStyle('big',fontName='Arial-Bold',fontSize=27,leading=35,textColor=DARK)
 story=[Spacer(1,20),Paragraph('ASKERİ ARAÇLAR',cover_kicker),Spacer(1,18),Paragraph('Askeri Araçlar<br/>Kaynak Yönetimi<br/>Sistemi',cover_title),Spacer(1,67),Paragraph('Kullanıcı Manueli',cover_big),Spacer(1,10),p('AA Kaynak Planlama Sistemi','small'),Spacer(1,30)]
-story+=[table([['Doküman','Bilgi'],['Sürüm / tarih','1.0 / 13.10.2026'],['Uygulama paketi','3.0.0 / ed02266 kaynakları'],['Hedef kitle','Son kullanıcılar, yöneticiler, Admin ve IT ekibi'],['Doğrulama temeli','Kaynak kod, mevcut dokümantasyon ve sentetik ekran kontrolleri']]),Spacer(1,15),p('Günlük kullanımdan işletime: roller, veri girişi, takvim, proje takibi, raporlama ve kurumsal devreye alma sınırları.'),p('Gerçek çalışan verisi, parola veya gizli yapılandırma içermez. Kurum ortamı kabulü gerektiren konular ayrı listelenmiştir.','small'),PageBreak()]
+story+=[table([['Doküman','Bilgi'],['Sürüm / tarih',VERSION+' / '+DATE],['Uygulama paketi',metadata['application_version']+' / '+COMMIT+' kaynakları'],['Hedef kitle','Son kullanıcılar, yöneticiler, Admin ve IT ekibi'],['Doğrulama temeli','Kaynak kod, mevcut belgeler ve sentetik ekran kontrolleri']]),Spacer(1,15),p('Kısa rehber: giriş, kaynak dağılımı, takvim, proje takibi, raporlar ve yetki yönetimi.'),p('Gerçek çalışan verisi, parola veya gizli yapılandırma içermez. IT için başlatma ve kurumda doğrulanacak konular son bölümdedir.','small'),PageBreak()]
 story.append(p('İçindekiler','h1'))
 toc=TableOfContents();toc.levelStyles=[ParagraphStyle('TOC',fontName='Arial',fontSize=10.2,leading=17.4,textColor=INK,leftIndent=0,firstLineIndent=0,rightIndent=23,spaceBefore=0,spaceAfter=0)]
-story.extend([p('Bölüm başlıkları ve PDF yer imleri tıklanabilir. 1-21 günlük kullanım, 22-24 IT işletimi, 25-26 teyit listesi ve doğrulama izidir.','small'),toc,PageBreak()])
-text=SRC.read_text();text=re.sub(r'^---\n.*?\n---\n','',text,flags=re.S)
+story.extend([p('Günlük işlemler için 1-6. bölümleri, sorun giderme ve IT notları için 7. bölümü kullanın. Başlıklar ve PDF yer imleri tıklanabilir.','small'),toc,Spacer(1,28),p('Her işlemde: filtreyi kontrol edin, değişikliği yapın ve kaydedilen sonucu doğrulayın.','note'),PageBreak()])
+text=source_text[header.end():]
 lines=text.splitlines();i=0
 while i<len(lines):
  s=lines[i].strip();i+=1
