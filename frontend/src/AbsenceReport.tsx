@@ -1,4 +1,3 @@
-import { monthLabel } from "./format";
 import type { Data } from "./model";
 import { useMemo, useState } from "react";
 import { Pencil, Trash2 } from "lucide-react";
@@ -70,16 +69,6 @@ export default function AbsenceReport({
       <div className="panelhead">
         <div>
           <h2>Çalışan İzin ve Eğitim Kayıtları</h2>
-          <p>
-            İzin aylık çalışma saatinden düşer; eğitim dağıtılan kaynak
-            yüzdesine eklenir. Aralıklar tek satırda gösterilir; gün ve saat
-            toplamları seçili filtrelere göre hesaplanır.
-          </p>
-          <p>
-            {months.length
-              ? `${monthLabel(months[0])} – ${monthLabel(months.at(-1)!)} · ${teamIds.length} takım · Kaynak planlama ekranlarında seçilen liderlik, takım ve rapor dönemi uygulanır.`
-              : "Dönem seçilmedi."}
-          </p>
         </div>
         <div className="absence-report-summary">
           <strong>{rows.length}</strong> kayıt <span>·</span>{" "}

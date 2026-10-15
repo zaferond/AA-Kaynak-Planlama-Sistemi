@@ -33,6 +33,8 @@ export default function PersonAllocationPanel(
     currentMonth,
     todayDate,
     canEditCalendar,
+    sharedCalendarOpen,
+    onSharedCalendarClose,
     ownResourceId,
     onSaved,
   } = props;
@@ -131,11 +133,6 @@ export default function PersonAllocationPanel(
         onUnitChange={setUnit}
         selectedHoursPerson={selectedHoursPerson}
         selectedHoursMonth={selectedHoursMonth}
-        canEditCalendar={canEditCalendar}
-        onOpenSharedCalendar={() => {
-          setCalendarPerson(null);
-          setCalendarMode("shared");
-        }}
         actualMonths={actualMonths}
         saveHours={saveHours}
         canEditPersonMonth={canEditPersonMonth}
@@ -170,14 +167,15 @@ export default function PersonAllocationPanel(
       />
       <ActualAllocationDialogs
         data={data}
-        calendarMode={calendarMode}
-        calendarPerson={calendarPerson}
+        calendarMode={sharedCalendarOpen ? "shared" : calendarMode}
+        calendarPerson={sharedCalendarOpen ? null : calendarPerson}
         canEditCalendar={canEditCalendar}
         ownResourceId={ownResourceId}
         onSaved={onSaved}
         selectedCell={selectedCell}
         currentMonth={currentMonth}
         onCalendarClose={() => {
+          onSharedCalendarClose();
           setCalendarMode(null);
           setCalendarPerson(null);
         }}

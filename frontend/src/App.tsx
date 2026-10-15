@@ -30,7 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { ClipboardPaste, Copy, Info } from "lucide-react";
+import { ClipboardPaste, Copy } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import AbsenceReport from "./AbsenceReport";
 import { useActualView } from "./features/actual-allocation/useActualView";
@@ -65,6 +65,7 @@ export default function Portal() {
   const [accountEditing, setAccountEditing] = useState(false);
   const [organizationView, setOrganizationView] = useState("employees");
   const [reportView, setReportView] = useState<ReportView>("resources");
+  const [sharedCalendarOpen, setSharedCalendarOpen] = useState(false);
   const mainTabsRef = useRef<HTMLDivElement>(null),
     capacityTableRef = useRef<HTMLTableElement>(null),
     planTableRef = useRef<HTMLTableElement>(null);
@@ -115,6 +116,9 @@ export default function Portal() {
     setError,
     setNotice,
   });
+  useEffect(() => {
+    if (tab !== "actual" || !isAdmin) setSharedCalendarOpen(false);
+  }, [tab, isAdmin]);
   const {
     leads,
     setLeads,
@@ -526,6 +530,9 @@ export default function Portal() {
             view={view}
             setView={setView}
             openProject={() => openProject()}
+            onOpenSharedCalendar={() => {
+              if (isAdmin && data) setSharedCalendarOpen(true);
+            }}
             onExport={exportCurrentTab}
             dataLoaded={
               !!data && (tab !== "actual" || !!isAdmin || !!actualView.value)
@@ -545,58 +552,62 @@ export default function Portal() {
           ) : (
             <>
               {tab === "overview" || tab === "activity" ? (
-                <div className="reports-filter-dock">
-                  {workspaceFilters}
-                  <WorkspaceFilterSummary
-                    title="Uygulanan Filtreler"
-                    ariaLabel={
-                      tab === "activity"
-                        ? "Aylık aktivite raporunda uygulanan filtreler"
-                        : "Raporlarda uygulanan filtreler"
-                    }
-                    className="reports-filter-summary"
-                    filters={
-                      tab === "overview" && reportView === "headcount"
-                        ? [
-                            ...capacityFilters.filter(
-                              (filter) =>
-                                filter.label === "Liderlik" ||
-                                filter.label === "Takım",
-                            ),
-                            {
-                              label: "Rapor Tarihi",
-                              values: [fullDateLabel(todayDate)],
-                              active: true,
-                            },
-                          ]
-                        : [
-                            ...capacityFilters.filter(
-                              (filter) =>
-                                tab === "activity" || filter.label !== "Proje",
-                            ),
-                            {
-                              label: "Bitiş Ayı",
-                              values: [monthLabel(months.at(-1)!)],
-                              active: true,
-                            },
-                            {
-                              label: "Dönem",
-                              values: [months.length + " ay"],
-                              active: true,
-                            },
-                          ]
-                    }
-                  />
-                  {tab === "overview" && reportView === "resources" && (
-                    <ActivePostingPlanningToggle
-                      data={data}
-                      canEdit={!!isAdmin}
-                      saving={saving}
-                      onSave={batch}
-                      onError={setError}
+                <>
+                  {tab === "overview" && workspaceFilters}
+                  <div className="reports-filter-dock">
+                    {tab === "activity" && workspaceFilters}
+                    <WorkspaceFilterSummary
+                      title="Uygulanan Filtreler"
+                      ariaLabel={
+                        tab === "activity"
+                          ? "Aylık aktivite raporunda uygulanan filtreler"
+                          : "Raporlarda uygulanan filtreler"
+                      }
+                      className="reports-filter-summary"
+                      filters={
+                        tab === "overview" && reportView === "headcount"
+                          ? [
+                              ...capacityFilters.filter(
+                                (filter) =>
+                                  filter.label === "Liderlik" ||
+                                  filter.label === "Takım",
+                              ),
+                              {
+                                label: "Rapor Tarihi",
+                                values: [fullDateLabel(todayDate)],
+                                active: true,
+                              },
+                            ]
+                          : [
+                              ...capacityFilters.filter(
+                                (filter) =>
+                                  tab === "activity" ||
+                                  filter.label !== "Proje",
+                              ),
+                              {
+                                label: "Bitiş Ayı",
+                                values: [monthLabel(months.at(-1)!)],
+                                active: true,
+                              },
+                              {
+                                label: "Dönem",
+                                values: [months.length + " ay"],
+                                active: true,
+                              },
+                            ]
+                      }
                     />
-                  )}
-                </div>
+                    {tab === "overview" && reportView === "resources" && (
+                      <ActivePostingPlanningToggle
+                        data={data}
+                        canEdit={!!isAdmin}
+                        saving={saving}
+                        onSave={batch}
+                        onError={setError}
+                      />
+                    )}
+                  </div>
+                </>
               ) : tab !== "resources" ? (
                 workspaceFilters
               ) : null}
@@ -773,6 +784,8 @@ export default function Portal() {
                       todayDate={todayDate}
                       selectedPersonIds={personIds}
                       canEditCalendar={!!isAdmin}
+                      sharedCalendarOpen={sharedCalendarOpen && !!isAdmin}
+                      onSharedCalendarClose={() => setSharedCalendarOpen(false)}
                       ownResourceId={
                         user?.role !== "admin" ? user?.resourceId : undefined
                       }
@@ -934,12 +947,6 @@ export default function Portal() {
                   )}
                 </TabsContent>
               )}
-              <div className="bottomnote">
-                <Info size={15} />
-                Veriler sunucuya kaydedilir. Düzenli yedek alın; JSON veri
-                yedeği şifreli değildir.
-                <span>Veritabanı · Değişiklikler sunucuya kaydedilir</span>
-              </div>
             </>
           )}
         </Tabs>

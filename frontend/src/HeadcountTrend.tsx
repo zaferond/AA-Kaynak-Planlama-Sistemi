@@ -71,7 +71,7 @@ export default function HeadcountTrend({
     <section className="panel trend headcount-trend">
       <div className="panelhead">
         <div>
-          <h2>Aylık Ortalama Çalışan Sayısı ve Öngörü</h2>
+          <h2>Aylık Ortalama Çalışan Sayısı ve Öngörü Grafiği</h2>
           <p>Aktif Çalışan, Gear Up ve Saat Ücretli · seçili takımlar</p>
         </div>
         <div className="headcount-metrics">
@@ -218,13 +218,6 @@ export default function HeadcountTrend({
           })}
         </svg>
       </div>
-      <p className="chartnote">
-        Her nokta, seçili dönemin başlangıcından ilgili aya kadar aylık çalışan
-        sayısının ortalamasıdır. İşbaşı ve ayrılış aylarında kişi sayısı
-        çalışılan gün oranında hesaplanır. Tahmini İşbaşı Tarihi girilmiş Aktif
-        İlanlar, kaynak planlamasına dahil seçiminden bağımsız olarak bu
-        tarihten itibaren gelecek ayların öngörüsüne eklenir.
-      </p>
     </section>
   );
 }

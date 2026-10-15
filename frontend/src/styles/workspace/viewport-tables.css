@@ -100,7 +100,7 @@
   border-bottom: 1px solid var(--brand-border, #d5dfcf);
 }
 
-/* Keep report filters, summary and vacancy option together above the reports. */
+/* Freeze reports from the applied-filter summary; filter inputs scroll away. */
 .app.tab-overview .reports-filter-dock {
   position: sticky;
   top: 0;
@@ -109,9 +109,6 @@
   background: var(--brand-surface-soft, #f6f8f4);
   border-radius: 10px;
   box-shadow: 0 3px 12px #29372d26;
-}
-.app.tab-overview .reports-filter-dock .planning-filterbar {
-  margin-top: 0;
 }
 .app.tab-overview .reports-filter-summary {
   margin: 0;

@@ -492,7 +492,8 @@
 .app.tab-overview .panelhead {
   padding: 10px 12px;
 }
-.app.tab-overview .panelhead h2 {
+.app.tab-overview .panelhead h2,
+.app.tab-overview .resource-report-head h2 {
   font-size: 14px;
 }
 .app.tab-overview .panelhead p {

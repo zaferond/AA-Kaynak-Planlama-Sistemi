@@ -46,14 +46,13 @@ export default function ResourcePlanningCharts({
       <section className="panel resource-report capacity-comparison">
         <header className="resource-report-head">
           <div>
-            <span className="resource-report-eyebrow">PLAN VE GERÇEKLEŞEN</span>
-            <h2>Gerçekleşen Kaynak ve Dağıtılan Kaynak</h2>
+            <h2>Planlanan Kaynak / Gerçekleşen Kaynak Karşılaştırma Grafiği</h2>
             <p>{scope}</p>
           </div>
           <span className="resource-report-chip">Tüm proje tahsisleri</span>
         </header>
         <MonthlyComparison
-          title="Gerçekleşen Kaynak ve Dağıtılan Kaynak"
+          title="Planlanan Kaynak / Gerçekleşen Kaynak Karşılaştırma Grafiği"
           months={months}
           series={[
             {
@@ -69,25 +68,13 @@ export default function ResourcePlanningCharts({
             },
           ]}
         />
-        <p className="resource-report-note">
-          Üstteki liderlik, takım ve dönem filtreleri uygulanır. Gerçekleşen
-          kaynak, çalışanların projelere kaydedilmiş dağılımlarından; dağıtılan
-          kaynak ise planlanan takım/proje tahsislerinden hesaplanır.
-        </p>
       </section>
-      <ProjectAllocationChart
-        rows={comparison.projects}
-        scope={scope}
-        monthCount={months.length}
-      />
+      <ProjectAllocationChart rows={comparison.projects} scope={scope} />
       <PlanningEffectivenessChart months={comparison.months} scope={scope} />
       <section className="panel resource-report shortage-ranking">
         <header className="resource-report-head">
           <div>
-            <span className="resource-report-eyebrow">
-              ÖNCELİKLİ KAYNAK İHTİYACI
-            </span>
-            <h2>En Fazla Kaynak İhtiyacı Olan Takımlar</h2>
+            <h2>Takım Bazlı Kaynak İhtiyaç Grafiği</h2>
             <p>{scope}</p>
           </div>
           <span className="resource-report-chip">
@@ -132,12 +119,6 @@ export default function ResourcePlanningCharts({
               : `Tümünü göster (${ranked.length} takım)`}
           </button>
         )}
-        <p className="resource-report-note">
-          Ortalama eksik kaynak ihtiyacı = takımın seçili dönemdeki aylık
-          pozitif açıkları toplamı / seçili ay sayısı ({months.length} ay). Açık
-          olmayan aylar da ortalamaya dahildir. Başka takımlardaki kaynak
-          fazlaları düşülmez; seçili kapsamın net açığından farklı olabilir.
-        </p>
       </section>
     </div>
   );

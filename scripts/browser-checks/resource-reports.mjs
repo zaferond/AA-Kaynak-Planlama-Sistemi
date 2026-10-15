@@ -126,17 +126,18 @@ export async function checkResourceReports(f) {
     await page.locator(".planning-filterbar .period select").selectOption("6");
     await choose([team.name]);
     await f.check(
-      "resource reports: filter controls and summary stay together above tables/charts while page scrolling",
+      "resource reports: applied filter summary and vacancy option stay above reports while filter inputs scroll away",
       async () => {
         const summary = page.getByRole("region", {
           name: "Raporlarda uygulanan filtreler",
           exact: true,
         });
         const dock = page.locator(".reports-filter-dock");
-        const controls = dock.getByRole("group", {
+        const controls = page.getByRole("group", {
           name: "Planlama filtreleri",
           exact: true,
         });
+        assert.equal(await dock.locator(".planning-filterbar").count(), 0);
         assert.equal(
           await summary.locator(".capacitystrip-copy > strong").innerText(),
           "Uygulanan Filtreler",
@@ -182,12 +183,15 @@ export async function checkResourceReports(f) {
                 position,
               );
               return Math.abs((await dock.boundingBox()).y) <= 2;
-            }, "report filter controls stick to viewport top");
+            }, "report summary sticks to viewport top");
             const filterRect = await controls.boundingBox();
             const summaryRect = await summary.boundingBox();
-            assert(Math.abs(filterRect.y) <= 2);
-            assert(summaryRect.y >= filterRect.y + filterRect.height - 2);
-            for (const region of [controls, summary])
+            assert(filterRect.y + filterRect.height <= 2);
+            assert(Math.abs(summaryRect.y) <= 2);
+            for (const region of [
+              summary,
+              dock.locator(".report-posting-options"),
+            ])
               assert(
                 await region.evaluate((el) => {
                   const rect = el.getBoundingClientRect();
@@ -197,7 +201,7 @@ export async function checkResourceReports(f) {
                   );
                   return el === hit || el.contains(hit);
                 }),
-                "sticky filter controls and summary paint above report content",
+                "sticky summary and vacancy option paint above report content",
               );
           }
         }
@@ -227,7 +231,7 @@ export async function checkResourceReports(f) {
         }
         await page
           .getByRole("heading", {
-            name: "Gerçekleşen Kaynak ve Dağıtılan Kaynak",
+            name: "Planlanan Kaynak / Gerçekleşen Kaynak Karşılaştırma Grafiği",
             exact: true,
           })
           .waitFor();

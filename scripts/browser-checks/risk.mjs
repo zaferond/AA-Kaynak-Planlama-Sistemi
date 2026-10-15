@@ -252,7 +252,7 @@ export async function checkRisks(f) {
           .click();
         await page
           .getByRole("heading", {
-            name: "Aylık Eksik Kaynak Sayısı",
+            name: "Aylık Eksik Kaynak Grafiği",
             exact: true,
           })
           .waitFor();

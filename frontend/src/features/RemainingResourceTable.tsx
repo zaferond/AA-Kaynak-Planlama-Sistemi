@@ -202,17 +202,6 @@ export default function RemainingResourceTable({
         {!groups.length && (
           <p className="emptymsg">Bu filtrelere uygun birim yok.</p>
         )}
-        <footer className="tablefoot">
-          <span>
-            Kalan Kaynak · aylık kişi eşdeğeri
-            {!teamReport && displayGroups.some((group) => group.depth)
-              ? " · Alt liderlikler üst toplamın kırılımıdır."
-              : ""}
-          </span>
-          <span>
-            Üye sayısı: bu ay Aktif Çalışan, Saat Ücretli ve Gear Up kayıtları.
-          </span>
-        </footer>
       </>
     );
   }

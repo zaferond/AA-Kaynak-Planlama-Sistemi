@@ -21,7 +21,6 @@
 }
 .resource-report-head h2 {
   margin: 5px 0;
-  font-size: 18px;
   color: var(--brand-text, #293a2d);
 }
 .resource-report-head p,

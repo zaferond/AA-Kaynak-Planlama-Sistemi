@@ -23,6 +23,7 @@ type Props = {
   view: string;
   setView: (view: string) => void;
   openProject: () => void;
+  onOpenSharedCalendar: () => void;
   onExport: () => void;
   dataLoaded: boolean;
   hasTeams: boolean;
@@ -42,6 +43,7 @@ export default function WorkspaceNavigation({
   view,
   setView,
   openProject,
+  onOpenSharedCalendar,
   onExport,
   dataLoaded,
   hasTeams,
@@ -174,6 +176,18 @@ export default function WorkspaceNavigation({
             >
               <Plus size={17} />
               Yeni Proje Ekle
+            </button>
+          )}
+          {tab === "actual" && isAdmin && (
+            <button
+              type="button"
+              className="button"
+              aria-label="Çalışma Takvimi'ni aç"
+              onClick={onOpenSharedCalendar}
+              disabled={!dataLoaded}
+            >
+              <CalendarDays size={17} />
+              Çalışma Takvimi
             </button>
           )}
           {tab !== "resources" && (

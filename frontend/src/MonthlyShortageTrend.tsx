@@ -56,7 +56,7 @@ export default function MonthlyShortageTrend({
     <section className="panel trend monthly-shortage-trend">
       <div className="panelhead">
         <div>
-          <h2>Aylık Eksik Kaynak Sayısı</h2>
+          <h2>Aylık Eksik Kaynak Grafiği</h2>
           <p>
             {filterLabel} · {teamIds.length} takım
             {points.length > 0 && (
@@ -148,13 +148,6 @@ export default function MonthlyShortageTrend({
           Grafik için liderlik veya takım seçimine uygun takım bulunamadı.
         </p>
       )}
-      <p className="chartnote">
-        Sütunlar, seçili liderlik ve takımların aylık net eksik kaynağını kişi
-        eşdeğeri olarak gösterir: toplam dağıtılan kaynak − toplam aktif kaynak.
-        Sonuç sıfırın altındaysa eksik kaynak 0 gösterilir. Dönem ortalaması,
-        aylık eksik kaynakların toplamının seçilen ay sayısına bölünmesiyle
-        hesaplanır; eksik olmayan aylar da hesaba katılır.
-      </p>
     </section>
   );
 }

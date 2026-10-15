@@ -1,4 +1,3 @@
-import { CalendarDays } from "lucide-react";
 import type { Resource, Data } from "../../model";
 import type { ActualUnit } from "../../actual-units";
 import { WorkedHours } from "../ActualAllocationInputs";
@@ -12,8 +11,6 @@ export default function ActualAllocationControls({
   onUnitChange,
   selectedHoursPerson,
   selectedHoursMonth,
-  canEditCalendar,
-  onOpenSharedCalendar,
   actualMonths,
   saveHours,
   canEditPersonMonth,
@@ -23,8 +20,6 @@ export default function ActualAllocationControls({
   onUnitChange: (unit: ActualUnit) => void;
   selectedHoursPerson?: Resource;
   selectedHoursMonth?: string;
-  canEditCalendar: boolean;
-  onOpenSharedCalendar: () => void;
   actualMonths: ActualAllocationView["actualMonths"];
   saveHours: WorkedHoursSave;
   canEditPersonMonth: (id: string, month: string) => boolean;
@@ -37,30 +32,12 @@ export default function ActualAllocationControls({
     <div className="panelhead">
       <div>
         <h2>AA Gerçekleşen Kaynak Dağılımı</h2>
-        <p>
-          Proje tarihleri arasında kalan, içinde bulunduğumuz ay ve önceki
-          aylara kaynak girilebilir.
-        </p>
       </div>
       <div className="actual-unit-control">
         <div className="actual-control-fields">
           <div className="actual-control-item actual-context-item actual-person-item">
             <span>Çalışan</span>
             <div className="actual-person-value">
-              {canEditCalendar && (
-                <button
-                  type="button"
-                  className="actual-shared-calendar-button"
-                  title="Tüm çalışanlara uygulanan çalışma dışı günleri düzenle"
-                  aria-label="Çalışma Takvimi'ni aç"
-                  onClick={() => {
-                    onOpenSharedCalendar();
-                  }}
-                >
-                  <CalendarDays size={16} />
-                  <span>Çalışma Takvimi</span>
-                </button>
-              )}
               <strong
                 className={
                   selectedHoursPerson ? "" : "actual-context-placeholder"
@@ -155,11 +132,6 @@ export default function ActualAllocationControls({
             </select>
           </label>
         </div>
-        <small>
-          Hafta sonları ve ortak tatiller otomatik düşülür. İzin saatleri aylık
-          saatten çıkarılır; eğitim saatleri dağıtılan kaynak yüzdesine eklenir.
-          Fazla mesai için saati düzenleyebilirsiniz.
-        </small>
       </div>
     </div>
   );

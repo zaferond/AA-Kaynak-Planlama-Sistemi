@@ -196,7 +196,7 @@ export default function ResourcesPanel({
       <div className="employee-access-table-wrap accesstable">
         <Table className="resource-table employee-access-table">
           <colgroup>
-            {[3, 10, 9, 8, 7, 6, 6, 6, 8, 10, 6, 7, 9, 5].map(
+            {[3, 10, 10, 10, 7, 5, 6, 6, 8, 7, 6, 8, 9, 5].map(
               (width, index) => (
                 <col key={index} style={{ width: width + "%" }} />
               ),

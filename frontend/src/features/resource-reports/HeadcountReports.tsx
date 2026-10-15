@@ -186,14 +186,18 @@ export default function HeadcountReports({
                 {definition.showWithPostings && (
                   <TableRow className="headcount-with-postings">
                     <TableCell
-                      colSpan={columns.length + (definition.showTotal ? 2 : 1)}
+                      colSpan={columns.length + (definition.showTotal ? 1 : 0)}
                     >
-                      <div>
-                        <span>Aktif İlan Dahil Head Count</span>
-                        <strong data-headcount-with-postings>
-                          {fmt(headcountWithPostings(report.totals))}
-                        </strong>
-                      </div>
+                      <span className="headcount-total-label">
+                        <span aria-hidden="true">+</span>
+                        Aktif İlan Dahil Head Count
+                      </span>
+                    </TableCell>
+                    <TableCell
+                      className="headcount-row-total"
+                      data-headcount-with-postings
+                    >
+                      {fmt(headcountWithPostings(report.totals))}
                     </TableCell>
                   </TableRow>
                 )}

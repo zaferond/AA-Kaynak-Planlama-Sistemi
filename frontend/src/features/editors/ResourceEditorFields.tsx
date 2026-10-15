@@ -222,12 +222,6 @@ export default function ResourceEditorFields({
               </label>
             )}
           </div>
-          <small>
-            Aktif İlan için Tahmini İşbaşı Tarihi boş başlar; diğer statülerde
-            bu yılın 1 Ocak günü önerilir. Tarihi değiştirebilirsiniz. İşten
-            Ayrıldı için iki tarih, dahil edilen Aktif İlan için Tahmini İşbaşı
-            Tarihi zorunludur. İşbaşı ve ayrılış ayları gün oranıyla hesaplanır.
-          </small>
           <label className="switchrow">
             <Switch
               checked={editor.version.included}

@@ -16,6 +16,8 @@ export type PersonAllocationPanelProps = {
   todayDate: string;
   selectedPersonIds: string[];
   canEditCalendar: boolean;
+  sharedCalendarOpen: boolean;
+  onSharedCalendarClose: () => void;
   ownResourceId?: string;
   onSaved: (data: Data) => void;
 };

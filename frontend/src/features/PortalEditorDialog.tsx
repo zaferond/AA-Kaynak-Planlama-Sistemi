@@ -69,6 +69,9 @@ export default function PortalEditorDialog({
       }}
     >
       <DialogContent
+        {...(editor?.kind === "resource"
+          ? { "aria-describedby": undefined }
+          : {})}
         showCloseButton={!saving}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
@@ -107,19 +110,19 @@ export default function PortalEditorDialog({
                       : "Kaynağı Düzenle"
                     : "Seçilen Kaynakları Toplu Düzenle"}
           </DialogTitle>
-          <DialogDescription>
-            {editor?.kind === "project"
-              ? "Proje adını, sorumlusunu ve çalışma dönemini belirleyin."
-              : editor?.kind === "projectPhase"
-                ? "Aşama metnini ve takvim rengini güncelleyin."
-                : editor?.kind === "milestone"
-                  ? "Kritik detay konulara tarih aralığı veya tek tarihli Milestone ekleyin."
-                  : editor?.kind === "resource"
-                    ? "Çalışan bilgilerini, kurumsal hesabını ve uygulama yetkilerini birlikte yönetin."
+          {editor?.kind !== "resource" && (
+            <DialogDescription>
+              {editor?.kind === "project"
+                ? "Proje adını, sorumlusunu ve çalışma dönemini belirleyin."
+                : editor?.kind === "projectPhase"
+                  ? "Aşama metnini ve takvim rengini güncelleyin."
+                  : editor?.kind === "milestone"
+                    ? "Kritik detay konulara tarih aralığı veya tek tarihli Milestone ekleyin."
                     : editor?.kind === "bulkResources"
                       ? "Seçili kayıtların takımını, statüsünü ve planlama durumunu birlikte güncelleyin."
                       : "Düzenlemeler seçili planlama ayından itibaren uygulanır."}
-          </DialogDescription>
+            </DialogDescription>
+          )}
         </DialogHeader>
         {editor && (
           <div

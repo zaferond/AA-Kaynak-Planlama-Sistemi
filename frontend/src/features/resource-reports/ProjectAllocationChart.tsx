@@ -30,11 +30,9 @@ function projectLabel(name: string) {
 export default function ProjectAllocationChart({
   rows,
   scope,
-  monthCount,
 }: {
   rows: ProjectResourceComparison[];
   scope: string;
-  monthCount: number;
 }) {
   const [showPlanned, setShowPlanned] = useState(true);
   const [showActual, setShowActual] = useState(true);
@@ -81,10 +79,9 @@ export default function ProjectAllocationChart({
     <section className="panel resource-report project-allocation-report">
       <header className="resource-report-head">
         <div>
-          <span className="resource-report-eyebrow">
-            PROJE BAZLI KAYNAK KULLANIMI
-          </span>
-          <h2>Proje Bazlı Dağıtılan ve Gerçekleşen Kaynak</h2>
+          <h2>
+            Proje Bazlı Planlanan / Gerçekleşen Kaynak Karşılaştırma Grafiği
+          </h2>
           <p>{scope}</p>
         </div>
         <span className="resource-report-chip">
@@ -129,7 +126,7 @@ export default function ProjectAllocationChart({
             height={300}
             viewBox={`0 0 ${w} 300`}
             role="img"
-            aria-label="Proje Bazlı Dağıtılan ve Gerçekleşen Kaynak"
+            aria-label="Proje Bazlı Planlanan / Gerçekleşen Kaynak Karşılaştırma Grafiği"
           >
             <text x={left} y={14} className="resource-chart-axis">
               Toplam kaynak (kişi-ay)
@@ -272,13 +269,6 @@ export default function ProjectAllocationChart({
           </div>
         </details>
       )}
-      <p className="resource-report-note">
-        {monthCount} aylık seçili dönemin kaynak toplamları gösterilir; birim
-        kişi-aydır. Gerçekleşen açıkken sıralama gerçekleşen kaynağa göre
-        yapılır; eşitlikte dağıtılan kaynak kullanılır. Yalnız dağıtılan açıkken
-        sıralama dağıtılan kaynağa göredir. Üstteki liderlik, takım ve dönem
-        filtreleri uygulanır.
-      </p>
     </section>
   );
 }

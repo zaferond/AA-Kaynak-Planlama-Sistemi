@@ -113,25 +113,15 @@
   color: #fff;
 }
 .headcount-table .headcount-with-postings td {
-  background: #f7f9f4;
-  padding: 10px 14px;
-}
-.headcount-with-postings td > div {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 12px;
+  background: var(--brand-surface, #edf2e8);
+  border-top: 1px solid var(--brand-border-strong, #a8b89d);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 750;
   color: var(--brand-primary, #405341);
 }
-.headcount-with-postings strong {
-  min-width: 54px;
-  padding: 4px 12px;
-  border-radius: 6px;
-  background: var(--brand-primary, #405341);
-  color: #fff;
-  font-size: 16px;
-  text-align: center;
+.headcount-table .headcount-with-postings td:first-child {
+  position: static;
 }
 .headcount-table td.headcount-empty {
   padding: 24px;

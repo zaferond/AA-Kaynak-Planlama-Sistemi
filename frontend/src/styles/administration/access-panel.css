@@ -459,40 +459,26 @@
   overflow: hidden;
 }
 .app.tab-resources .employee-access-table {
-  min-width: 1550px;
+  width: 100%;
+  min-width: 0;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
 }
 .app.tab-resources .employee-access-table th {
+  padding: 9px clamp(3px, 0.45vw, 8px) !important;
   background: #eaf0e3;
   color: #3a5031;
   border-bottom: 1px solid #bdcab4;
   text-align: left;
 }
 .app.tab-resources .employee-access-table td {
-  padding: 10px 10px;
+  padding: 10px clamp(3px, 0.45vw, 8px);
   border-bottom: 1px solid #e3e8df;
   border-right: 1px solid #edf0e9;
   vertical-align: middle;
 }
-.employee-access-table td:nth-child(2) {
-  min-width: 170px;
-  max-width: 220px;
-}
-.employee-access-table .resourceteam {
-  min-width: 130px;
-  max-width: 200px;
-  overflow-wrap: anywhere;
-}
-.employee-access-table td:nth-child(9) {
-  min-width: 140px;
-  max-width: 190px;
-  overflow-wrap: anywhere;
-}
 .employee-access-table .account-scope {
-  min-width: 130px;
-  max-width: 210px;
   font-size: 10px;
   overflow-wrap: anywhere;
 }
@@ -515,6 +501,11 @@
   flex-direction: column;
   gap: 7px;
   min-width: 0;
+}
+.app.tab-resources .employee-access-table .resourceactions {
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  white-space: normal;
 }
 .employee-access-table .access-account-actions {
   gap: 5px;
@@ -578,6 +569,7 @@
   overflow-wrap: anywhere;
 }
 .app.tab-resources .employee-access-table :is(th, td) {
+  min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: normal;

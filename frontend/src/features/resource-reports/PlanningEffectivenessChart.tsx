@@ -15,8 +15,7 @@ export default function PlanningEffectivenessChart({
     <section className="panel resource-report planning-effectiveness-report">
       <header className="resource-report-head">
         <div>
-          <span className="resource-report-eyebrow">PLANLAMA VE UYGULAMA</span>
-          <h2>Kaynak Planlama Süreci Etkinlik Grafiği</h2>
+          <h2>Kaynak Planlama Süreç Etkinlik Grafiği</h2>
           <p>{scope}</p>
         </div>
         <span className="resource-report-chip">
@@ -27,7 +26,7 @@ export default function PlanningEffectivenessChart({
         </span>
       </header>
       <MonthlyComparison
-        title="Kaynak Planlama Süreci Etkinlik Grafiği"
+        title="Kaynak Planlama Süreç Etkinlik Grafiği"
         months={months.map((point) => point.month)}
         series={[
           {
@@ -39,13 +38,6 @@ export default function PlanningEffectivenessChart({
         unit="percent"
         reference={100}
       />
-      <p className="resource-report-note">
-        Etkinlik = gerçekleşen dağılım / planlanan dağılım × 100. %100 plana
-        eşit; %100 üzeri planı aşan gerçekleşen kaynağı gösterir. Planlanan
-        dağılım sıfırsa oran hesaplanamaz ve grafikte boşluk bırakılır. Dönem
-        etkinliği, seçili dönemin gerçekleşen toplamının planlanan toplamına
-        oranıdır. Liderlik, takım ve dönem filtreleri uygulanır.
-      </p>
     </section>
   );
 }
