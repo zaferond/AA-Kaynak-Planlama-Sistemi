@@ -1,5 +1,6 @@
 import type { Project } from "../../model";
-import { phaseStyle } from "../../model";
+import { phaseChipStyle, phaseChipEmpty } from "../../phase-chip";
+import { phaseInitial } from "../../timeline-periods";
 import { monthLabel } from "../../format";
 import type { PlannedAllocationProps } from "./types";
 function phaseText(p: Project, m: string) {
@@ -20,8 +21,9 @@ export default function PlannedPhaseButton({
   const text = phaseText(p, m);
   return (
     <button
-      className="month-work"
-      style={phaseStyle(p, m)}
+      className="month-work phase-chip"
+      style={phaseChipStyle(p, m)}
+      data-phase-empty={m < p.start || m > p.end || phaseChipEmpty(p, m)}
       title={p.name + " / " + monthLabel(m) + "\n" + text}
       aria-label={p.name + " / " + monthLabel(m) + " planlanan çalışma"}
       onContextMenu={(e) => onPhaseContextMenu(e, p, m)}
@@ -29,7 +31,9 @@ export default function PlannedPhaseButton({
       disabled={m < p.start || m > p.end}
     >
       <span className="phasepreview">
-        {density === "overview" ? (p.phases[m] ? "●" : "·") : text}
+        {density === "overview"
+          ? phaseInitial(p.phases[m]?.trim() || "") || "-"
+          : p.phases[m]?.trim() || "-"}
       </span>
     </button>
   );

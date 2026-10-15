@@ -43,7 +43,8 @@ import AccessPanel from "./AccessPanel";
 import PortalEditorDialog from "./features/PortalEditorDialog";
 import { usePlannedGrid } from "./features/usePlannedGrid";
 import { fmt, monthLabel, fullDateLabel } from "./format";
-import { Project, phaseStyle } from "./model";
+import { Project } from "./model";
+import { phaseChipStyle } from "./phase-chip";
 import PersonAllocationPanel from "./PersonAllocationPanel";
 import ProjectInfoReport from "./ProjectInfoReport";
 import ProjectResponsible from "./ProjectResponsible";
@@ -1022,8 +1023,8 @@ export default function Portal() {
           {phaseDetail && (
             <>
               <div
-                className="phasedetailtext"
-                style={phaseStyle(phaseDetail.project, phaseDetail.month)}
+                className="phasedetailtext phase-chip phase-chip-detail"
+                style={phaseChipStyle(phaseDetail.project, phaseDetail.month)}
               >
                 {phaseText(phaseDetail.project, phaseDetail.month)}
               </div>

@@ -1084,6 +1084,42 @@ html[data-theme="military"] .capacitystrip .planning-grid tbody td {
   background: #fafbf7;
   color: var(--brand-primary);
 }
+html[data-theme="military"]
+  .app
+  .capacitystrip
+  .planning-grid
+  thead
+  tr:last-child
+  th:first-child {
+  background: var(--brand-primary);
+  color: #fff !important;
+}
+html[data-theme="military"]
+  .app
+  .capacitystrip
+  .planning-grid
+  tbody
+  .summary
+  td:first-child {
+  padding-inline: 12px;
+  background: #eef1f4;
+  color: #344654;
+  border-right: 1px solid #c7d0d7;
+  border-bottom: 1px solid #c7d0d7;
+  font-weight: 600;
+  vertical-align: middle;
+}
+html[data-theme="military"]
+  .app
+  .capacitystrip
+  .planning-grid
+  tbody
+  .summary.s3
+  td:first-child {
+  background: #e3ebe7;
+  color: #2d5142;
+  font-weight: 700;
+}
 html[data-theme="military"] .capacitystrip .capacity-months .summary.s3 td {
   color: #25796f;
 }
@@ -1113,21 +1149,22 @@ html[data-theme="military"] .cell input:hover:not(:disabled) {
 html[data-theme="military"]
   .app
   .projectmatrix
-  :is(
-    .milestone-section-row,
-    .milestone-section-row td,
-    .milestone-row,
-    .milestone-row td:first-child,
-    .milestone-row td.milestone-month
-  ) {
-  background: #f0f4e9;
-  border-color: var(--brand-border);
+  :is(.milestone-row, .milestone-row td) {
+  background: #f4f5f7;
+  border-color: #d4dce3;
+}
+html[data-theme="military"]
+  .app
+  .projectmatrix
+  :is(.milestone-section-row, .milestone-section-row td) {
+  background: #e8edf1;
+  border-color: #c6d0d9;
 }
 html[data-theme="military"] .app .projectmatrix .milestone-track {
   background-image: linear-gradient(
     to right,
     transparent calc(100% - 1px),
-    #dce4d3 calc(100% - 1px)
+    #dde2e7 calc(100% - 1px)
   );
 }
 html[data-theme="military"]
@@ -1272,7 +1309,7 @@ html[data-theme="military"] [data-slot="table-container"] > .today-date-line {
   html[data-theme="military"]
     button:not(:disabled):not([aria-disabled="true"]):not([role="tab"]):not(
       [role="switch"]
-    ):not([data-timeline-item]):not(.phasebutton):hover {
+    ):not([data-timeline-item]):not(.phasebutton):not(.phase-chip):hover {
     filter: brightness(0.84);
   }
 }

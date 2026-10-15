@@ -1,5 +1,8 @@
 import { monthLabel } from "../../format";
-import { phasePalette, phaseStyle } from "../../model";
+import {
+  phaseChipPalette as phasePalette,
+  phaseChipStyle,
+} from "../../phase-chip";
 import ProjectResponsible from "../../ProjectResponsible";
 import type { EditorFieldProps } from "./editor-field-props";
 type Props = EditorFieldProps<"projectPhase">;
@@ -77,8 +80,8 @@ export default function ProjectPhaseEditorFields({ editor, setEditor }: Props) {
       <div className="timeline-live-preview">
         <span>TAKVİM ÖNİZLEMESİ</span>
         <div
-          className="timeline-phase-preview"
-          style={phaseStyle(editor.value, editor.phaseMonth)}
+          className="timeline-phase-preview phase-chip phase-chip-preview"
+          style={phaseChipStyle(editor.value, editor.phaseMonth)}
         >
           {editor.value.phases[editor.phaseMonth] ||
             "Aşama metni burada görünecek"}

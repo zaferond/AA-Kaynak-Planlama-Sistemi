@@ -1,5 +1,5 @@
 import type { Data, Resource } from "../../model";
-import { phaseStyle } from "../../model";
+import { phaseChipStyle } from "../../phase-chip";
 import ProjectResponsible from "../../ProjectResponsible";
 import WorkCalendarDialog from "../../WorkCalendarDialog";
 import {
@@ -118,8 +118,8 @@ export default function ActualAllocationDialogs({
           </DialogHeader>
           {phaseDetail && (
             <div
-              className="phasedetailtext"
-              style={phaseStyle(phaseDetail.project, phaseDetail.month)}
+              className="phasedetailtext phase-chip phase-chip-detail"
+              style={phaseChipStyle(phaseDetail.project, phaseDetail.month)}
             >
               {phaseDetail.project.phases[phaseDetail.month]}
             </div>

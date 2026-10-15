@@ -43,7 +43,7 @@ export default function PlannedCapacitySummary(
           <Layers3 size={18} />
         </span>
         <span className="capacitystrip-copy">
-          <strong>Filtrelenen Takımlar Özet Kaynak Raporu</strong>
+          <strong>Filtrelenen Takımlar Özet Raporu</strong>
           <span aria-label="Özet kaynak raporunda uygulanan filtreler">
             <FilterSummaryChips filters={capacityFilters} />
           </span>

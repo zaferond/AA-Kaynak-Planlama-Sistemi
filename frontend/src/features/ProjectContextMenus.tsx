@@ -9,6 +9,7 @@ import {
 import { milestoneRanges, rangeNotes } from "../../../shared/milestone-ranges";
 import type { Data } from "../model";
 import { phasePalette } from "../model";
+import { phaseChipPalette } from "../phase-chip";
 import { monthLabel } from "../format";
 import type { useProjectMenus } from "./useProjectMenus";
 type Props = {
@@ -123,10 +124,10 @@ export default function ProjectContextMenus({
                     <span
                       className="phase-color-swatch"
                       style={{
-                        background: phasePalette.find(
+                        background: phaseChipPalette.find(
                           (c) => c.id === copiedPhaseColor,
-                        )?.bg,
-                        borderColor: phasePalette.find(
+                        )?.border,
+                        borderColor: phaseChipPalette.find(
                           (c) => c.id === copiedPhaseColor,
                         )?.border,
                       }}
@@ -152,10 +153,10 @@ export default function ProjectContextMenus({
                     <span
                       className="phase-color-swatch"
                       style={{
-                        background: phasePalette.find(
+                        background: phaseChipPalette.find(
                           (c) => c.id === copiedPhaseBundle.values[0][0].color,
-                        )?.bg,
-                        borderColor: phasePalette.find(
+                        )?.border,
+                        borderColor: phaseChipPalette.find(
                           (c) => c.id === copiedPhaseBundle.values[0][0].color,
                         )?.border,
                       }}

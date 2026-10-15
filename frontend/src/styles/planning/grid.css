@@ -1,4 +1,8 @@
 /* Kaynak dağılımı: ay sütunları ve geniş çalışma sekmesi. */
+.app:is(.tab-plan, .tab-actual) .allocation-grid {
+  border-collapse: separate;
+  border-spacing: 0;
+}
 .app.tab-plan .allocation-grid tr > th:not(:first-child),
 .app.tab-plan .allocation-grid tr > td:not(:first-child) {
   border-left: 1px solid var(--table-grid-border);

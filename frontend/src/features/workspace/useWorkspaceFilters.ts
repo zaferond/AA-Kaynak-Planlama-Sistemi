@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { DEFAULT_FILTERS } from "../../settings";
+import { ACTUAL_DEFAULT_PERIOD_MONTHS, DEFAULT_FILTERS } from "../../settings";
 import { currentPlanningDate } from "../../resource-dates";
 import { monthsFrom } from "../../model";
 import type { WorkspaceDensity } from "../WorkspaceNavigation";
@@ -13,8 +13,12 @@ export function useWorkspaceFilters(
     [teamIds, setTeamIds] = useState(options.teamIds),
     [projectIds, setProjectIds] = useState(options.projectIds),
     [start, setStart] = useState(options.start),
-    [count, setCount] = useState(options.count),
-    [density, setDensity] = useState<WorkspaceDensity>(options.density),
+    [workspaceCount, setWorkspaceCount] = useState(options.count),
+    [actualCount, setActualCount] = useState(ACTUAL_DEFAULT_PERIOD_MONTHS),
+    [workspaceDensity, setWorkspaceDensity] = useState<WorkspaceDensity>(
+      options.density,
+    ),
+    [actualDensity, setActualDensity] = useState<WorkspaceDensity>("detail"),
     [view, setView] = useState(options.view),
     [search, setSearch] = useState("");
   const [cells, setCells] = useState<string[]>([]),
@@ -30,6 +34,10 @@ export function useWorkspaceFilters(
     [projectWeekly, setProjectWeekly] = useState(false),
     [showProjectCodes, setShowProjectCodes] = useState(false),
     [filterResetKey, setFilterResetKey] = useState(0);
+  const count = tab === "actual" ? actualCount : workspaceCount;
+  const setCount = tab === "actual" ? setActualCount : setWorkspaceCount;
+  const density = tab === "actual" ? actualDensity : workspaceDensity;
+  const setDensity = tab === "actual" ? setActualDensity : setWorkspaceDensity;
   const [todayDate, setTodayDate] = useState(currentPlanningDate);
   const currentMonth = todayDate.slice(0, 7);
   const months = useMemo(() => monthsFrom(start, count), [start, count]);
@@ -65,7 +73,9 @@ export function useWorkspaceFilters(
     setTeamIds([]);
     setProjectIds([]);
     setStart(firstMonth);
-    setCount(DEFAULT_FILTERS.count);
+    setCount(
+      tab === "actual" ? ACTUAL_DEFAULT_PERIOD_MONTHS : DEFAULT_FILTERS.count,
+    );
     setSearch("");
     setCells([]);
     setResourceIds([]);

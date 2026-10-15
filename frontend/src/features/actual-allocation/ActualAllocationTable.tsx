@@ -5,7 +5,7 @@ import {
 } from "../workspace/useWindowedSections";
 import { CalendarDays } from "lucide-react";
 import type { Data, Project, Resource } from "../../model";
-import { phaseStyle } from "../../model";
+import { phaseChipStyle } from "../../phase-chip";
 import { ACTUAL_FTE_TOLERANCE } from "../../../../shared/actual-months.ts";
 import { ActualAmount as Amount } from "../ActualAllocationInputs";
 import ProjectResponsible from "../../ProjectResponsible";
@@ -125,11 +125,11 @@ export default function ActualAllocationTable({
                       : "";
                   return (
                     <TableCell key={month} className="actual-phase-cell">
-                      {text && (
+                      {text ? (
                         <button
                           type="button"
-                          className="actual-phase-button"
-                          style={phaseStyle(project, month)}
+                          className="actual-phase-button phase-chip"
+                          style={phaseChipStyle(project, month)}
                           title={text}
                           aria-label={
                             project.name + " / " + month + " aşaması: " + text
@@ -138,7 +138,15 @@ export default function ActualAllocationTable({
                         >
                           {text}
                         </button>
-                      )}
+                      ) : month >= project.start && month <= project.end ? (
+                        <span
+                          className="phase-chip"
+                          data-phase-empty="true"
+                          title="Aşama girilmemiş"
+                        >
+                          -
+                        </span>
+                      ) : null}
                     </TableCell>
                   );
                 })}

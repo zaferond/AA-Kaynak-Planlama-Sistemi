@@ -17,3 +17,4 @@ export const DEFAULT_FILTERS = {
   start: currentPlanningMonth().slice(0, 4) + "-01",
   count: 12,
 };
+export const ACTUAL_DEFAULT_PERIOD_MONTHS = 24;

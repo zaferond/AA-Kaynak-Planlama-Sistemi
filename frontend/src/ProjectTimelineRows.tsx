@@ -8,7 +8,8 @@ import {
   phaseInitial,
   phaseMonthForPeriod,
 } from "./timeline-periods";
-import { phaseStyle, phasePalette } from "./model";
+import { phasePalette } from "./model";
+import { phaseChipStyle, phaseChipEmpty } from "./phase-chip";
 import ProjectResponsible from "./ProjectResponsible";
 import { milestoneRanges } from "./milestone-ranges";
 import { milestoneBarsForPeriods } from "./milestone-bars";
@@ -182,9 +183,10 @@ export default function ProjectTimelineRows({
               }
             >
               <button
-                className="phasebutton"
+                className="phasebutton phase-chip"
                 disabled={!active}
-                style={phaseStyle(project, month)}
+                style={phaseChipStyle(project, month)}
+                data-phase-empty={!active || phaseChipEmpty(project, month)}
                 aria-label={
                   project.name +
                   " / " +

@@ -5,7 +5,8 @@ import {
   columnName as col,
 } from "./xlsx-cells.ts";
 import type { Project } from "./model.ts";
-import { phasePalette } from "./model.ts";
+import { phaseColor } from "./model.ts";
+import { phaseChipPalette as phasePalette } from "./phase-chip.ts";
 import { SYSTEM_NAME } from "./settings.ts";
 import {
   periodOverlapsProject,
@@ -74,15 +75,10 @@ function wrappedLines(value: string, width: number) {
       0,
     );
 }
-function phaseColor(p: Project, m: string) {
-  return (
-    p.phaseColors?.[m] || (p.phases[m] === "ÇALIŞMA YOK" ? "gray" : "blue")
-  );
-}
 function phaseStyleIndex(p: Project, m: string, view: ProjectReportView) {
   const color = Math.max(
     0,
-    phasePalette.findIndex((item) => item.id === phaseColor(p, m)),
+    phasePalette.findIndex((item) => item.id === phaseColor(p, m).id),
   );
   return (
     (view === "detail"

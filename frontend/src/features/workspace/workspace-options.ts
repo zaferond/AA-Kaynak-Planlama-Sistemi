@@ -5,6 +5,7 @@ import {
 } from "../../../../shared/planning-dates.ts";
 import { monthLabel } from "../../format.ts";
 import type { WorkspaceDensity } from "../WorkspaceNavigation";
+import { ACTUAL_DEFAULT_PERIOD_MONTHS } from "../../settings.ts";
 
 export type WorkspaceFilterValues = {
   leads: string[];
@@ -63,7 +64,11 @@ export function planWorkspacePath(
 }
 export function filterResetNotice(tab: string, firstMonth: string) {
   return tab === "actual"
-    ? "Filtreler sıfırlandı: " + monthLabel(firstMonth) + " · 12 ay."
+    ? "Filtreler sıfırlandı: " +
+        monthLabel(firstMonth) +
+        " · " +
+        ACTUAL_DEFAULT_PERIOD_MONTHS +
+        " ay."
     : tab === "resources"
       ? "Filtreler sıfırlandı: tüm liderlikler ve takımlar · " +
         monthLabel(firstMonth) +
