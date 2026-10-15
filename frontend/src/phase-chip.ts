@@ -26,10 +26,10 @@ export const phaseChipPalette = [
   },
   {
     id: "red",
-    name: "Kiremit",
-    bg: "#e9d4ce",
-    ink: "#783d36",
-    border: "#98534b",
+    name: "Kırmızı",
+    bg: "#f0cccc",
+    ink: "#793c3c",
+    border: "#a65c5c",
   },
   {
     id: "purple",
@@ -40,10 +40,10 @@ export const phaseChipPalette = [
   },
   {
     id: "gray",
-    name: "Arduvaz Gri",
-    bg: "#dce2e7",
-    ink: "#4d5b67",
-    border: "#5b6975",
+    name: "Sarı",
+    bg: "#f3e8a6",
+    ink: "#65551a",
+    border: "#b3a044",
   },
 ];
 
@@ -55,6 +55,8 @@ export function phaseChipStyle(project: Project, month: string): CSSProperties {
     "--phase-chip-accent": color.border,
     "--phase-chip-background": color.bg,
     "--phase-chip-ink": color.ink,
+    "--phase-chip-highlight":
+      color.id === "red" || color.id === "gray" ? "10%" : "30%",
   } as CSSProperties;
 }
 
